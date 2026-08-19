@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     MINIO_SECRET_KEY: str = "minioadmin"
     MINIO_BUCKET: str = "context-vault"
 
+    # --- Task queue (Redis / Celery) -----------------------------------
+    # Used as both Celery broker and result backend. docker-compose.yml
+    # already injects this into the ``backend`` and ``worker`` containers;
+    # the default matches the docker-network hostname used there so a bare
+    # `docker compose up` works without an explicit .env override.
+    REDIS_URL: str = "redis://redis:6379"
+
     @property
     def available_chat_models(self) -> List[str]:
         """Parsed CHAT_MODELS allow-list, falling back to [CHAT_MODEL]."""
