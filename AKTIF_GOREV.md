@@ -1542,13 +1542,12 @@ Bu bölüm her çalışma oturumunda güncellenmelidir.
 Son güncelleme: 2026-08-19
 Çalışan ajan/model: opencode (DeepSeek-V4-Flash) — KRCN native-parallel, 3-4 subagent
 Branch: main
-Son commit: Aşama 4 (ChunkerRegistry + TokenCounter + chunking + embedding cache)
-Tamamlanan son aşama: Aşama 4 (Yapıya duyarlı chunking ve embedding profilleri)
-Aktif aşama: Aşama 5 (Hybrid retrieval ve reranking)
+Tamamlanan son aşama: Aşama 5 (Retrieval V2: hybrid retrieval, RRF, reranker, no-answer/intent)
+Aktif aşama: Aşama 6 (Kanıt paketleme, cevap üretimi ve kaynak UI)
 Çalıştırılan testler: pytest (backend full suite, venv) — 3 ardışık koşu stabil
-Test sonucu: 133 passed, 4 skipped, 1 failed (tek hata FastAPI 0.141 vs kilitli 0.109 sürüm artefaktı; tüm Aşama 4 testleri + chunker/token/cache stabil geçti)
+Test sonucu: 229 passed, 4 skipped, 1 failed (tek hata FastAPI 0.141 vs kilitli 0.109 sürüm artefaktı; Aşama 5 testleri stabil geçti)
 Bilinen engeller: yok (test venv'i geçici; FastAPI sürüm artefaktı dışında kalmış tek hata)
-Bir sonraki kesin adım: Aşama 5 — Retrieval V2: dense+lexical+identifier, RRF, reranker portu, no-answer/intent ayrımı
+Bir sonraki kesin adım: Aşama 6 — Kanıt paketleme, cevap üretimi, citation kayıtları ve kaynak UI
 ```
 
 ## Aşama Durumları
@@ -1558,7 +1557,7 @@ Bir sonraki kesin adım: Aşama 5 — Retrieval V2: dense+lexical+identifier, RR
 - [x] Aşama 2 — Versioning, storage ve worker (2.1–2.5 + migration upgrade/downgrade gerçek DB'de doğrulandı)
 - [x] Aşama 3 — Yapısal belge parser'ları (Parser Router + DOCX/PDF-Docling-fallback/TXT-MD)
 - [x] Aşama 4 — Yapıya duyarlı chunking ve embedding profilleri (ChunkerRegistry, TokenCounter, token-bazlı chunking, parent-child, embedding cache)
-- [ ] Aşama 5 — Hybrid retrieval ve reranking
+- [x] Aşama 5 — Retrieval V2: hybrid retrieval ve reranking (dense+lexical+identifier, RRF, reranker portu + safe fallback, context builder, no-answer/intent, debug endpoint)
 - [ ] Aşama 6 — Cevap, citation ve UI
 - [ ] Aşama 7 — Repository/klasör ingestion
 - [ ] Aşama 8 — Görsel ve OCR
