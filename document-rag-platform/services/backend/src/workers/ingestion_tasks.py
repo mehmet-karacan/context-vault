@@ -232,6 +232,12 @@ def run_ingestion_job(
     job.started_at = datetime.utcnow()
     job.error_code = None
     job.error_message = None
+    # Mirror job progress onto documents.status using the same vocabulary the
+    # legacy synchronous upload path already writes ("uploaded" / "processing"
+    # / "indexed" / "error") so existing frontend status labels keep working
+    # unchanged for async-ingested documents too (Aşama 2.4).
+    document.status = "processing"
+    document.updated_at = datetime.utcnow()
     db.commit()
 
     try:
@@ -359,6 +365,7 @@ def run_ingestion_job(
         version.status = "ready"
         version.activated_at = datetime.utcnow()
         document.active_version_id = version.id
+        document.status = "indexed"
         document.updated_at = datetime.utcnow()
         job.status = "completed"
         job.finished_at = datetime.utcnow()
@@ -381,6 +388,20 @@ def run_ingestion_job(
             job.error_message = str(exc)
             job.finished_at = datetime.utcnow()
             _emit_event(db, job, stage=job.stage or "unknown", status="failed", message=str(exc))
+            # Best-effort: also surface the failure on documents.status (same
+            # re-fetch-after-rollback pattern as ``job`` above). Never lets a
+            # failure to resolve version/document mask the real job failure.
+            failed_document = None
+            try:
+                failed_version = db.get(DocumentVersion, job.version_id)
+                if failed_version is not None:
+                    failed_document = db.get(Document, failed_version.document_id)
+            except Exception:
+                failed_document = None
+            if failed_document is not None:
+                failed_document.status = "error"
+                failed_document.error_message = str(exc)
+                failed_document.updated_at = datetime.utcnow()
             db.commit()
         raise
 
