@@ -86,6 +86,20 @@ class Settings(BaseSettings):
     # ParserRouter as an error (bounded output, protects downstream chunkers).
     MAX_PARSED_TEXT_CHARS: int = 20000000
 
+    # --- Chunking (Aşama 4) --------------------------------------------------
+    # Token-based chunking targets (AKTIF_GOREV.md §11). These drive the
+    # ChunkerRegistry / content-sensitive chunkers: each resulting leaf chunk
+    # is bounded by CHUNK_MIN/MAX_TOKENS (respecting unit boundaries so a
+    # paragraph, table cell or code line is never sliced), CHUNK_TARGET_TOKENS
+    # is the desired size, CHUNK_OVERLAP_RATIO is the controlled overlap
+    # between neighbouring document chunks, and PARENT_CHUNK_MAX_TOKENS bounds
+    # the aggregated parent chunks for parent-child retrieval expansion.
+    CHUNK_TARGET_TOKENS: int = 600
+    CHUNK_MIN_TOKENS: int = 250
+    CHUNK_MAX_TOKENS: int = 900
+    CHUNK_OVERLAP_RATIO: float = 0.12
+    PARENT_CHUNK_MAX_TOKENS: int = 2400
+
     @property
     def available_chat_models(self) -> List[str]:
         """Parsed CHAT_MODELS allow-list, falling back to [CHAT_MODEL]."""
