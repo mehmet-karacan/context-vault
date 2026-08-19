@@ -1539,24 +1539,24 @@ Görev yalnız aşağıdaki maddelerin tamamı sağlandığında tamamlanmış s
 Bu bölüm her çalışma oturumunda güncellenmelidir.
 
 ```text
-Son güncelleme:
-Çalışan ajan/model:
-Branch:
-Son commit:
-Tamamlanan son aşama:
-Aktif aşama:
-Çalıştırılan testler:
-Test sonucu:
-Bilinen engeller:
-Bir sonraki kesin adım:
+Son güncelleme: 2026-08-19
+Çalışan ajan/model: opencode (DeepSeek-V4-Flash) — KRCN native-parallel, 3 subagent
+Branch: main
+Son commit: 7e465b1 (Aşama 2.4: job-tabanli upload + ingestion-jobs API)
+Tamamlanan son aşama: Aşama 3 (Parser Router + DOCX/PDF/TXT-MD yapısal parser'ları)
+Aktif aşama: Aşama 4 (Yapıya duyarlı chunking ve embedding profilleri)
+Çalıştırılan testler: pytest (backend full suite, venv)
+Test sonucu: 101 passed, 4 skipped, 1 failed (tek hata FastAPI 0.141 vs kilitli 0.109 sürüm artefaktı; Aşama 3 ile ilgisiz). Aşama 2 + Aşama 3 testleri tamamen geçti.
+Bilinen engeller: yok (yalnız Aşama 2 ve 3 değişiklikleri henüz commit edilmedi; test venv'i geçici)
+Bir sonraki kesin adım: Aşama 4 — ChunkerRegistry + TokenCounter + token-bazlı chunking + parent-child + embedding cache
 ```
 
 ## Aşama Durumları
 
-- [ ] Aşama 0 — Baseline ve gerçek durum
-- [ ] Aşama 1 — Config ve modüler backend
-- [ ] Aşama 2 — Versioning, storage ve worker
-- [ ] Aşama 3 — Yapısal belge parser'ları
+- [x] Aşama 0 — Baseline ve gerçek durum
+- [x] Aşama 1 — Config ve modüler backend
+- [x] Aşama 2 — Versioning, storage ve worker (2.1–2.5 + migration upgrade/downgrade gerçek DB'de doğrulandı)
+- [x] Aşama 3 — Yapısal belge parser'ları (Parser Router + DOCX/PDF-Docling-fallback/TXT-MD)
 - [ ] Aşama 4 — Chunking ve embedding profilleri
 - [ ] Aşama 5 — Hybrid retrieval ve reranking
 - [ ] Aşama 6 — Cevap, citation ve UI
