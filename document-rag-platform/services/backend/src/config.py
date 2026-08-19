@@ -51,12 +51,40 @@ class Settings(BaseSettings):
     # `docker compose up` works without an explicit .env override.
     REDIS_URL: str = "redis://redis:6379"
 
+    # --- Ingestion worker (Aşama 2.5) -------------------------------------
+    # Max number of Celery task retries for a single ingestion job, beyond
+    # the initial attempt. Transient failures (embeddings gateway timeouts,
+    # MinIO blips, DB connection drops) are retried with exponential backoff;
+    # permanent validation errors (missing version/document, empty content)
+    # are never retried.
+    INGESTION_MAX_RETRIES: int = 3
+    # Base (first) retry delay in seconds; doubled after each retry.
+    INGESTION_RETRY_BACKOFF_SECONDS: float = 10.0
+    # Backoff is capped so an 3-retry job never sleeps for hours.
+    INGESTION_RETRY_BACKOFF_MAX_SECONDS: float = 300.0
+    # Hard and soft Celery time limits for ingestion tasks (seconds). Real
+    # parse/embed of a large document can legitimately take minutes, so these
+    # must stay comfortably above the long-running embedding window rather
+    # than being treated as a cheap request timeout.
+    INGESTION_TASK_SOFT_TIME_LIMIT_SECONDS: int = 3600
+    INGESTION_TASK_TIME_LIMIT_SECONDS: int = 3700
+
     # --- Features --------------------------------------------------------
     # Aşama 2.4: upload endpoint returns immediately with a queued
     # IngestionJob instead of blocking on parse+chunk+embed. Default True
     # per AKTIF_GOREV.md §11; set to False to fall back to the old fully
     # synchronous upload behavior (kept for transition/rollback safety).
     FEATURE_ASYNC_INGESTION: bool = True
+
+    # --- Parsing (Aşama 3.1) ----------------------------------------------
+    # Per-file wall-clock budget for a single parser call (seconds). A parse
+    # exceeding this is aborted by the ParserRouter as a hard timeout rather
+    # than a soft deadline. Defaults per AKTIF_GOREV.md §11.
+    PARSER_TIMEOUT_SECONDS: float = 300.0
+    # Upper bound on total characters a normalized parse may produce across
+    # all ContentUnit texts. A parser returning more is treated by the
+    # ParserRouter as an error (bounded output, protects downstream chunkers).
+    MAX_PARSED_TEXT_CHARS: int = 20000000
 
     @property
     def available_chat_models(self) -> List[str]:
