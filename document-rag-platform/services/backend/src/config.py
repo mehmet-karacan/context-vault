@@ -69,6 +69,20 @@ class Settings(BaseSettings):
     INGESTION_TASK_SOFT_TIME_LIMIT_SECONDS: int = 3600
     INGESTION_TASK_TIME_LIMIT_SECONDS: int = 3700
 
+    # --- Reranking (Aşama 5.4) ----------------------------------------------
+    # Feature-gated, remote-capable reranker. Off by default: when the feature
+    # is disabled or the provider is "none", a pass-through NoopReranker is
+    # used so retrieval always has a safe fusion-order fallback (AKTIF_GOREV.md
+    # §11 / §16). FEATURE_RERANKER gates the whole pipeline; RERANKER_ENABLED
+    # additionally gates the active rerank call; RERANKER_PROVIDER selects the
+    # adapter (none | remote); RERANKER_MODEL is the rerank model and
+    # RERANK_TOP_K the number of re-ranked candidates to keep.
+    FEATURE_RERANKER: bool = False
+    RERANKER_ENABLED: bool = False
+    RERANKER_PROVIDER: str = "none"
+    RERANKER_MODEL: str = ""
+    RERANK_TOP_K: int = 8
+
     # --- Features --------------------------------------------------------
     # Aşama 2.4: upload endpoint returns immediately with a queued
     # IngestionJob instead of blocking on parse+chunk+embed. Default True
@@ -99,6 +113,44 @@ class Settings(BaseSettings):
     CHUNK_MAX_TOKENS: int = 900
     CHUNK_OVERLAP_RATIO: float = 0.12
     PARENT_CHUNK_MAX_TOKENS: int = 2400
+
+    # --- Retrieval candidates (Aşama 5.1-5.3) ----------------------------------
+    # Per-retriever candidate counts and the RRF fusion window
+    # (AKTIF_GOREV.md §5.3). Each retriever may raise its own candidate count
+    # above these via constructor override; top-level callers use these plus
+    # RERANK_TOP_K to size the fused/reranked pipeline.
+    VECTOR_CANDIDATE_K: int = 40
+    LEXICAL_CANDIDATE_K: int = 40
+    IDENTIFIER_CANDIDATE_K: int = 20
+    FUSION_CANDIDATE_K: int = 20
+    RRF_K: int = 60
+    RERANK_TOP_K: int = 8
+
+    # --- Retrieval context expansion (Aşama 5.5) ------------------------------
+    # Final RAG context budget. CONTEXT_MAX_CHUNKS caps how many distinct chunks
+    # (selected + expanded parents/neighbours) reach the model; CONTEXT_MAX_TOKENS
+    # caps the total token budget. The ContextBuilder enforces both and must never
+    # exceed them (AKTIF_GOREV.md 5.5).
+    CONTEXT_MAX_CHUNKS: int = 8
+    CONTEXT_MAX_TOKENS: int = 12000
+    # How many controlled adjacent chunks (by sequence_no) are pulled in around a
+    # selected chunk during expansion.
+    CONTEXT_ADJACENT_WINDOW: int = 1
+
+    # --- No-answer / intent policy (Aşama 5.6) --------------------------------
+    # These are configurable calibration defaults, NOT hardcoded constants and NOT
+    # a single decision mechanism. The AnswerPolicy combines dense score, lexical /
+    # identifier evidence and evidence count: an exact identifier or strong lexical
+    # match overrides a low dense score, and an empty retrieval is never treated as
+    # small-talk. Tuned against the golden dataset (AKTIF_GOREV.md 5.6).
+    NO_ANSWER_SCORE_THRESHOLD: float = 0.55
+    NO_ANSWER_MIN_EVIDENCE: int = 1
+    # A lexical score at/above this counts as "strong lexical" evidence that can
+    # rescue a candidate whose dense score is below NO_ANSWER_SCORE_THRESHOLD.
+    LEXICAL_STRONG_SCORE: float = 0.4
+    # Minimum normalized token length below which a query is too short to be an
+    # informative document question (one input into small-talk detection).
+    SMALLTALK_MIN_CONTENT_LEN: int = 20
 
     @property
     def available_chat_models(self) -> List[str]:
