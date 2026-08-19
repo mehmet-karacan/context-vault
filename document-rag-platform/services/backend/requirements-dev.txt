@@ -1,0 +1,5 @@
+# Test-only dependencies (Aşama 1 unit test iskeleti).
+# Not installed in the production image; used for `pytest` locally / in CI.
+-r requirements.txt
+pytest==7.4.4
+httpx==0.26.0
