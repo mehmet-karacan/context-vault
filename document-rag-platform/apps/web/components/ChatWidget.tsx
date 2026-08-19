@@ -3,8 +3,26 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { ChevronDownIcon, FileIcon, LayersIcon, PenIcon, SearchIcon, SendIcon, TargetIcon } from "./icons";
+import {
+  ChevronDownIcon,
+  FileIcon,
+  LayersIcon,
+  PenIcon,
+  SearchIcon,
+  SendIcon,
+  TargetIcon,
+  CloseIcon,
+} from "./icons";
 import { apiUrl } from "../lib/api";
+import {
+  Citation,
+  ChatResponse,
+  LegacySource,
+  RetrievalDebug,
+  SOURCE_TYPE_FILTERS,
+  SourceTypeFilter,
+  scopeValue,
+} from "../lib/types";
 
 const markdownComponents = {
   p: ({ children }: any) => <p className="mb-3 last:mb-0">{children}</p>,
@@ -107,22 +125,24 @@ function CodeTicker() {
   );
 }
 
-interface Source {
-  document: { name: string };
-  chunk: string;
-  similarity: number;
-}
-
 interface Project {
   id: string;
   name: string;
 }
 
+type CitationPayload = Partial<Citation> &
+  Pick<Citation, "label" | "document_name"> & {
+    snippet?: string | null;
+  };
+
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
-  sources?: Source[];
+  citations?: CitationPayload[];
+  retrievalDebug?: RetrievalDebug | null;
+  answerable?: boolean;
+  sources?: LegacySource[];
   durationMs?: number;
 }
 
@@ -169,8 +189,152 @@ function ThinkingIndicator({ stageIndex }: { stageIndex: number }) {
   );
 }
 
-function uniqueDocumentNames(sources: Source[]): string[] {
-  return Array.from(new Set(sources.map((s) => s.document.name)));
+function uniqueSourceNames(citations: CitationPayload[], sources?: LegacySource[]): string[] {
+  const names = citations.map((c) => c.document_name).filter(Boolean) as string[];
+  if (sources) names.push(...sources.map((s) => s.document.name));
+  return Array.from(new Set(names));
+}
+
+function formatRange(start?: number | null, end?: number | null): string | null {
+  if (start == null && end == null) return null;
+  if (start == null) return `${end}`;
+  if (end == null || end === start) return `${start}`;
+  return `${start}–${end}`;
+}
+
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  if (value === null || value === undefined || value === "") return null;
+  return (
+    <div className="flex gap-2 text-[11px] leading-relaxed">
+      <dt className="text-ink-soft/70 shrink-0 w-[72px] font-mono">{label}</dt>
+      <dd className="text-ink min-w-0 break-words">{value}</dd>
+    </div>
+  );
+}
+
+function SourceTypeBadge({ sourceType }: { sourceType?: string }) {
+  if (!sourceType || sourceType === "document") return null;
+  const classes: Record<string, string> = {
+    code: "bg-paper-dim text-brass-dim border-ink-line",
+    image: "bg-brass/15 text-brass-dim border-brass/20",
+  };
+  return (
+    <span
+      className={`inline-flex items-center px-1.5 py-0.5 rounded font-mono text-[10px] uppercase tracking-wide border ${classes[sourceType] ?? classes.image}`}
+    >
+      {sourceType}
+    </span>
+  );
+}
+
+function CitationPanel({ citation }: { citation: CitationPayload }) {
+  const [open, setOpen] = useState(false);
+  const sourceType = citation.source_type as string | undefined;
+  const isCode = sourceType === "code";
+  const heading = citation.heading_path?.length
+    ? citation.heading_path.join(" > ")
+    : null;
+  const location = [
+    isCode ? null : formatRange(citation.page_start, citation.page_end),
+    isCode ? formatRange(citation.line_start, citation.line_end) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <div className="folio bg-surface border border-ink-line shadow-folio overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-paper-dim/50 transition-colors"
+      >
+        <FileIcon className="w-3.5 h-3.5 text-ink/40 shrink-0" />
+        <span className="font-mono text-[11px] text-brass-dim shrink-0">{citation.label}</span>
+        <span className="font-mono text-[11px] text-ink truncate flex-1">{citation.document_name}</span>
+        <SourceTypeBadge sourceType={sourceType} />
+        <span className="font-mono text-[10px] text-ink-soft shrink-0">{location}</span>
+        <ChevronDownIcon
+          className={`w-3 h-3 text-ink-soft shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && (
+        <dl className="border-t border-ink-line px-3 py-2.5 flex flex-col gap-1.5 bg-paper-dim/40">
+          <DetailRow label="Belge" value={citation.document_name} />
+          <DetailRow label="Bölüm" value={heading} />
+          <DetailRow
+            label="Sayfa"
+            value={
+              citation.page_start != null || citation.page_end != null
+                ? formatRange(citation.page_start, citation.page_end)
+                : null
+            }
+          />
+          <DetailRow label="Sembol" value={citation.symbol_name} />
+          <DetailRow label="Dosya" value={citation.file_path} />
+          <DetailRow label="Satırlar" value={formatRange(citation.line_start, citation.line_end)} />
+          <DetailRow label="Sıra" value={citation.rank != null ? `${citation.rank}.` : null} />
+          {citation.snippet && (
+            <div className="flex gap-2 text-[11px] leading-relaxed">
+              <dt className="text-ink-soft/70 shrink-0 w-[72px] font-mono">Paragraf</dt>
+              <dd className="text-ink min-w-0 break-words italic">{citation.snippet}</dd>
+            </div>
+          )}
+        </dl>
+      )}
+    </div>
+  );
+}
+
+function RetrievalDebugPanel({ retrievalDebug }: { retrievalDebug: RetrievalDebug | null }) {
+  const [open, setOpen] = useState(true);
+  const stages = retrievalDebug?.stages ?? {};
+  const entries = Object.entries(stages).filter(([, list]) => Array.isArray(list));
+
+  if (entries.length === 0) {
+    return <p className="font-mono text-[10px] text-ink-soft/50">retrieval_debug boş</p>;
+  }
+
+  return (
+    <div className="rounded-md border border-ink-line bg-paper-dim/40 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide text-ink-soft hover:text-ink transition-colors"
+      >
+        <span>Retrieval sıraları</span>
+        <ChevronDownIcon className={`w-3 h-3 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="border-t border-ink-line px-3 py-2 flex flex-col gap-2.5">
+          {entries.map(([stage, ranks]) => (
+            <div key={stage}>
+              <div className="font-mono text-[10px] uppercase tracking-wide text-brass-dim mb-1">{stage}</div>
+              <div className="flex flex-col gap-0.5">
+                {ranks.slice(0, 10).map((r, i) => (
+                  <div key={`${stage}-${i}`} className="flex items-center gap-2 font-mono text-[10px]">
+                    <span className="w-4 text-ink-soft/60 shrink-0">{(r.rank ?? i + 1)}.</span>
+                    <span className="text-ink truncate flex-1">{r.label || r.document_name || r.chunk_id || "—"}</span>
+                    {r.score != null && <span className="text-ink-soft/70 shrink-0">{Number(r.score).toFixed(3)}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NoAnswerBlock() {
+  return (
+    <div className="rounded-md border border-ink-line bg-paper-dim/50 px-3.5 py-2.5 flex items-start gap-2">
+      <CloseIcon className="w-3.5 h-3.5 text-rust shrink-0 mt-0.5" />
+      <p className="text-[13px] text-ink-soft leading-relaxed">
+        Kaynaklarda bilgi bulunamadı. Bu soruya yüklediğin belgelerden doğrulanabilir bir yanıt üretilemedi.
+      </p>
+    </div>
+  );
 }
 
 function StyledSelect({
@@ -196,6 +360,13 @@ function StyledSelect({
   );
 }
 
+const SOURCE_TYPE_LABEL: Record<SourceTypeFilter, string> = {
+  all: "Tüm kaynaklar",
+  documents: "Belgeler",
+  code: "Kod",
+  images: "Görseller",
+};
+
 const GREETING: Message = {
   id: "greeting",
   role: "assistant",
@@ -207,6 +378,8 @@ export default function ChatWidget() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [thinkingStage, setThinkingStage] = useState(0);
+  const [sourceTypeFilter, setSourceTypeFilter] = useState<SourceTypeFilter>("all");
+  const [devMode, setDevMode] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [chatModels, setChatModels] = useState<string[]>([]);
@@ -269,16 +442,22 @@ export default function ChatWidget() {
           query: userMessage.content,
           project_id: selectedProjectId || null,
           model: selectedModel || null,
+          scope: scopeValue(sourceTypeFilter),
+          source_type: sourceTypeFilter === "all" ? null : scopeValue(sourceTypeFilter),
+          debug: devMode,
         }),
       });
-      const data = await response.json();
+      const data: Partial<ChatResponse> = await response.json();
 
       setMessages((prev) => [
         ...prev,
         {
           id: (Date.now() + 1).toString(),
           role: "assistant",
-          content: data.answer || "Bu soruya yüklü belgelerde bir yanıt bulunamadı.",
+          content: data.answer || "",
+          answerable: data.answerable ?? true,
+          citations: data.citations ?? [],
+          retrievalDebug: data.retrieval_debug ?? null,
           sources: data.sources,
           durationMs: Date.now() - startedAt,
         },
@@ -307,54 +486,86 @@ export default function ChatWidget() {
 
   return (
     <aside className="fixed top-0 right-0 h-screen w-[640px] bg-surface border-l border-ink-line shadow-folio flex flex-col z-40">
-      <div className="flex items-center px-5 py-4 border-b border-ink-line shrink-0">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-ink-line shrink-0">
         <span className="font-display italic text-lg text-ink">Sohbet</span>
+        <button
+          type="button"
+          onClick={() => setDevMode((v) => !v)}
+          title="Geliştirici modu: retrieval sıralarını göster"
+          className={`flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded border transition-colors ${
+            devMode
+              ? "bg-brass/15 text-brass-dim border-brass/30"
+              : "text-ink-soft border-ink-line hover:text-ink"
+          }`}
+        >
+          <TargetIcon className="w-3 h-3" />
+          Dev
+        </button>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-6 space-y-7 min-h-0">
-            {messages.map((message) => (
-              <div key={message.id} className={`flex gap-3 ${message.role === "user" ? "flex-row-reverse" : ""}`}>
-                <Avatar role={message.role} />
-                <div className={`flex flex-col gap-3 max-w-[88%] ${message.role === "user" ? "items-end" : "items-start"}`}>
-                  <div
-                    className={`rounded-lg px-3.5 py-2.5 text-[15px] leading-relaxed ${
-                      message.role === "user"
-                        ? "bg-paper-dim text-ink border border-ink-line"
-                        : "bg-transparent text-ink"
-                    }`}
-                  >
-                    {message.role === "assistant" ? (
-                      <MarkdownContent content={message.content} />
-                    ) : (
-                      message.content
-                    )}
-                  </div>
-                  {message.sources && message.sources.length > 0 && (
-                    <div className="flex flex-col gap-1 pl-3.5">
-                      {uniqueDocumentNames(message.sources).map((name) => (
-                        <div key={name} className="flex items-center gap-1.5 font-mono text-[11px] text-ink-soft">
-                          <FileIcon className="w-3 h-3 text-ink/40 shrink-0" />
-                          <span className="truncate">{name}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {message.role === "assistant" && message.durationMs !== undefined && (
-                    <span className="font-mono text-[10px] text-ink-soft/50 pl-3.5">
-                      {formatDuration(message.durationMs)}
-                    </span>
-                  )}
-                </div>
+        {messages.map((message) => (
+          <div key={message.id} className={`flex gap-3 ${message.role === "user" ? "flex-row-reverse" : ""}`}>
+            <Avatar role={message.role} />
+            <div className={`flex flex-col gap-3 max-w-[88%] ${message.role === "user" ? "items-end" : "items-start"}`}>
+              <div
+                className={`rounded-lg px-3.5 py-2.5 text-[15px] leading-relaxed ${
+                  message.role === "user"
+                    ? "bg-paper-dim text-ink border border-ink-line"
+                    : "bg-transparent text-ink"
+                }`}
+              >
+                {message.role === "assistant" ? (
+                  <MarkdownContent content={message.content} />
+                ) : (
+                  message.content
+                )}
               </div>
-            ))}
 
-            {isTyping && (
-              <div className="flex gap-3">
-                <Avatar role="assistant" />
-                <ThinkingIndicator stageIndex={thinkingStage} />
-              </div>
-            )}
+              {message.role === "assistant" && message.answerable === false && <NoAnswerBlock />}
+
+              {message.role === "assistant" && message.citations && message.citations.length > 0 && (
+                <div className="flex flex-col gap-1.5 w-full">
+                  {message.citations.map((citation, i) => (
+                    <CitationPanel key={`${citation.label}-${i}`} citation={citation} />
+                  ))}
+                </div>
+              )}
+
+              {message.role === "assistant" &&
+                (!message.citations || message.citations.length === 0) &&
+                message.sources &&
+                message.sources.length > 0 && (
+                  <div className="flex flex-col gap-1 pl-3.5">
+                    {uniqueSourceNames(message.citations ?? [], message.sources).map((name) => (
+                      <div key={name} className="flex items-center gap-1.5 font-mono text-[11px] text-ink-soft">
+                        <FileIcon className="w-3 h-3 text-ink/40 shrink-0" />
+                        <span className="truncate">{name}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+              {message.role === "assistant" && devMode && message.retrievalDebug && (
+                <RetrievalDebugPanel retrievalDebug={message.retrievalDebug} />
+              )}
+
+              {message.role === "assistant" && message.durationMs !== undefined && (
+                <span className="font-mono text-[10px] text-ink-soft/50 pl-3.5">
+                  {formatDuration(message.durationMs)}
+                </span>
+              )}
+            </div>
           </div>
+        ))}
+
+        {isTyping && (
+          <div className="flex gap-3">
+            <Avatar role="assistant" />
+            <ThinkingIndicator stageIndex={thinkingStage} />
+          </div>
+        )}
+      </div>
 
       <div className="border-t border-ink-line p-3 shrink-0 flex flex-col gap-2">
         <div className="flex items-center gap-2">
@@ -375,6 +586,13 @@ export default function ChatWidget() {
               ))}
             </StyledSelect>
           )}
+          <StyledSelect value={sourceTypeFilter} onChange={(v) => setSourceTypeFilter(v as SourceTypeFilter)}>
+            {SOURCE_TYPE_FILTERS.map((f) => (
+              <option key={f.value} value={f.value}>
+                {SOURCE_TYPE_LABEL[f.value]}
+              </option>
+            ))}
+          </StyledSelect>
         </div>
         <div className="flex items-center gap-2.5">
           <input

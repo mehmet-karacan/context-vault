@@ -53,7 +53,6 @@ _chat_client = ChatCompletionClient(
 def embed_text(text: str, instruction: str = "") -> List[float]:
     return _embedding_provider.embed_one(text, instruction)
 
-
 def embed_texts(texts: List[str], instruction: str = "") -> List[List[float]]:
     return _embedding_provider.embed(texts, instruction)
 
@@ -62,3 +61,8 @@ def generate_answer(
     query: str, context_chunks: List[str], model: Optional[str] = None
 ) -> str:
     return _chat_client.generate_answer(query, context_chunks, model)
+
+
+# Public handle to the shared ChatCompletionClient so Aşama 6 callers can use
+# its prompt-controlled ``.complete`` API without touching the private field.
+chat_client = _chat_client

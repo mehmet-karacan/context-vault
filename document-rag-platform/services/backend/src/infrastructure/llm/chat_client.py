@@ -74,3 +74,31 @@ class ChatCompletionClient:
             temperature=0.2,
         )
         return response.choices[0].message.content
+
+    def complete(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model: Optional[str] = None,
+    ) -> str:
+        """Generate an answer from an explicit system + user prompt pair (Aşama 6).
+
+        Unlike :meth:`generate_answer`, the caller controls both prompts
+        verbatim — the AnswerService uses this to keep document/evidence text
+        strictly inside the user/evidence section and never inside the system
+        instructions (prompt-injection protection) while still honoring the
+        same model allow-list and sampling parameters.
+        """
+        selected_model = (
+            model if model in self._available_models else self._default_model
+        )
+        response = self._client.chat.completions.create(
+            model=selected_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_tokens=8000,
+            temperature=0.2,
+        )
+        return response.choices[0].message.content
