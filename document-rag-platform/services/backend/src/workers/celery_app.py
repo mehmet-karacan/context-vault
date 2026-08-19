@@ -45,6 +45,33 @@ celery_app.conf.update(
     result_expires=None,
 )
 
+# --- Worker-safe delivery & time limits (Aşama 2.5) --------------------------
+# These make ingestion jobs robust to a worker being killed/restarted mid-run:
+#
+# * task_acks_late: the message is only acknowledged AFTER the task succeeds.
+#   If the worker dies (kill -9, OOM, restart) while a job is in-flight, Celery
+#   redelivers the task to another worker instead of losing it forever. This is
+#   the mechanism behind the AKTIF_GOREV.md Aşama 2 kabul kriteri
+#   "Worker yeniden başlatılsa job verisi kaybolmaz".
+# * task_reject_on_worker_lost: a task whose worker vanished mid-execution is
+#   returned to the queue as rejected (requeued) rather than silently dropped.
+# * task_acks_on_failure_or_timeout: with autoretry, the *final* failure after
+#   max_retries is exhausted is acknowledged so the broker does not loop the
+#   message forever. Retries themselves happen inside the handled task, and the
+#   job's on-disk state machine (idempotent wipe+rewrite) stays convergence-safe
+#   across redeliveries either way.
+# * worker_prefetch_multiplier=1: a slow ingestion task reserves at most one
+#   message, so one long job cannot hoard every queued ingestion while the
+#   rest of the workers sit idle.
+celery_app.conf.update(
+    task_acks_late=True,
+    task_reject_on_worker_lost=True,
+    task_acks_on_failure_or_timeout=True,
+    worker_prefetch_multiplier=1,
+    task_soft_time_limit=settings.INGESTION_TASK_SOFT_TIME_LIMIT_SECONDS,
+    task_time_limit=settings.INGESTION_TASK_TIME_LIMIT_SECONDS,
+)
+
 # Alias some Celery app-discovery conventions look for when given a bare
 # module path (``-A src.workers.celery_app`` with no ``:attr`` suffix).
 # Harmless to keep alongside ``celery_app`` — same object either name.

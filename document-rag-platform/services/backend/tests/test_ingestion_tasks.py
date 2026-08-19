@@ -38,7 +38,12 @@ from src.models import (
     IngestionJob,
 )
 from src.workers import ingestion_tasks
-from src.workers.ingestion_tasks import IngestionJobError, run_ingestion_job
+from src.workers.ingestion_tasks import (
+    IngestionJobError,
+    RetryableIngestionError,
+    StageTransitionError,
+    run_ingestion_job,
+)
 
 
 # --- Fake SQLAlchemy session -------------------------------------------------
@@ -395,4 +400,93 @@ def test_embedding_count_mismatch_fails_job():
 
     assert job.status == "failed"
     assert version.status == "pending"
+    assert document.active_version_id is None
+
+
+# --- Tests: stage transition control (Aşama 2.5) ------------------------------
+
+
+def test_skipping_a_stage_is_rejected():
+    db = FakeSession()
+    storage = FakeStorage()
+    _, _, job = _make_chain(db, storage)
+
+    # ''validating'' -> ''storing'' is fine...
+    ingestion_tasks._advance_stage(db, job, "validating")
+    # ...but jumping straight to ''embedding'' (skipping ''storing'',
+    # ''parsing'', ''chunking'') must be rejected.
+    with pytest.raises(StageTransitionError):
+        ingestion_tasks._advance_stage(db, job, "embedding")
+
+
+def test_rewind_to_validating_is_allowed_for_restart():
+    db = FakeSession()
+    storage = FakeStorage()
+    _, _, job = _make_chain(db, storage)
+
+    # Simulate a mid-run state.
+    ingestion_tasks._advance_stage(db, job, "validating")
+    ingestion_tasks._advance_stage(db, job, "storing")
+    assert job.stage == "storing"
+
+    # A retried job may rewind to ''validating'' to restart its pipeline.
+    ingestion_tasks._advance_stage(db, job, "validating")
+    assert job.stage == "validating"
+
+
+def test_unknown_stage_is_rejected():
+    db = FakeSession()
+    storage = FakeStorage()
+    _, _, job = _make_chain(db, storage)
+
+    with pytest.raises(StageTransitionError):
+        ingestion_tasks._advance_stage(db, job, "not-a-real-stage")
+
+
+# --- Tests: retryability (Aşama 2.5) ------------------------------------------
+
+
+def test_transient_failure_is_wrapped_as_retryable():
+    db = FakeSession()
+    storage = FakeStorage()
+    document, version, job = _make_chain(db, storage)
+
+    def _flaky_embedder(texts, instruction=""):
+        raise TimeoutError("embedding gateway timed out")
+
+    with pytest.raises(RetryableIngestionError):
+        run_ingestion_job(
+            db=db,
+            job_id=job.id,
+            storage=storage,
+            extract_text_fn=_stub_extractor(),
+            chunk_text_fn=_stub_chunker(["a"]),
+            embed_texts_fn=_flaky_embedder,
+        )
+
+    # The job is marked failed so the durable status/events are accurate...
+    assert job.status == "failed"
+    assert job.error_message == "embedding gateway timed out"
+    # ...but the transient classification is what lets Celery autoretry it.
+    assert job.error_code == "TimeoutError"
+
+
+def test_permanent_validation_error_is_not_retryable():
+    db = FakeSession()
+    storage = FakeStorage()
+    document, version, job = _make_chain(db, storage)
+
+    def _empty_embedder(texts, instruction=""):
+        return []  # produces a count mismatch -> permanent IngestionJobError
+
+    with pytest.raises(IngestionJobError):
+        run_ingestion_job(
+            db=db,
+            job_id=job.id,
+            storage=storage,
+            extract_text_fn=_stub_extractor(),
+            chunk_text_fn=_stub_chunker(["a"]),
+            embed_texts_fn=_empty_embedder,
+        )
+    assert job.status == "failed"
     assert document.active_version_id is None

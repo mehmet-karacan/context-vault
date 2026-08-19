@@ -91,8 +91,28 @@ DEFAULT_CHUNK_OVERLAP = 50
 
 
 class IngestionJobError(RuntimeError):
-    """Raised for validation-level failures (missing job/version/document,
-    unreadable source content, etc.)."""
+    """Raised for permanent validation-level failures (missing
+    job/version/document, unreadable source content, zero chunks, embedding
+    count mismatch, etc.). A permanent failure is never retried: the job ends
+    ``failed`` and no automatic redelivery happens (Aşama 2.5)."""
+
+
+class StageTransitionError(IngestionJobError):
+    """Raised when an ingestion job tries to move to a stage that is not the
+    documented successor of its current stage. This indicates a code-level
+    state bug rather than a transient environment hiccup, so it is treated as
+    permanent (see ``_validate_stage_transition``)."""
+
+
+class RetryableIngestionError(RuntimeError):
+    """Raised for transient, environment-dependent failures (embedding gateway
+    timeouts, MinIO connection blips, DB connection drops, etc.) where a
+    later retry has a real chance of succeeding. With Celery ``autoretry``
+    (see ``process_ingestion_job``) this exception triggers an automatic retry
+    with exponential backoff up to ``settings.INGESTION_MAX_RETRIES``. The
+    job is still marked ``failed`` on this attempt (so the durable status and
+    events are accurate), but a fresh attempt rewinds its stage to
+    ``validating`` and re-runs the idempotent pipeline."""
 
 
 def _build_storage() -> MinioObjectStorage:
@@ -119,7 +139,38 @@ def _emit_event(
     )
 
 
+def _validate_stage_transition(current, new) -> None:
+    """Enforces the documented stage machine on ``STAGES``.
+
+    A job may only ever transition to the *immediate successor* of its current
+    stage, with one deliberate exception: rewinding to ``STAGES[0]``
+    (``validating``) is always allowed, because a retried job restarts its
+    pipeline from the top (see ``RetryableIngestionError``). Everything else —
+    skipping a stage, jumping backwards, starting at a non-first stage, or
+    naming a stage that is not in ``STAGES`` — is a state-machine bug and
+    raises ``StageTransitionError`` (permanent; never retried).
+    """
+    if new not in STAGES:
+        raise StageTransitionError(f"Unknown ingestion stage: {new!r}")
+    if new == STAGES[0]:
+        # Fresh start, or a retried job rewinding to the beginning. Both are
+        # valid; the pipeline always runs forward from here.
+        return
+    if current is None or current not in STAGES:
+        raise StageTransitionError(
+            f"Cannot start a job at stage {new!r} with current stage {current!r}"
+        )
+    current_idx = STAGES.index(current)
+    expected = STAGES[current_idx + 1] if current_idx + 1 < len(STAGES) else None
+    if new != expected:
+        raise StageTransitionError(
+            f"Invalid stage transition {current!r} -> {new!r}; expected "
+            f"{expected!r} (next stage) or {STAGES[0]!r} (restart)"
+        )
+
+
 def _advance_stage(db: Session, job: IngestionJob, stage: str) -> None:
+    _validate_stage_transition(job.stage, stage)
     job.stage = stage
     _emit_event(db, job, stage=stage, status="started")
     db.commit()
@@ -403,10 +454,24 @@ def run_ingestion_job(
                 failed_document.error_message = str(exc)
                 failed_document.updated_at = datetime.utcnow()
             db.commit()
-        raise
+
+        # Permanent, code-level failures (validation, stage machine) propagate
+        # unchanged so the Celery task does not retry them. Anything else is a
+        # transient environment failure (gateway/MINIO/DB blip) and is wrapped
+        # in RetryableIngestionError so autoretry picks it up.
+        if isinstance(exc, IngestionJobError):
+            raise
+        raise RetryableIngestionError(str(exc)) from exc
 
 
-@celery_app.task(name="ingestion.process_ingestion_job")
+@celery_app.task(
+    name="ingestion.process_ingestion_job",
+    autoretry_for=(RetryableIngestionError,),
+    retry_kwargs={"max_retries": settings.INGESTION_MAX_RETRIES},
+    retry_backoff=settings.INGESTION_RETRY_BACKOFF_SECONDS,
+    retry_backoff_max=int(settings.INGESTION_RETRY_BACKOFF_MAX_SECONDS),
+    retry_jitter=True,
+)
 def process_ingestion_job(job_id: str) -> dict:
     """Celery task entrypoint: builds the real DB session and MinIO storage
     adapter, then runs the job to completion. Kept as a thin wrapper around
