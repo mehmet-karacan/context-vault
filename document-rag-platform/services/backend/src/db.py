@@ -37,9 +37,16 @@ def init_db():
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         conn.commit()
 
-    from . import models  # noqa: F401  (register models on Base before create_all)
+    from . import models  # noqa: F401  (kept so Base.metadata is fully populated
+    # for anything that still inspects it, e.g. tests)
 
-    Base.metadata.create_all(bind=engine)
+    # Schema creation is Alembic's job now (see alembic/versions/ and
+    # MIGRATION_RUNBOOK.md), not app startup's. This function used to call
+    # Base.metadata.create_all(bind=engine) here unconditionally, which
+    # silently created tables Alembic didn't know about and collided with
+    # `alembic upgrade` ("relation ... already exists"). Run
+    # `alembic upgrade head` before starting the app against a fresh
+    # database; startup no longer creates or alters tables.
 
     with engine.connect() as conn:
         try:
