@@ -87,6 +87,12 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       MINIO_BUCKET: ${MINIO_BUCKET:-context-vault}
+      SECRET_KEY: ${SECRET_KEY}
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL}
+      LITELLM_API_KEY: ${LITELLM_API_KEY}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+      CHAT_MODEL: ${CHAT_MODEL}
+      CHAT_MODELS: ${CHAT_MODELS}
     command: celery -A src.workers.celery_app worker -l info
     depends_on:
       - backend
