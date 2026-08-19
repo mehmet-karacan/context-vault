@@ -1540,15 +1540,15 @@ Bu bölüm her çalışma oturumunda güncellenmelidir.
 
 ```text
 Son güncelleme: 2026-08-19
-Çalışan ajan/model: opencode (DeepSeek-V4-Flash) — KRCN native-parallel, 3 subagent
+Çalışan ajan/model: opencode (DeepSeek-V4-Flash) — KRCN native-parallel, 3-4 subagent
 Branch: main
-Son commit: 7e465b1 (Aşama 2.4: job-tabanli upload + ingestion-jobs API)
-Tamamlanan son aşama: Aşama 3 (Parser Router + DOCX/PDF/TXT-MD yapısal parser'ları)
-Aktif aşama: Aşama 4 (Yapıya duyarlı chunking ve embedding profilleri)
-Çalıştırılan testler: pytest (backend full suite, venv)
-Test sonucu: 101 passed, 4 skipped, 1 failed (tek hata FastAPI 0.141 vs kilitli 0.109 sürüm artefaktı; Aşama 3 ile ilgisiz). Aşama 2 + Aşama 3 testleri tamamen geçti.
-Bilinen engeller: yok (yalnız Aşama 2 ve 3 değişiklikleri henüz commit edilmedi; test venv'i geçici)
-Bir sonraki kesin adım: Aşama 4 — ChunkerRegistry + TokenCounter + token-bazlı chunking + parent-child + embedding cache
+Son commit: Aşama 4 (ChunkerRegistry + TokenCounter + chunking + embedding cache)
+Tamamlanan son aşama: Aşama 4 (Yapıya duyarlı chunking ve embedding profilleri)
+Aktif aşama: Aşama 5 (Hybrid retrieval ve reranking)
+Çalıştırılan testler: pytest (backend full suite, venv) — 3 ardışık koşu stabil
+Test sonucu: 133 passed, 4 skipped, 1 failed (tek hata FastAPI 0.141 vs kilitli 0.109 sürüm artefaktı; tüm Aşama 4 testleri + chunker/token/cache stabil geçti)
+Bilinen engeller: yok (test venv'i geçici; FastAPI sürüm artefaktı dışında kalmış tek hata)
+Bir sonraki kesin adım: Aşama 5 — Retrieval V2: dense+lexical+identifier, RRF, reranker portu, no-answer/intent ayrımı
 ```
 
 ## Aşama Durumları
@@ -1557,7 +1557,7 @@ Bir sonraki kesin adım: Aşama 4 — ChunkerRegistry + TokenCounter + token-baz
 - [x] Aşama 1 — Config ve modüler backend
 - [x] Aşama 2 — Versioning, storage ve worker (2.1–2.5 + migration upgrade/downgrade gerçek DB'de doğrulandı)
 - [x] Aşama 3 — Yapısal belge parser'ları (Parser Router + DOCX/PDF-Docling-fallback/TXT-MD)
-- [ ] Aşama 4 — Chunking ve embedding profilleri
+- [x] Aşama 4 — Yapıya duyarlı chunking ve embedding profilleri (ChunkerRegistry, TokenCounter, token-bazlı chunking, parent-child, embedding cache)
 - [ ] Aşama 5 — Hybrid retrieval ve reranking
 - [ ] Aşama 6 — Cevap, citation ve UI
 - [ ] Aşama 7 — Repository/klasör ingestion
