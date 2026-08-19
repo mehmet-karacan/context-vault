@@ -35,6 +35,15 @@ class Settings(BaseSettings):
     # None (unset) means "fall back to CHAT_MODEL only".
     CHAT_MODELS: Optional[str] = None
 
+    # --- Object storage (MinIO / S3-compatible) ------------------------
+    # Required. docker-compose.yml already injects ENDPOINT/ACCESS_KEY/
+    # SECRET_KEY into the backend and worker containers; BUCKET has a
+    # sensible default so existing .env files without it don't break.
+    MINIO_ENDPOINT: str = "http://minio:9000"
+    MINIO_ACCESS_KEY: str = "minioadmin"
+    MINIO_SECRET_KEY: str = "minioadmin"
+    MINIO_BUCKET: str = "context-vault"
+
     @property
     def available_chat_models(self) -> List[str]:
         """Parsed CHAT_MODELS allow-list, falling back to [CHAT_MODEL]."""
