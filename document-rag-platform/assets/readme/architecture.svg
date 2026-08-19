@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="410" viewBox="0 0 1200 410"
+     role="img" aria-labelledby="arch-title arch-desc"
+     font-family="Georgia, 'Songti SC', serif">
+  <title id="arch-title">Belge Arşivi mimari haritası</title>
+  <desc id="arch-desc">Tarayıcı, Next.js frontend'e; frontend, çekirdek FastAPI backend'e bağlanır. Backend, PostgreSQL + pgvector'a yazar ve LiteLLM gateway üzerinden embedding ile sohbet modellerini çağırır.</desc>
+
+  <rect width="1200" height="410" rx="22" fill="#f6f1e4"/>
+  <rect x="1" y="1" width="1198" height="408" rx="21" fill="none" stroke="#1e2128" stroke-opacity="0.08"/>
+
+  <!-- A: Tarayıcı -->
+  <g transform="translate(64 100)">
+    <rect width="170" height="110" rx="12" fill="#fffdf7" stroke="#1e2128" stroke-opacity="0.14"/>
+    <text x="18" y="42" font-size="22" font-weight="600" fill="#1e2128">Tarayıcı</text>
+    <text x="18" y="66" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" fill="#736f60">kullanıcı</text>
+  </g>
+
+  <!-- B: Frontend -->
+  <g transform="translate(311 100)">
+    <rect width="210" height="110" rx="12" fill="#fffdf7" stroke="#1e2128" stroke-opacity="0.14"/>
+    <text x="18" y="42" font-size="22" font-weight="600" fill="#1e2128">Frontend</text>
+    <text x="18" y="66" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" fill="#736f60">Next.js 14 · React</text>
+  </g>
+
+  <!-- C: Backend (core) -->
+  <g transform="translate(598 100)">
+    <rect x="-7" y="-7" width="244" height="124" rx="17" fill="none" stroke="#c68a3d" stroke-width="2"/>
+    <rect width="230" height="110" rx="12" fill="#fffdf7" stroke="#1e2128" stroke-opacity="0.14"/>
+    <text x="18" y="42" font-size="22" font-weight="600" fill="#1e2128">Backend</text>
+    <text x="18" y="66" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" fill="#736f60">FastAPI · Python</text>
+  </g>
+
+  <!-- D: Gateway -->
+  <g transform="translate(905 100)">
+    <rect width="230" height="110" rx="12" fill="#fffdf7" stroke="#1e2128" stroke-opacity="0.14"/>
+    <text x="18" y="36" font-size="22" font-weight="600" fill="#1e2128">Gateway</text>
+    <text x="18" y="58" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" fill="#736f60">embedding: BGE-M3</text>
+    <text x="18" y="78" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" fill="#736f60">chat: env ile seçilir</text>
+  </g>
+
+  <!-- E: PostgreSQL + pgvector -->
+  <g transform="translate(598 250)">
+    <rect width="230" height="90" rx="12" fill="#fffdf7" stroke="#5c7a4c" stroke-opacity="0.55"/>
+    <text x="18" y="36" font-size="22" font-weight="600" fill="#1e2128">PostgreSQL</text>
+    <text x="18" y="60" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" fill="#736f60">pgvector · HNSW</text>
+  </g>
+
+  <g stroke="#c68a3d" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M266.5 149 L278.5 155 L266.5 161"/>
+    <path d="M553.5 149 L565.5 155 L553.5 161"/>
+    <path d="M860.5 149 L872.5 155 L860.5 161"/>
+    <path d="M707 216 L713 228 L719 216"/>
+  </g>
+
+  <text x="64" y="376" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#736f60">Backend'de torch/sentence-transformers gibi ağır yerel bağımlılık yok — embedding ve</text>
+  <text x="64" y="398" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#736f60">sohbet çağrıları OpenAI uyumlu bir gateway üzerinden yapılır.</text>
+</svg>

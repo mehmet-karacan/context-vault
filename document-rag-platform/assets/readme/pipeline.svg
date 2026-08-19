@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="430" viewBox="0 0 1200 430"
+     role="img" aria-labelledby="pipeline-title pipeline-desc"
+     font-family="Georgia, 'Songti SC', serif">
+  <title id="pipeline-title">Belge Arşivi işlem hattı</title>
+  <desc id="pipeline-desc">Üstte belge yükleme akışı (yükle, ayrıştır, böl, vektörle, kaydet), altta soru-cevap akışı (sor, vektörle, ara, eşikle, yanıtla). Her iki akış da aynı embedding modelini ve aynı pgvector tablosunu paylaşır.</desc>
+
+  <rect width="1200" height="430" rx="22" fill="#f6f1e4"/>
+  <rect x="1" y="1" width="1198" height="428" rx="21" fill="none" stroke="#1e2128" stroke-opacity="0.08"/>
+
+  <!-- Lane 1: document ingestion -->
+  <text x="64" y="54" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" letter-spacing="1.5" fill="#a3702f">1 · BELGE YÜKLEME</text>
+
+  <g id="lane-1">
+    <!-- node 0: Yükle -->
+    <g transform="translate(64 72)">
+      <path d="M0 0 L166 0 L180 14 L180 84 L0 84 Z" fill="#fffdf7" stroke="#1e2128" stroke-opacity="0.14"/>
+      <path d="M166 0 L180 0 L180 14 Z" fill="#1e2128" fill-opacity="0.12"/>
+      <text x="16" y="35" font-size="23" font-weight="600" fill="#1e2128">Yükle</text>
+      <text x="16" y="60" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" fill="#736f60">PDF·DOCX·TXT</text>
+    </g>
+    <!-- node 1: Ayrıştır -->
+    <g transform="translate(287 72)">
+      <path d="M0 0 L166 0 L180 14 L180 84 L0 84 Z" fill="#fffdf7" stroke="#1e2128" stroke-opacity="0.14"/>
+      <path d="M166 0 L180 0 L180 14 Z" fill="#1e2128" fill-opacity="0.12"/>
+      <text x="16" y="35" font-size="23" font-weight="600" fill="#1e2128">Ayrıştır</text>
+      <text x="16" y="60" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" fill="#736f60">metni çıkar</text>
+    </g>
+    <!-- node 2: Böl -->
+    <g transform="translate(510 72)">
+      <path d="M0 0 L166 0 L180 14 L180 84 L0 84 Z" fill="#fffdf7" stroke="#1e2128" stroke-opacity="0.14"/>
+      <path d="M166 0 L180 0 L180 14 Z" fill="#1e2128" fill-opacity="0.12"/>
+      <text x="16" y="35" font-size="23" font-weight="600" fill="#1e2128">Böl</text>
+      <text x="16" y="60" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" fill="#736f60">kelime sınırlı</text>
+    </g>
+    <!-- node 3: Vektörle -->
+    <g transform="translate(733 72)">
+      <path d="M0 0 L166 0 L180 14 L180 84 L0 84 Z" fill="#fffdf7" stroke="#1e2128" stroke-opacity="0.14"/>
+      <path d="M166 0 L180 0 L180 14 Z" fill="#1e2128" fill-opacity="0.12"/>
+      <text x="16" y="35" font-size="23" font-weight="600" fill="#1e2128">Vektörle</text>
+      <text x="16" y="60" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" fill="#736f60">BGE-M3+talimat</text>
+    </g>
+    <!-- node 4: Kaydet -->
+    <g transform="translate(956 72)">
+      <path d="M0 0 L166 0 L180 14 L180 84 L0 84 Z" fill="#fffdf7" stroke="#c68a3d" stroke-width="1.5"/>
+      <path d="M166 0 L180 0 L180 14 Z" fill="#c68a3d" fill-opacity="0.25"/>
+      <text x="16" y="35" font-size="23" font-weight="600" fill="#1e2128">Kaydet</text>
+      <text x="16" y="60" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" fill="#736f60">pgvector HNSW</text>
+    </g>
+
+    <g stroke="#c68a3d" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M259.5 106 L271.5 114 L259.5 122"/>
+      <path d="M482.5 106 L494.5 114 L482.5 122"/>
+      <path d="M705.5 106 L717.5 114 L705.5 122"/>
+      <path d="M928.5 106 L940.5 114 L928.5 122"/>
+    </g>
+  </g>
+
+  <!-- Lane 2: question and answer -->
+  <text x="64" y="214" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" letter-spacing="1.5" fill="#a3702f">2 · SORU &amp; YANIT</text>
+
+  <g id="lane-2">
+    <!-- node 0: Sor -->
+    <g transform="translate(64 232)">
+      <path d="M0 0 L166 0 L180 14 L180 84 L0 84 Z" fill="#fffdf7" stroke="#1e2128" stroke-opacity="0.14"/>
+      <path d="M166 0 L180 0 L180 14 Z" fill="#1e2128" fill-opacity="0.12"/>
+      <text x="16" y="35" font-size="23" font-weight="600" fill="#1e2128">Sor</text>
+      <text x="16" y="60" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" fill="#736f60">serbest metin</text>
+    </g>
+    <!-- node 1: Vektörle -->
+    <g transform="translate(287 232)">
+      <path d="M0 0 L166 0 L180 14 L180 84 L0 84 Z" fill="#fffdf7" stroke="#1e2128" stroke-opacity="0.14"/>
+      <path d="M166 0 L180 0 L180 14 Z" fill="#1e2128" fill-opacity="0.12"/>
+      <text x="16" y="35" font-size="23" font-weight="600" fill="#1e2128">Vektörle</text>
+      <text x="16" y="60" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" fill="#736f60">query talimatı</text>
+    </g>
+    <!-- node 2: Ara -->
+    <g transform="translate(510 232)">
+      <path d="M0 0 L166 0 L180 14 L180 84 L0 84 Z" fill="#fffdf7" stroke="#1e2128" stroke-opacity="0.14"/>
+      <path d="M166 0 L180 0 L180 14 Z" fill="#1e2128" fill-opacity="0.12"/>
+      <text x="16" y="35" font-size="23" font-weight="600" fill="#1e2128">Ara</text>
+      <text x="16" y="60" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" fill="#736f60">cosine, top-3</text>
+    </g>
+    <!-- node 3: Eşikle -->
+    <g transform="translate(733 232)">
+      <path d="M0 0 L166 0 L180 14 L180 84 L0 84 Z" fill="#fffdf7" stroke="#1e2128" stroke-opacity="0.14"/>
+      <path d="M166 0 L180 0 L180 14 Z" fill="#1e2128" fill-opacity="0.12"/>
+      <text x="16" y="35" font-size="23" font-weight="600" fill="#1e2128">Eşikle</text>
+      <text x="16" y="60" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" fill="#736f60">alaka ≥0.52</text>
+    </g>
+    <!-- node 4: Yanıtla -->
+    <g transform="translate(956 232)">
+      <path d="M0 0 L166 0 L180 14 L180 84 L0 84 Z" fill="#fffdf7" stroke="#c68a3d" stroke-width="1.5"/>
+      <path d="M166 0 L180 0 L180 14 Z" fill="#c68a3d" fill-opacity="0.25"/>
+      <text x="16" y="35" font-size="23" font-weight="600" fill="#1e2128">Yanıtla</text>
+      <text x="16" y="60" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" fill="#736f60">LLM + kaynak</text>
+    </g>
+
+    <g stroke="#c68a3d" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M259.5 266 L271.5 274 L259.5 282"/>
+      <path d="M482.5 266 L494.5 274 L482.5 282"/>
+      <path d="M705.5 266 L717.5 274 L705.5 282"/>
+      <path d="M928.5 266 L940.5 274 L928.5 282"/>
+    </g>
+  </g>
+
+  <text x="64" y="364" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#736f60">Belge parçaları ve sorular aynı vektör uzayına gömülür; aralarındaki kosinüs mesafesi</text>
+  <text x="64" y="386" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#736f60">en yakın parçaları belirler — 0.52 eşiğinin altındaki eşleşmeler sohbet moduna düşer.</text>
+</svg>
