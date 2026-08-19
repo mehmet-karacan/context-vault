@@ -21,12 +21,12 @@ dosyayı otomatik güvenilir sayma"):
   ``UnsupportedFileTypeError``.
 
 The dedicated parsers (``docx_parser``, ``pdf_parser``/``docling_parser``,
-``plain_text_parser``, ``image_parser``, ``code_parser``) do not exist yet —
-this stage only lays the foundational router. The registry maps each
-source_type to a parser instance conforming to ``DocumentParser``; concrete
-adapters can be swapped in later without touching the router's contract.
-``PlainTextParser`` / ``MarkdownParser`` are genuinely implemented here so
-the pipeline is end-to-end functional; the rest are minimal placeholders.
+``plain_text_parser``, ``image_parser`` — Aşama 8.4 OCR image routing,
+``code_parser``) live in their own modules; this router only maps each
+source_type to a parser instance conforming to ``DocumentParser`` and swaps
+them in without touching the router's contract. ``PlainTextParser`` /
+``MarkdownParser`` are genuinely implemented here so the pipeline is
+end-to-end functional.
 """
 
 from __future__ import annotations
@@ -43,6 +43,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from ...config import settings
 from .code_parser import CodeParser
 from .docx_parser import DocxParser
+from .image_parser import ImageParser
 from .pdf_parser import PdfParser
 from ...domain.normalized_content import (
     ContentUnit,
@@ -726,10 +727,6 @@ class _PlaceholderParser:
             )
         )
         return source
-
-
-class ImageParser(_PlaceholderParser):
-    source_type = "image"
 
 
 def default_parser_registry() -> Dict[str, DocumentParser]:

@@ -83,6 +83,12 @@ class Settings(BaseSettings):
     RERANKER_MODEL: str = ""
     RERANK_TOP_K: int = 8
 
+    # --- OCR (Aşama 8.4) ------------------------------------------------------
+    # Minimum OCR confidence (0..1) below which a recognized image/PDF-page
+    # result is flagged ``needs_review`` in normalized-content metadata so a
+    # human can verify it (AKTIF_GOREV.md §8.4).
+    OCR_MIN_CONFIDENCE: float = 0.5
+
     # --- Features --------------------------------------------------------
     # Aşama 2.4: upload endpoint returns immediately with a queued
     # IngestionJob instead of blocking on parse+chunk+embed. Default True
@@ -184,6 +190,23 @@ class Settings(BaseSettings):
     CODE_ARCHIVE_MAX_TOTAL_BYTES: int = 1073741824
     CODE_ARCHIVE_MAX_ENTRY_BYTES: int = 2097152
     CODE_ARCHIVE_MAX_ENTRIES: int = 20000
+
+    # --- OCR (Aşama 8) --------------------------------------------------------
+    # OCR routing config (AKTIF_GOREV.md §8 / §11 / §16). FEATURE_OCR gates the
+    # whole feature; OCR_ENABLED additionally gates the active OCR call. When
+    # the selected OCR_PROVIDER's engine is not installed, the factory degrades
+    # to OCR_FALLBACK_PROVIDER, and if neither is available it reports OCR as
+    # unavailable. OCR_LANGUAGES uses the "tur+eng" profile (provider-resolved).
+    # OCR_MIN_TEXT_COVERAGE is the per-page threshold below which a page is
+    # routed to OCR (see pdf_parser coverage_metadata). OCR_MIN_CONFIDENCE (the
+    # threshold below which an OCR result is flagged needs_review metadata, 8.4)
+    # is defined together with the OCR routing logic below; see §8.4 comment.
+    FEATURE_OCR: bool = True
+    OCR_ENABLED: bool = True
+    OCR_PROVIDER: str = "docling"
+    OCR_FALLBACK_PROVIDER: str = "tesseract"
+    OCR_LANGUAGES: str = "tur+eng"
+    OCR_MIN_TEXT_COVERAGE: float = 0.02
 
     # --- No-answer / intent policy (Aşama 5.6) --------------------------------
     # These are configurable calibration defaults, NOT hardcoded constants and NOT
