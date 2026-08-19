@@ -143,6 +143,48 @@ class Settings(BaseSettings):
     # selected chunk during expansion.
     CONTEXT_ADJACENT_WINDOW: int = 1
 
+    # --- Repository / directory scan (Aşama 7) --------------------------------
+    # Security and resource limits for repository/archive/directory source
+    # discovery and scanning (AKTIF_GOREV.md §7.2 / §11 / §12.3). These are the
+    # configurable knobs discovery enforces — no such numbers are hardcoded in
+    # the scanning logic.
+    # Comma-separated list of absolute filesystem roots that a web-requested
+    # scan path may resolve under. Any path outside these is refused (AKTIF
+    # 7.2: "Yalnız CODE_ALLOWED_ROOTS altında kalan canonical path'lere izin
+    # ver").
+    CODE_ALLOWED_ROOTS: str = "/imports,/workspace"
+    # Maximum number of files a single scan may discover.
+    CODE_MAX_FILES: int = 20000
+    # Maximum total bytes across all discovered files in one scan.
+    CODE_MAX_TOTAL_BYTES: int = 1073741824
+    # Maximum bytes for a single discovered file; larger files are skipped.
+    CODE_MAX_FILE_BYTES: int = 2097152
+    # Wall-clock budget in seconds for a single scan.
+    CODE_SCAN_TIMEOUT_SECONDS: int = 900
+    # Whether directory symlinks are traversed during discovery. Default False:
+    # symlinks are never followed (AKTIF 7.2 symlink escape guard).
+    CODE_FOLLOW_SYMLINKS: bool = False
+    # Whether git submodules are pulled/expanded automatically. Default False.
+    CODE_ALLOW_SUBMODULES: bool = False
+    # Whether git LFS large objects are downloaded. Default False.
+    CODE_ALLOW_GIT_LFS: bool = False
+    # Secret handling policy for sensitive paths: "skip" (default) skips
+    # sensitive files during discovery.
+    CODE_SECRET_POLICY: str = "skip"
+
+    # --- Repository / archive ingestion feature (Aşama 7) --------------------
+    # Gates the whole repository/archive/directory source-ingestion feature
+    # behind a flag so it can be rolled back safely (AKTIF_GOREV.md §11 / §16:
+    # FEATURE_REPOSITORY_INGESTION). The API routes in ``api/v1/repositories.py``
+    # refuse to run when this is off.
+    FEATURE_REPOSITORY_INGESTION: bool = False
+    # Archive "zip bomb" / traversal protective limits (AKTIF_GOREV.md §7.2:
+    # "Archive path traversal ve zip bomb koruması uygula", "Maksimum dosya
+    # sayısı, tek dosya boyutu, toplam byte ve tarama süresi limiti koy").
+    CODE_ARCHIVE_MAX_TOTAL_BYTES: int = 1073741824
+    CODE_ARCHIVE_MAX_ENTRY_BYTES: int = 2097152
+    CODE_ARCHIVE_MAX_ENTRIES: int = 20000
+
     # --- No-answer / intent policy (Aşama 5.6) --------------------------------
     # These are configurable calibration defaults, NOT hardcoded constants and NOT
     # a single decision mechanism. The AnswerPolicy combines dense score, lexical /
