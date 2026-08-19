@@ -8,9 +8,12 @@ kontrollü biçimde, sırayla çalıştırılmalıdır.
 
 Tüm komutlar repository kökünden değil, **`document-rag-platform/` dizininden**
 çalıştırılmak üzere yazılmıştır (docker-compose.yml'nin bulunduğu yer).
-Örnekler PowerShell için yazılmıştır; Git Bash kullanıyorsanız komutlar
-aynen çalışır (tek tırnaklı `sh -c '...'` blokları her iki shell'de de
-literal geçer).
+Komutlar **yalnızca Windows PowerShell** için yazılmıştır (PS ile başlayan
+mavi terminal). Her komutu TEK BAŞINA, tek satır halinde kopyalayıp
+Enter'a basın — birden fazla satıra yayılan hiçbir komut yok, bu yüzden
+kopyala-yapıştırda satır sonu/backtick sorunu yaşamamalısınız. Aynı
+PowerShell penceresini adım 1'den 8'e kadar KAPATMADAN kullanın (Adım 1'de
+tanımlanan `$stamp` değişkeni sonraki adımlarda da kullanılıyor).
 
 Migration zinciri (`alembic/versions/`):
 
@@ -266,13 +269,24 @@ docker compose logs --tail=50 backend
 
 Ardından uçtan uca endpoint testleri:
 
+Windows PowerShell'de `curl` komutu aslında `Invoke-WebRequest` takma adıdır
+ve `-X`/`-H`/`-d` bayraklarını desteklemez — bu yüzden aşağıda **gerçek
+curl programını** (`curl.exe`) açıkça çağırıyoruz, `curl` YAZMAYIN:
+
 ```powershell
-curl http://localhost:8000/health
-curl http://localhost:8000/projects
-curl http://localhost:8000/documents
-curl -X POST http://localhost:8000/chat/query `
-  -H "Content-Type: application/json" `
-  -d '{"query": "merhaba"}'
+curl.exe http://localhost:8000/health
+```
+
+```powershell
+curl.exe http://localhost:8000/projects
+```
+
+```powershell
+curl.exe http://localhost:8000/documents
+```
+
+```powershell
+curl.exe -X POST http://localhost:8000/chat/query -H "Content-Type: application/json" -d '{"query": "merhaba"}'
 ```
 
 **Beklenen çıktı:**
