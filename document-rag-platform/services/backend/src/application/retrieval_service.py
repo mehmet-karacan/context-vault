@@ -142,14 +142,39 @@ class RetrievalResult:
 
 
 def serialize_candidate(candidate: RetrievalCandidate) -> Dict[str, Any]:
-    """Serialize a RetrievalCandidate into a rank/score/source-debug dict."""
+    """Serialize a RetrievalCandidate into a rank/score/source-debug dict.
+
+    The payload is consumed directly by the A�Yama 6 frontend retrieval-debug
+    panel, which renders each stage's ranked list. We therefore surface
+    ``label`` (falls back to ``chunk_id``) and ``document_name`` (when it can be
+    resolved from the candidate metadata or the attached chunk) so the UI never
+    renders bare "—" placeholders.
+    """
+    meta = dict(candidate.metadata or {})
+    chunk = getattr(candidate, "chunk", None)
+    chunk_meta: Dict[str, Any] = {}
+    chunk_document_name: Any = None
+    if chunk is not None and isinstance(chunk, dict):
+        chunk_meta = dict(chunk.get("metadata") or {})
+        chunk_document_name = chunk.get("document_name")
+    elif chunk is not None:
+        chunk_meta = dict(getattr(chunk, "metadata", None) or {})
+        chunk_document_name = getattr(chunk, "document_name", None)
+    document_name = (
+        meta.get("document_name")
+        or chunk_meta.get("document_name")
+        or chunk_document_name
+    )
     base = {
         "chunk_id": candidate.chunk_id,
+        "label": str(candidate.chunk_id),
         "rank": candidate.rank,
         "score": candidate.score,
         "source": candidate.source,
-        "metadata": dict(candidate.metadata or {}),
+        "metadata": dict(meta),
     }
+    if document_name:
+        base["document_name"] = document_name
     rerank_score = getattr(candidate, "rerank_score", None)
     if rerank_score is not None:
         base["rerank_score"] = rerank_score

@@ -24,6 +24,12 @@ wheels/
 .installed.cfg
 *.egg
 
+# The Python build-artifact `lib/` rule above also matched Next.js apps/web/lib,
+# which is a real, tracked source directory (shared TS types/api), not a build
+# artifact. Re-include it so those files are version-controlled again.
+!apps/web/lib/
+!apps/web/lib/**
+
 # Virtual environments
 .venv/
 venv/

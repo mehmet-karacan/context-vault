@@ -13,6 +13,7 @@ import {
   ChevronDownIcon,
 } from "../components/icons";
 import { apiUrl } from "../lib/api";
+import { IngestionJob, IngestionJobEvent, UploadResponse } from "../lib/types";
 
 interface Document {
   id: string;
@@ -32,8 +33,36 @@ interface Project {
 
 const NEW_PROJECT_VALUE = "__new__";
 
-const DEFAULT_INSTRUCTION = "Bu metni bir belge arama sisteminde bulunmak üzere temsil et: ";
 const DEFAULT_CHUNK_SIZE = 500;
+
+// How long (ms) we keep polling a job's live progress before we gracefully
+// fall back to the document list status. Ingestion of large docs can be slow,
+// but a settling timeout avoids a permanently spinning UI when a worker is
+// down or the endpoint is unavailable.
+const JOB_POLL_TIMEOUT_MS = 10 * 60 * 1000;
+const JOB_POLL_INTERVAL_MS = 1500;
+
+const STAGE_LABEL: Record<string, string> = {
+  validating: "Doğrulanıyor",
+  parsing: "Ayrıştırılıyor",
+  chunking: "Parçalara bölünüyor",
+  embedding: "Vektörleniyor",
+  indexing: "Dizine ekleniyor",
+  completed: "Tamamlandı",
+  failed: "Hata",
+};
+
+interface UploadJob {
+  name: string;
+  jobId: string;
+  documentId: string | null;
+  status: string;
+  stage: string;
+  progress: number | null;
+  events: IngestionJobEvent[];
+  error: string | null;
+  settled: boolean;
+}
 
 const STATUS_LABEL: Record<Document["status"], { text: string; className: string }> = {
   uploaded: { text: "Yüklendi", className: "bg-paper-dim text-ink/70" },
@@ -68,14 +97,10 @@ function StyledSelect({
 }
 
 function SettingsModal({
-  extraInstruction,
-  setExtraInstruction,
   chunkSize,
   setChunkSize,
   onClose,
 }: {
-  extraInstruction: string;
-  setExtraInstruction: (v: string) => void;
   chunkSize: number;
   setChunkSize: (v: number) => void;
   onClose: () => void;
@@ -102,26 +127,11 @@ function SettingsModal({
 
         <div className="flex flex-col gap-5">
           <div>
-            <label className="block text-xs font-mono uppercase tracking-wide text-ink-soft mb-1.5">
-              Sabit vektörleme talimatı
-            </label>
-            <div className="bg-paper-dim border border-ink-line rounded-md px-3 py-2 text-sm text-ink/70 italic">
-              {DEFAULT_INSTRUCTION}
+            <div className="bg-paper-dim border border-ink-line rounded-md px-3 py-3 text-sm text-ink/70 leading-relaxed">
+              Belgenin içeriği, ek embedding talimatı olmadan doğrudan temsil edilir. Vektörleme
+              davranışı sunucu tarafındaki sabit profil tarafından belirlenir; kullanıcı tarafından
+              serbest bir embedding talimatı kaldırılmıştır.
             </div>
-
-            <label className="block text-xs font-mono uppercase tracking-wide text-ink-soft mt-3 mb-1.5">
-              Ek talimat (isteğe bağlı)
-            </label>
-            <textarea
-              value={extraInstruction}
-              onChange={(e) => setExtraInstruction(e.target.value)}
-              rows={2}
-              placeholder="Örn. bu belge bir sözleşmedir, madde numaralarına dikkat et…"
-              className="w-full bg-surface border border-ink-line rounded-md px-3 py-2 text-sm text-ink placeholder-ink-soft focus:outline-none focus:border-brass resize-none"
-            />
-            <p className="text-ink-soft/60 text-[11px] mt-1">
-              Aşağıya yazacakların, yukarıdaki sabit talimata eklenerek kullanılır.
-            </p>
           </div>
 
           <div>
@@ -155,6 +165,64 @@ function SettingsModal({
   );
 }
 
+function UploadProgressPanel({
+  jobs,
+  onDismiss,
+}: {
+  jobs: UploadJob[];
+  onDismiss: (jobId: string) => void;
+}) {
+  const active = jobs.filter((j) => !j.settled);
+  if (active.length === 0) return null;
+
+  return (
+    <div className="mt-3 flex flex-col gap-2">
+      {active.map((j) => {
+        const lastEvent = j.events.length > 0 ? j.events[j.events.length - 1] : null;
+        const failed = j.status === "failed" || j.stage === "failed";
+        const stage = j.stage ? STAGE_LABEL[j.stage] ?? j.stage : "Kuyrukta";
+        const pct = typeof j.progress === "number" ? Math.round(j.progress) : null;
+        return (
+          <div key={j.jobId} className="rounded-lg border border-ink-line bg-surface p-3 flex flex-col gap-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-medium truncate flex-1">{j.name}</span>
+              <span
+                className={`font-mono text-[10px] uppercase tracking-wide shrink-0 ${
+                  failed ? "text-rust" : "text-brass-dim"
+                }`}
+              >
+                {failed ? "Hata" : stage}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-1.5 flex-1 rounded-full bg-paper-dim overflow-hidden">
+                <div
+                  className={`h-full ${failed ? "bg-rust" : "bg-brass"} transition-all`}
+                  style={{ width: `${pct ?? 5}%` }}
+                />
+              </div>
+              <button
+                onClick={() => onDismiss(j.jobId)}
+                aria-label="Gizle"
+                className="text-ink/40 hover:text-ink transition-colors shrink-0"
+              >
+                <CloseIcon className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {pct !== null && <span className="font-mono text-[10px] text-ink-soft">{pct}%</span>}
+            {!failed && lastEvent?.message && (
+              <p className="font-mono text-[10px] text-ink-soft truncate">› {lastEvent.message}</p>
+            )}
+            {failed && (lastEvent?.message || j.error) && (
+              <p className="font-mono text-[10px] text-rust truncate">› {j.error || lastEvent?.message}</p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Home() {
   const [documents, setDocuments] = useState<Document[] | null>(null);
   const [projects, setProjects] = useState<Project[] | null>(null);
@@ -166,8 +234,8 @@ export default function Home() {
   const [isUploading, setIsUploading] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [extraInstruction, setExtraInstruction] = useState("");
   const [chunkSize, setChunkSize] = useState(DEFAULT_CHUNK_SIZE);
+  const [uploadJobs, setUploadJobs] = useState<UploadJob[]>([]);
 
   useEffect(() => {
     fetchProjects();
@@ -239,6 +307,49 @@ export default function Home() {
     }
   };
 
+  const pollJob = (jobId: string) =>
+    new Promise<void>((resolve) => {
+      const startedAt = Date.now();
+      const tick = async () => {
+        try {
+          const [jobRes, evRes] = await Promise.all([
+            fetch(apiUrl(`/ingestion-jobs/${jobId}`)),
+            fetch(apiUrl(`/ingestion-jobs/${jobId}/events`)),
+          ]);
+          const job: IngestionJob | null = jobRes.ok ? await jobRes.json() : null;
+          const events: IngestionJobEvent[] = evRes.ok ? await evRes.json() : [];
+          const done = !job || job.status === "completed" || job.status === "failed";
+          setUploadJobs((prev) =>
+            prev.map((u) =>
+              u.jobId === jobId
+                ? {
+                    ...u,
+                    status: job?.status ?? u.status,
+                    stage: job?.stage ?? u.stage,
+                    progress: job?.progress ?? u.progress,
+                    events,
+                    error: job?.error_message ?? null,
+                    settled: done,
+                  }
+                : u
+            )
+          );
+          if (done || Date.now() - startedAt > JOB_POLL_TIMEOUT_MS) {
+            resolve();
+            return;
+          }
+          setTimeout(tick, JOB_POLL_INTERVAL_MS);
+        } catch (error) {
+          // Job endpoint is unavailable at the moment — fall back gracefully
+          // to the document-list status rather than blocking the upload flow.
+          console.error("Job poll error:", error);
+          setUploadJobs((prev) => prev.map((u) => (u.jobId === jobId ? { ...u, settled: true } : u)));
+          resolve();
+        }
+      };
+      tick();
+    });
+
   const uploadFiles = async (files: File[]) => {
     if (!selectedProjectId) return;
     setIsUploading(true);
@@ -246,17 +357,29 @@ export default function Home() {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("project_id", selectedProjectId);
-      const finalInstruction = extraInstruction.trim()
-        ? `${DEFAULT_INSTRUCTION}${extraInstruction.trim()} `
-        : DEFAULT_INSTRUCTION;
       formData.append("chunk_size", String(chunkSize));
-      formData.append("instruction", finalInstruction);
       try {
         const response = await fetch(apiUrl("/documents/upload"), {
           method: "POST",
           body: formData,
         });
         if (response.ok) {
+          const data: UploadResponse = await response.json();
+          if (data.job_id) {
+            const job: UploadJob = {
+              name: file.name,
+              jobId: data.job_id,
+              documentId: data.document_id ?? null,
+              status: data.status ?? "queued",
+              stage: "validating",
+              progress: null,
+              events: [],
+              error: null,
+              settled: false,
+            };
+            setUploadJobs((prev) => [...prev, job]);
+            await pollJob(data.job_id);
+          }
           await fetchDocuments(documentsFilterProjectId);
           await fetchProjects();
         }
@@ -411,13 +534,16 @@ export default function Home() {
               </button>
             </div>
             </div>
+
+            <UploadProgressPanel
+              jobs={uploadJobs}
+              onDismiss={(jobId) => setUploadJobs((prev) => prev.filter((j) => j.jobId !== jobId))}
+            />
           </div>
         </section>
 
         {showSettings && (
           <SettingsModal
-            extraInstruction={extraInstruction}
-            setExtraInstruction={setExtraInstruction}
             chunkSize={chunkSize}
             setChunkSize={setChunkSize}
             onClose={() => setShowSettings(false)}

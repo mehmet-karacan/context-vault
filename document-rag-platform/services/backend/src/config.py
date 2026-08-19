@@ -90,6 +90,12 @@ class Settings(BaseSettings):
     # synchronous upload behavior (kept for transition/rollback safety).
     FEATURE_ASYNC_INGESTION: bool = True
 
+    # Aşama 6: evidence-packaged, citation-persisting chat answers
+    # (AKTIF_GOREV.md §6 / §12.4 / §16). Gates the new labeled-evidence prompt
+    # packaging and ``message_citations`` DB persistence behind a feature flag
+    # so the old chat path can be restored for rollback safety.
+    FEATURE_NEW_CITATIONS: bool = True
+
     # --- Parsing (Aşama 3.1) ----------------------------------------------
     # Per-file wall-clock budget for a single parser call (seconds). A parse
     # exceeding this is aborted by the ParserRouter as a hard timeout rather
