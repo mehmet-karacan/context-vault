@@ -7,14 +7,18 @@ stages (parsers, chunkers, embeddings, retrieval, OCR, storage, repository
 scanning — see AKTIF_GOREV.md Aşama 2+) have a stable shape to implement
 against.
 
-Concrete request/response dataclasses (e.g. ``NormalizedSource``,
-``OcrResult``) are intentionally left as ``Any``/loosely-typed here; they
-will be formalized alongside the domain models in a later stage.
+Concrete request/response dataclasses are formalized in the domain models
+package. ``DocumentParser`` now returns the real ``NormalizedSource`` model
+(see ``domain.normalized_content``, AKTIF_GOREV.md Bölüm 6). Other ports
+(e.g. ``OcrResult``, chunk shapes) intentionally remain loosely typed until
+their models are formalized in a later stage.
 """
 
 from __future__ import annotations
 
 from typing import Any, List, Optional, Protocol, runtime_checkable
+
+from .normalized_content import NormalizedSource
 
 
 @runtime_checkable
@@ -24,8 +28,17 @@ class DocumentParser(Protocol):
     def supports(self, mime_type: str, extension: str) -> bool:
         ...
 
-    def parse(self, file_path: str, filename: str) -> Any:
-        """Returns a NormalizedSource (or equivalent) for the given file."""
+    def parse(
+        self,
+        file_path: str,
+        filename: str,
+        options: Optional[dict] = None,
+    ) -> NormalizedSource:
+        """Returns a ``NormalizedSource`` for the given file.
+
+        ``options`` is an optional passthrough dict (e.g. parser-specific
+        hints); parsers should tolerate it being ``None``.
+        """
         ...
 
 

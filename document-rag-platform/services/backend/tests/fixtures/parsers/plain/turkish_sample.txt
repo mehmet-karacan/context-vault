@@ -1,0 +1,6 @@
+Merhaba Dünya
+
+Bu bir Türkçe metindir.
+Akış ve çözümleme bağlamında bir örnek.
+
+Son satır.
