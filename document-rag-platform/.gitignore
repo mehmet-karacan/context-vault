@@ -66,3 +66,7 @@ logs/
 postgres_data/
 minio_data/
 *.db
+
+# Local-only manual DB backups (pg_dump output before running migrations).
+# Never commit real customer/document data -- see MIGRATION_RUNBOOK.md.
+.local-backups/
