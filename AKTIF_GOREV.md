@@ -1542,12 +1542,12 @@ Bu bölüm her çalışma oturumunda güncellenmelidir.
 Son güncelleme: 2026-08-19
 Çalışan ajan/model: opencode (DeepSeek-V4-Flash) — KRCN native-parallel, 3-4 subagent
 Branch: main
-Tamamlanan son aşama: Aşama 6 (Kanıt paketleme, cevap üretimi, citation persistance, kaynak UI)
-Aktif aşama: Aşama 7 (Repository, arşiv ve klasör taraması)
-Çalıştırılan testler: pytest (backend full suite, venv) + frontend tsc/build
-Test sonucu: 243 passed, 4 skipped, 1 failed (tek hata FastAPI 0.141 vs kilitli 0.109 sürüm artefaktı); frontend tsc --exit 0, build temiz. Aşama 6 blocker'ları (dev-mode rank yapısı + citation DB wiring) çözüldü.
+Tamamlanan son aşama: Aşama 7 (Repository/arşiv/klasör taraması)
+Aktif aşama: Aşama 8 (Görsel, PNG ve OCR altyapısı)
+Çalıştırılan testler: pytest (backend full suite, venv) — 3 ardışık koşu stabil
+Test sonucu: 358 passed, 6 skipped, 1 failed (tek hata FastAPI 0.141 vs kilitli 0.109 sürüm artefaktı); Aşama 7 testleri 114 passed stabil. Aşama 7 entegrasyon boşluğu (re-index default'u gerçek CodeParser/PlSqlChunker'a kilitlendi) giderildi.
 Bilinen engeller: yok (test venv'i geçici; FastAPI sürüm artefaktı dışında kalmış tek hata)
-Bir sonraki kesin adım: Aşama 7 — Repository/arşiv/klasör taraması (git_source, archive_source, directory_source, ignore_rules, language_detection, incremental re-index, PL/SQL chunking)
+Bir sonraki kesin adım: Aşama 8 — Görsel/PNG ve OCR (Docling/Tesseract provider'ları, ön işleme, OCR yönlendirme, bounding-box citation)
 ```
 
 ## Aşama Durumları
@@ -1559,7 +1559,7 @@ Bir sonraki kesin adım: Aşama 7 — Repository/arşiv/klasör taraması (git_s
 - [x] Aşama 4 — Yapıya duyarlı chunking ve embedding profilleri (ChunkerRegistry, TokenCounter, token-bazlı chunking, parent-child, embedding cache)
 - [x] Aşama 5 — Retrieval V2: hybrid retrieval ve reranking (dense+lexical+identifier, RRF, reranker portu + safe fallback, context builder, no-answer/intent, debug endpoint)
 - [x] Aşama 6 — Cevap, citation ve UI (kanıt paketleme, no-answer/prompt-injection, citation persistance, kaynak UI: panel/dev modu/source filtresi/job ilerlemesi)
-- [ ] Aşama 7 — Repository/klasör ingestion
+- [x] Aşama 7 — Repository/klasör ingestion (git/archive/directory kaynakları, güvenlik, ignore kuralları, kod+PL/SQL parser/chunker, incremental re-index, API)
 - [ ] Aşama 8 — Görsel ve OCR
 - [ ] Aşama 9 — Eval, observability ve güvenlik
 - [ ] Aşama 10 — Dokümantasyon ve aktivasyon
