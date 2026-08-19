@@ -1,5 +1,19 @@
 # Aşama 2 — Alembic Migration Runbook
 
+> **Durum notu (2026-08-19):** Bu migration zinciri gerçek ortamda başarıyla
+> uygulandı ve doğrulandı: veritabanı tamamen sıfırlanıp `alembic upgrade
+> head` ile baştan kuruldu, ardından `alembic downgrade base` ile tüm şema
+> geri alınıp `alembic upgrade head` ile tekrar ileri alındı — hepsi
+> hatasız. Bu süreçte `src/db.py`'deki `init_db()` fonksiyonunun her
+> başlangıçta `Base.metadata.create_all()` çağırarak Alembic ile çakıştığı
+> tespit edildi ve düzeltildi (artık şema oluşturma tamamen Alembic'e ait);
+> baseline migration da artık gerçek DDL içeriyor, bu yüzden **aşağıdaki
+> "stamp" adımı (Adım 3) yalnızca daha önce create_all ile oluşturulmuş,
+> Alembic'e hiç geçmemiş eski bir veritabanı için gereklidir** — sıfırdan
+> kurulan bir veritabanında `alembic upgrade head` tek başına yeterlidir,
+> stamp adımını atlayabilirsiniz. Bu doküman gelecekte tekrar migration
+> yazılırsa referans olarak kalıyor.
+
 Bu doküman, `alembic/versions/` altındaki üç migration'ı gerçek Postgres
 container'ına uygulamak için **kullanıcının kendi terminalinde sırayla**
 çalıştırması gereken komutları içerir. Bu dosyayı yazan otomasyon adımı
