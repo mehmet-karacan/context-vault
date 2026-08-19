@@ -63,6 +63,7 @@ services:
       EMBEDDING_MODEL: ${EMBEDDING_MODEL}
       CHAT_MODEL: ${CHAT_MODEL}
       CHAT_MODELS: ${CHAT_MODELS}
+      FEATURE_ASYNC_INGESTION: ${FEATURE_ASYNC_INGESTION:-true}
     ports:
       - "8000:8000"
     depends_on:

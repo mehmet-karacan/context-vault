@@ -51,6 +51,13 @@ class Settings(BaseSettings):
     # `docker compose up` works without an explicit .env override.
     REDIS_URL: str = "redis://redis:6379"
 
+    # --- Features --------------------------------------------------------
+    # Aşama 2.4: upload endpoint returns immediately with a queued
+    # IngestionJob instead of blocking on parse+chunk+embed. Default True
+    # per AKTIF_GOREV.md §11; set to False to fall back to the old fully
+    # synchronous upload behavior (kept for transition/rollback safety).
+    FEATURE_ASYNC_INGESTION: bool = True
+
     @property
     def available_chat_models(self) -> List[str]:
         """Parsed CHAT_MODELS allow-list, falling back to [CHAT_MODEL]."""
