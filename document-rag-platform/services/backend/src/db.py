@@ -1,12 +1,10 @@
-import os
-
 from pgvector.psycopg2 import register_vector
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql://user:password@localhost:5432/rag_platform"
-)
+from .config import settings
+
+DATABASE_URL = settings.DATABASE_URL
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 

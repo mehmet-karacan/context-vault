@@ -1,18 +1,17 @@
-import os
 from typing import List, Optional
 
 from openai import OpenAI
 
-GATEWAY_BASE_URL = os.getenv("LITELLM_BASE_URL", "https://aihub-api.turktelekom.com.tr/v1")
-GATEWAY_API_KEY = os.getenv("LITELLM_API_KEY")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "openai/BAAI/bge-m3")
-CHAT_MODEL = os.getenv("CHAT_MODEL", "Qwen/Qwen3.5-27B-FP8")
+from .config import settings
+
+GATEWAY_BASE_URL = settings.LITELLM_BASE_URL
+GATEWAY_API_KEY = settings.LITELLM_API_KEY
+EMBEDDING_MODEL = settings.EMBEDDING_MODEL
+CHAT_MODEL = settings.CHAT_MODEL
 
 # Allow-list of models the chat UI may request — a comma-separated CHAT_MODELS
 # env var, falling back to just the single default CHAT_MODEL.
-AVAILABLE_CHAT_MODELS = [
-    m.strip() for m in os.getenv("CHAT_MODELS", CHAT_MODEL).split(",") if m.strip()
-] or [CHAT_MODEL]
+AVAILABLE_CHAT_MODELS = settings.available_chat_models
 
 client = OpenAI(base_url=GATEWAY_BASE_URL, api_key=GATEWAY_API_KEY)
 
