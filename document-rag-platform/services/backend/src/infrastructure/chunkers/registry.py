@@ -168,7 +168,18 @@ class ChunkerRegistry:
         return segments
 
     def chunk(self, content: NormalizedSource, **options: Any) -> List[ChunkCandidate]:
-        """Chunks every unit of ``content`` into ordered ``ChunkCandidate``s."""
+        """Chunks every unit of ``content`` into ordered ``ChunkCandidate``s.
+
+        Code sources (``source_type == "code"``) are chunked at source level by
+        ``CodeChunker`` (PL/SQL is delegated to the dedicated PlSqlChunker).
+        Their parent/child links are produced by that chunker (e.g. oversized
+        symbol inner splits) rather than by registry aggregation, so this path
+        only assigns the monotonic ``sequence_no`` / ``order``.
+        """
+        if content.source_type == "code":
+            children = self._code_chunker.chunk_source(content)
+            return self._finalize_code(children, content.source_id)
+
         children: List[ChunkCandidate] = []
         for kind, payload in self._segments(content):
             if kind == "doc":
@@ -252,6 +263,18 @@ class ChunkerRegistry:
         self, children: Sequence[ChunkCandidate], source_id: str
     ) -> List[ChunkCandidate]:
         result = self._attach_parents(children, source_id)
+        for i, candidate in enumerate(result, start=1):
+            candidate.sequence_no = i
+            candidate.order = i
+        return result
+
+    @staticmethod
+    def _finalize_code(
+        children: Sequence[ChunkCandidate], source_id: str
+    ) -> List[ChunkCandidate]:
+        """For code sources: preserve the chunker's own parent links and only
+        assign monotonic sequence_no / order (no registry parent aggregation)."""
+        result = list(children)
         for i, candidate in enumerate(result, start=1):
             candidate.sequence_no = i
             candidate.order = i

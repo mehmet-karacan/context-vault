@@ -41,6 +41,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
 
 from ...config import settings
+from .code_parser import CodeParser
 from .docx_parser import DocxParser
 from .pdf_parser import PdfParser
 from ...domain.normalized_content import (
@@ -92,6 +93,26 @@ _EXTENSION_TYPES: Dict[str, str] = {
     ".webp": "image",
 }
 
+# Source-code extensions routed to the "code" parser (Aşama 7.5).
+_CODE_EXTENSIONS: Tuple[str, ...] = (
+    ".py", ".pyi", ".pyw",
+    ".java", ".kt", ".kts", ".scala",
+    ".go", ".rs",
+    ".c", ".h", ".cc", ".cpp", ".cxx", ".c++", ".hh", ".hpp", ".hxx",
+    ".cs",
+    ".js", ".mjs", ".cjs", ".jsx", ".ts", ".mts", ".cts", ".tsx",
+    ".rb", ".php", ".swift", ".m", ".mm",
+    ".sh", ".bash", ".zsh", ".fish", ".ps1", ".bat", ".cmd",
+    ".sql", ".plsql", ".pks", ".pkb", ".prc", ".fnc", ".trg", ".vw",
+    ".json", ".yaml", ".yml", ".toml", ".xml",
+    ".html", ".htm", ".css", ".scss", ".sass", ".less",
+    ".tf", ".hcl", ".proto", ".graphql", ".gql", ".r", ".lua",
+    ".ex", ".exs", ".erl", ".hrl", ".hs", ".clj", ".cljs", ".dart",
+    ".vue", ".svelte", ".dockerfile",
+)
+for _ext in _CODE_EXTENSIONS:
+    _EXTENSION_TYPES.setdefault(_ext, "code")
+
 # First / shortest MIME token is used as the authoritative source signal.
 _MIME_TYPES: Dict[str, str] = {
     "application/pdf": "pdf",
@@ -134,7 +155,46 @@ def _mime_type_from_mime(mime_type: Optional[str]) -> Optional[str]:
         return _MIME_TYPES[mime]
     if mime.startswith(_IMAGE_MIME_PREFIXES):
         return "image"
+    if _is_code_mime(mime):
+        return "code"
     return None
+
+
+def _is_code_mime(mime: str) -> bool:
+    """Classifies a MIME type as source code (Aşama 7.5)."""
+    _code_mimes = {
+        "application/json",
+        "text/json",
+        "text/x-python",
+        "text/python",
+        "application/x-python",
+        "text/x-java-source",
+        "text/x-java",
+        "text/javascript",
+        "application/javascript",
+        "application/x-javascript",
+        "text/x-javascript",
+        "text/x-sql",
+        "application/sql",
+        "text/x-plsql",
+        "application/x-plsql",
+        "text/yaml",
+        "text/x-yaml",
+        "application/x-yaml",
+        "application/xml",
+        "text/xml",
+        "text/x-sh",
+        "text/x-ruby",
+        "text/x-c",
+        "text/x-csrc",
+        "text/x-c++src",
+    }
+    if mime in _code_mimes:
+        return True
+    if mime.startswith("text/x-") or mime.startswith("application/x-"):
+        # Generic, non-office code-ish content (e.g. text/x-golang).
+        return True
+    return False
 
 
 def _extension_from_filename(filename: Optional[str]) -> Optional[str]:
@@ -670,10 +730,6 @@ class _PlaceholderParser:
 
 class ImageParser(_PlaceholderParser):
     source_type = "image"
-
-
-class CodeParser(_PlaceholderParser):
-    source_type = "code"
 
 
 def default_parser_registry() -> Dict[str, DocumentParser]:
