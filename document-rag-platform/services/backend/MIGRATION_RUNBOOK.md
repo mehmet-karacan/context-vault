@@ -32,6 +32,13 @@ b2f1c0a10003  backfill (document_versions / embedding_profiles / chunk_embedding
 `requirements.txt`'ye `alembic==1.13.1` eklendi. Container içinde `alembic`
 komutunun çalışabilmesi için image yeniden build edilmeli.
 
+Önce `document-rag-platform/` dizinine geçin (docker-compose.yml orada,
+repo kökünde DEĞİL):
+
+```powershell
+cd C:\innova\projeler\context-vault\document-rag-platform
+```
+
 ```powershell
 docker compose build backend worker
 docker compose up -d backend worker
