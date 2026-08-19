@@ -15,6 +15,17 @@ kopyala-yapıştırda satır sonu/backtick sorunu yaşamamalısınız. Aynı
 PowerShell penceresini adım 1'den 8'e kadar KAPATMADAN kullanın (Adım 1'de
 tanımlanan `$stamp` değişkeni sonraki adımlarda da kullanılıyor).
 
+Aşağıdaki komutlarda DB kullanıcı adı/veritabanı adı doğrudan `raguser` /
+`rag_platform` olarak yazıldı (bunlar `.env.example`'daki ve gerçek
+`.env`'deki mevcut değerler — daha önce bu ortamda çalıştırılan `pg_dump`
+komutuyla teyit edildi). `$POSTGRES_USER`/`$POSTGRES_DB` gibi container-içi
+ortam değişkenlerini `sh -c '...'` üzerinden PowerShell'den genişletmeye
+ÇALIŞMIYORUZ artık — bu, iç içe tırnaklarda (PowerShell → sh → psql) hataya
+yol açıyordu (bir önceki denemede aldığınız `option requires an argument
+-- 'c'` hatası buradan kaynaklandı). Eğer `.env` dosyanızda bu isimleri
+değiştirdiyseniz, aşağıdaki komutlarda `raguser`/`rag_platform`'u kendi
+değerlerinizle değiştirin.
+
 Migration zinciri (`alembic/versions/`):
 
 ```text
@@ -60,8 +71,14 @@ klasöre yazılan dosyalar yanlışlıkla commit edilmez.
 
 ```powershell
 New-Item -ItemType Directory -Force -Path .local-backups | Out-Null
+```
+
+```powershell
 $stamp = Get-Date -Format "yyyyMMdd_HHmmss"
-docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -F p' > ".local-backups/pre-phase2-$stamp.sql"
+```
+
+```powershell
+docker compose exec -T postgres pg_dump -U raguser -d rag_platform -F p > ".local-backups/pre-phase2-$stamp.sql"
 ```
 
 **Beklenen çıktı:** `.local-backups/pre-phase2-<tarih>.sql` dosyası oluşur;
@@ -80,13 +97,7 @@ doğrulayın ve tekrar deneyin.
 ## 2. Migration öncesi satır sayılarını kaydet
 
 ```powershell
-docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
-SELECT
-  (SELECT count(*) FROM projects)                         AS projects,
-  (SELECT count(*) FROM documents)                         AS documents,
-  (SELECT count(*) FROM chunks)                            AS chunks,
-  (SELECT count(*) FROM chunks WHERE embedding IS NOT NULL) AS chunks_with_embedding;
-"'
+docker compose exec -T postgres psql -U raguser -d rag_platform -c "SELECT (SELECT count(*) FROM projects) AS projects, (SELECT count(*) FROM documents) AS documents, (SELECT count(*) FROM chunks) AS chunks, (SELECT count(*) FROM chunks WHERE embedding IS NOT NULL) AS chunks_with_embedding;"
 ```
 
 Bu dört sayıyı bir kenara not edin (`N_projects`, `N_documents`, `N_chunks`,
@@ -126,7 +137,7 @@ head'de değilsiniz, bu doğru).
 
 **Sorun olursa:** `relation "alembic_version" already exists` gibi bir hata
 alırsanız, DB daha önce başka bir alembic kurulumuyla stamp'lenmiş olabilir;
-`docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT * FROM alembic_version;"'`
+`docker compose exec -T postgres psql -U raguser -d rag_platform -c "SELECT * FROM alembic_version;"`
 ile mevcut durumu kontrol edip devam etmeden önce durumu anlayın.
 
 ---
@@ -151,8 +162,11 @@ deneyin (Adım 6)**; downgrade da başarısız olursa Adım 1'deki backup'tan
 restore edin:
 
 ```powershell
-docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"'
-Get-Content ".local-backups/pre-phase2-$stamp.sql" | docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+docker compose exec -T postgres psql -U raguser -d rag_platform -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+```
+
+```powershell
+Get-Content ".local-backups/pre-phase2-$stamp.sql" | docker compose exec -T postgres psql -U raguser -d rag_platform
 ```
 
 ---
@@ -160,14 +174,7 @@ Get-Content ".local-backups/pre-phase2-$stamp.sql" | docker compose exec -T post
 ## 5. Backfill'i doğrula
 
 ```powershell
-docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
-SELECT
-  (SELECT count(*) FROM document_versions)                                   AS versions,
-  (SELECT count(*) FROM documents WHERE active_version_id IS NULL)           AS docs_without_active_version,
-  (SELECT count(*) FROM chunks WHERE version_id IS NULL)                     AS chunks_without_version,
-  (SELECT count(*) FROM embedding_profiles WHERE is_active = true)           AS active_profiles,
-  (SELECT count(*) FROM chunk_embeddings)                                    AS chunk_embeddings;
-"'
+docker compose exec -T postgres psql -U raguser -d rag_platform -c "SELECT (SELECT count(*) FROM document_versions) AS versions, (SELECT count(*) FROM documents WHERE active_version_id IS NULL) AS docs_without_active_version, (SELECT count(*) FROM chunks WHERE version_id IS NULL) AS chunks_without_version, (SELECT count(*) FROM embedding_profiles WHERE is_active = true) AS active_profiles, (SELECT count(*) FROM chunk_embeddings) AS chunk_embeddings;"
 ```
 
 **Beklenen çıktı (Adım 2'de not ettiğiniz sayılarla karşılaştırın):**
@@ -200,12 +207,7 @@ docker compose exec backend alembic downgrade b2f1c0a10002
 **Doğrulama (backfill geri alındı, şema hâlâ duruyor olmalı):**
 
 ```powershell
-docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
-SELECT
-  (SELECT count(*) FROM document_versions) AS versions,
-  (SELECT count(*) FROM chunk_embeddings)   AS chunk_embeddings,
-  (SELECT count(*) FROM documents WHERE active_version_id IS NOT NULL) AS docs_with_active_version;
-"'
+docker compose exec -T postgres psql -U raguser -d rag_platform -c "SELECT (SELECT count(*) FROM document_versions) AS versions, (SELECT count(*) FROM chunk_embeddings) AS chunk_embeddings, (SELECT count(*) FROM documents WHERE active_version_id IS NOT NULL) AS docs_with_active_version;"
 ```
 
 **Beklenen çıktı:** üçü de `0`. Şema tabloları (`document_versions` vb.) hâlâ
@@ -218,12 +220,10 @@ docker compose exec backend alembic downgrade b2f1c0a10001
 ```
 
 **Doğrulama (şema tamamen kaldırıldı):** interaktif `psql` oturumuna girip
-tabloları gözle kontrol edin (string literal içeren tek satırlık sorguları
-PowerShell/sh çift tırnak iç içeliğinden kaçınmak için bilerek burada
-interaktif yapıyoruz):
+tabloları gözle kontrol edin:
 
 ```powershell
-docker compose exec -it postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+docker compose exec -it postgres psql -U raguser -d rag_platform
 ```
 
 `psql` içinde:
@@ -316,24 +316,21 @@ raporlayın, kendi başınıza ek düzeltme yapmayın.
 
 ## Özet: tam komut sırası
 
+Bu blok tek bir kopyala-yapıştır DEĞİLDİR — her satırı ayrı ayrı, sırayla
+çalıştırın (aralarda Adım 2/5'teki doğrulama sorgularını atlamayın, bkz.
+yukarıdaki notlar):
+
 ```powershell
+cd C:\innova\projeler\context-vault\document-rag-platform
 docker compose build backend worker
 docker compose up -d backend worker
-
 New-Item -ItemType Directory -Force -Path .local-backups | Out-Null
 $stamp = Get-Date -Format "yyyyMMdd_HHmmss"
-docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -F p' > ".local-backups/pre-phase2-$stamp.sql"
-
-# (satır sayılarını not edin - Adım 2)
-
+docker compose exec -T postgres pg_dump -U raguser -d rag_platform -F p > ".local-backups/pre-phase2-$stamp.sql"
 docker compose exec backend alembic stamp b2f1c0a10001
 docker compose exec backend alembic upgrade head
-
-# (backfill doğrulama - Adım 5)
-
 docker compose exec backend alembic downgrade b2f1c0a10002
 docker compose exec backend alembic downgrade b2f1c0a10001
 docker compose exec backend alembic upgrade head
-
 docker compose up -d --build backend
 ```
