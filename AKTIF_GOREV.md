@@ -1542,12 +1542,12 @@ Bu bölüm her çalışma oturumunda güncellenmelidir.
 Son güncelleme: 2026-08-19
 Çalışan ajan/model: opencode (DeepSeek-V4-Flash) — KRCN native-parallel, 3-4 subagent
 Branch: main
-Tamamlanan son aşama: Aşama 8 (Görsel, PNG ve OCR altyapısı)
-Aktif aşama: Aşama 9 (Değerlendirme, gözlemlenebilirlik ve güvenlik)
+Tamamlanan son aşama: Aşama 9 (Değerlendirme, gözlemlenebilirlik ve güvenlik)
+Aktif aşama: Aşama 10 (Dokümantasyon, temizlik ve son aktivasyon)
 Çalıştırılan testler: pytest (backend full suite, venv) — 3 ardışık koşu stabil
-Test sonucu: 401 passed, 8 skipped, 1 failed (tek hata FastAPI 0.141 vs kilitli 0.109 sürüm artefaktı); Aşama 8 testleri 43 passed stabil. Aşama 8 blocker'ları (ImageParser -> build_ocr_provider gerçek bağlantısı + bbox [l,t,w,h] tutarlılığı) çözüldü.
-Bilinen engeller: yok (test venv'i geçici; FastAPI sürüm artefaktı dışında kalmış tek hata)
-Bir sonraki kesin adım: Aşama 9 — Değerlendirme (golden dataset, Recall@K/MRR/nDCG), gözlemlenebilirlik (structured log, health/readiness, stage süreleri), güvenlik (MIME/magic-byte, archive/path koruma, prompt injection testleri, CORS, rate limiting)
+Test sonucu: 492 passed, 8 skipped, 1 failed (tek hata FastAPI 0.141 vs kilitli 0.109 sürüm artefaktı); Aşama 9 testleri stabildi. Kullanıcı backend'in docker compose ile ayağa kalkmadığını bildirdi (chat: "Sunucuya bağlanılamadı") — teşhis ve düzeltme devam ediyor.
+Bilinen engeller: backend container başlatma/bağlantı sorunu teşhis ediliyor
+Bir sonraki kesin adım: Backend'in docker compose ile ayağa kalkmasını sağla, ardından Aşama 10 — Dokümantasyon ve aktivasyon
 ```
 
 ## Aşama Durumları
@@ -1561,7 +1561,7 @@ Bir sonraki kesin adım: Aşama 9 — Değerlendirme (golden dataset, Recall@K/M
 - [x] Aşama 6 — Cevap, citation ve UI (kanıt paketleme, no-answer/prompt-injection, citation persistance, kaynak UI: panel/dev modu/source filtresi/job ilerlemesi)
 - [x] Aşama 7 — Repository/klasör ingestion (git/archive/directory kaynakları, güvenlik, ignore kuralları, kod+PL/SQL parser/chunker, incremental re-index, API)
 - [x] Aşama 8 — Görsel ve OCR (OCR provider'ları Docling/Tesseract, ön işleme, image parser + OCR yönlendirme, bbox citation, ocr_json artifact)
-- [ ] Aşama 9 — Eval, observability ve güvenlik
+- [x] Aşama 9 — Eval, observability ve güvenlik (golden dataset 66, metriker, structured log, health/readiness, rate limiting, MIME/magic, redaction, prompt-injection)
 - [ ] Aşama 10 — Dokümantasyon ve aktivasyon
 
 ---
