@@ -10,7 +10,9 @@ Uygulamanın gerçek kaynak kodu, Docker Compose yapılandırması ve kurulum ta
 cd document-rag-platform
 ```
 
-Ayrıntılı talimatlar için `document-rag-platform/README.md` dosyasına bakın.
+Ayrıntılı talimatlar için `document-rag-platform/README.md` dosyasına bakın. Operasyonel
+runbook'lar (upload/ingestion, re-index, embedding değişimi, OCR, repository scan
+limitleri, backup/restore) `document-rag-platform/docs/runbooks/` altındadır.
 
 Repo kökündeki `apps/`, `services/`, `docs/`, `tests/`, `packages/`, `infra/` dizinleri iskelet/boş placeholder'lardır; kullanılan gerçek kod bunların içinde değil, `document-rag-platform/` altındadır (bkz. `document-rag-platform/docs/cleanup-candidates.md`).
 
