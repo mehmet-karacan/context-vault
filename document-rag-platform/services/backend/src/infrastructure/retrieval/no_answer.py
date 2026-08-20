@@ -152,6 +152,14 @@ class EvidenceSignal:
     lexical_score: Optional[float] = None
     identifier: bool = False
     exact_identifier: bool = False
+    #: Content-verified term presence: at least one of the query's significant
+    #: terms demonstrably occurs in this candidate's chunk content. This is an
+    #: *additional* rescue path independent of the AND-based lexical retriever
+    #: (which can return zero for multi-term / split-acronym / comparative
+    #: queries whose terms live in different chunks or lexemes). Computed
+    #: upstream by the retrieval layer ground truth from the chunk text, so it
+    #: never fabricates.
+    lexical_presence: bool = False
 
     @classmethod
     def from_raw(cls, raw: Any) -> "EvidenceSignal":
@@ -162,12 +170,14 @@ class EvidenceSignal:
         else:
             keys = {k: getattr(raw, k) for k in (
                 "dense_score", "lexical_score", "identifier", "exact_identifier",
+                "lexical_presence",
             ) if hasattr(raw, k)}
         return cls(
             dense_score=_to_float(keys.get("dense_score")),
             lexical_score=_to_float(keys.get("lexical_score")),
             identifier=bool(keys.get("identifier", False)),
             exact_identifier=bool(keys.get("exact_identifier", False)),
+            lexical_presence=bool(keys.get("lexical_presence", False)),
         )
 
 
@@ -276,8 +286,18 @@ class AnswerPolicy:
         # ts_rank_cd of a short acronym inside a large chunk is inherently tiny,
         # so this uses presence, not the "strong" ts_rank magnitude, to rescue a
         # near-threshold dense result whose content genuinely contains the term.
+        # Lexical term presence covers two, independently-groundable cases:
+        # 1) the AND-based lexical retriever actually matched this chunk
+        #    (``lexical_score`` set) — the tsquery hit its search vector; or
+        # 2) the chunk content demonstrably contains a significant query term
+        #    (``lexical_presence``, computed upstream from the chunk text).
+        # The second path rescues multi-term / split-acronym / comparative
+        # queries whose terms appear in different chunks or as a single lexeme
+        # ("ttnet sis" -> content lexeme "ttnetsis") and so never produce a
+        # lexical-retriever hit, even though the evidence genuinely holds the
+        # answer. Both are content-verified, so nothing is fabricated.
         has_lexical_presence = any(
-            s.lexical_score is not None for s in signals
+            s.lexical_score is not None or s.lexical_presence for s in signals
         )
         has_exact_identifier = any(s.exact_identifier for s in signals)
         has_identifier = any(s.identifier for s in signals)
