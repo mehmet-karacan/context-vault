@@ -105,34 +105,33 @@ class DenseVectorRetriever:
         session: Any = None,
     ) -> List[RetrievalCandidate]:
         spec = self.build_spec(query_embedding, top_k, filters)
-        result = self._search_spec(spec, session)
-        if result:
-            return result
+        primary = self._search_spec(spec, session, source_tag=spec["embedding_table"])
 
-        # Legacy dense-index fallback. The default source is the versioned
-        # ``chunk_embeddings`` table, but the synchronous upload path (and any
-        # deployment before the versioned schema) writes the dense vector into
-        # the HNSW-indexed ``chunks.embedding`` column and leaves
-        # ``chunk_embeddings`` empty. When the primary source returns nothing we
-        # fall back to reading the dense vector straight off ``chunks`` so every
-        # indexed document stays retrievable, not just versioned/profile-ingested
-        # ones. This does NOT run when the retriever is already pointed at
-        # ``chunks`` (avoids an infinite self-fallback).
+        # Legacy dense source merge. The canonical source is the versioned
+        # ``chunk_embeddings`` table (Bölüm 8.9), but the synchronous upload
+        # path (and any deployment before the versioned schema) writes the
+        # dense vector into the HNSW-indexed ``chunks.embedding`` column and
+        # leaves ``chunk_embeddings`` empty for those chunks. Coverage can be
+        # PARTIAL across the two sources (some documents in one, some in the
+        # other), so a mere empty-result fallback would silently mask chunks
+        # that live only in ``chunks.embedding``. Instead we query BOTH sources
+        # and merge their candidate sets by ``chunk_id`` (union + dedup, keeping
+        # the higher score), tagging which physical source produced each hit.
+        # This does NOT run when the retriever is already pointed at ``chunks``
+        # (avoids an infinite self-merge).
         if self.table != "chunks":
-            legacy = dict(spec)
-            legacy.update(
-                {
-                    "embedding_table": "chunks",
-                    "join_table": "chunks",
-                    "chunk_id_column": "id",
-                    "vector_column": "embedding",
-                }
+            legacy = legacy_spec_from_spec(spec)
+            legacy_candidates = self._search_spec(legacy, session, source_tag="chunks.embedding")
+            return merge_dense_candidates(
+                primary, legacy_candidates, int(spec["candidate_k"])
             )
-            result = self._search_spec(legacy, session)
-        return result
+        return primary
 
     def _search_spec(
-        self, spec: Dict[str, Any], session: Any = None
+        self,
+        spec: Dict[str, Any],
+        session: Any = None,
+        source_tag: Optional[str] = None,
     ) -> List[RetrievalCandidate]:
         sql, params = dense_sql_from_spec(spec)
         session = session or self.session
@@ -142,7 +141,11 @@ class DenseVectorRetriever:
             result = session.execute(text(sql), params).fetchall()
         else:
             result = session(sql, params)
-        return to_candidates(result, source="dense")
+        candidates = to_candidates(result, source="dense")
+        if source_tag:
+            for c in candidates:
+                c.metadata["source"] = source_tag
+        return candidates
 
 
 def dense_sql_from_spec(spec: Dict[str, Any]) -> "tuple[str, Dict[str, Any]]":
@@ -161,13 +164,25 @@ def dense_sql_from_spec(spec: Dict[str, Any]) -> "tuple[str, Dict[str, Any]]":
     if ce == c:
         # Legacy layout: the dense vector lives directly on the chunk row
         # (``chunks.embedding``), so there is no separate embedding table to
-        # join; the chunk table carries BOTH the id and the vector.
+        # join; the chunk table carries BOTH the id and the vector. The chunk
+        # table is aliased ``c`` so chunk-level filters (rendered against the
+        # ``c`` alias) resolve, and rows without a legacy embedding are
+        # excluded (sync-path chunks may leave ``chunks.embedding`` NULL).
+        filter_sql, filter_params = render_where(terms, prefix="f")
+        params = {
+            "query_embedding": list(spec["query_embedding"]),
+            "candidate_k": int(spec["candidate_k"]),
+        }
+        params.update(filter_params)
+        where_parts = ["c.embedding IS NOT NULL"]
+        if filter_sql:
+            where_parts.append(filter_sql)
         sql = (
             f"SELECT {c}.{cid} AS chunk_id,\n"
             f"       1 - ({c}.{vec} <=> CAST(:query_embedding AS vector)) AS score\n"
-            f"FROM {c}\n"
-            f"JOIN documents AS d ON d.id = {c}.document_id\n"
-            f"{where_sql}\n"
+            f"FROM {c} AS c\n"
+            f"JOIN documents AS d ON d.id = c.document_id\n"
+            f"WHERE {' AND '.join(where_parts)}\n"
             f"ORDER BY {c}.{vec} <=> CAST(:query_embedding AS vector)\n"
             f"LIMIT :candidate_k"
         )
@@ -183,3 +198,54 @@ def dense_sql_from_spec(spec: Dict[str, Any]) -> "tuple[str, Dict[str, Any]]":
             f"LIMIT :candidate_k"
         )
     return sql, params
+
+
+def legacy_spec_from_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
+    """Derive the legacy ``chunks.embedding`` spec from a primary spec (pure).
+
+    Mirrors the mapping ``search`` applies so it can be asserted DB-free: the
+    dense vector is read straight off the ``chunks`` row via the HNSW-indexed
+    ``chunks.embedding`` column.
+    """
+    legacy = dict(spec)
+    legacy.update(
+        {
+            "embedding_table": "chunks",
+            "join_table": "chunks",
+            "chunk_id_column": "id",
+            "vector_column": "embedding",
+        }
+    )
+    return legacy
+
+
+def merge_dense_candidates(
+    primary: List[RetrievalCandidate],
+    legacy: List[RetrievalCandidate],
+    candidate_k: int,
+) -> List[RetrievalCandidate]:
+    """Merge primary + legacy dense candidate sets by ``chunk_id`` (pure).
+
+    The two sources may each expose a different subset of chunks (partial
+    coverage), so both must be unioned — never masked. Dedup keeps a single
+    entry per ``chunk_id`` and, when a chunk is present in both, the higher
+    score (and the metadata/source tag of whichever source produced it)
+    deterministically. The merged list is re-ranked by descending score and
+    truncated to ``candidate_k`` so the returned count stays bounded.
+    """
+    best: Dict[str, RetrievalCandidate] = {}
+    for cand in list(primary) + list(legacy):
+        existing = best.get(cand.chunk_id)
+        if existing is None or cand.score > existing.score:
+            best[cand.chunk_id] = cand
+    ranked = sorted(best.values(), key=lambda c: c.score, reverse=True)[:candidate_k]
+    return [
+        RetrievalCandidate(
+            chunk_id=c.chunk_id,
+            rank=rank,
+            score=c.score,
+            source=c.source,
+            metadata=dict(c.metadata),
+        )
+        for rank, c in enumerate(ranked, start=1)
+    ]
