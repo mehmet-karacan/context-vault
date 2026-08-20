@@ -214,7 +214,12 @@ def test_legacy_spec_and_sql_carry_both_sources():
 
     sql, params = dense_sql_from_spec(legacy)
     assert "FROM chunks AS c" in sql
-    assert "1 - (chunks.embedding <=> CAST(:query_embedding AS vector)) AS score" in sql
+    # After ``FROM chunks AS c`` the original table name is unusable, so the
+    # SELECT-list and ORDER BY must reference the ``c`` alias for id/embedding.
+    assert "SELECT c.id AS chunk_id," in sql
+    assert "1 - (c.embedding <=> CAST(:query_embedding AS vector)) AS score" in sql
+    assert "ORDER BY c.embedding <=> CAST(:query_embedding AS vector)" in sql
+    assert "chunks.embedding" not in sql, "SELECT/ORDER BY must use alias c, not chunks."
     assert "JOIN documents AS d ON d.id = c.document_id" in sql
     assert "c.embedding IS NOT NULL" in sql
     assert "c.document_id IN" in sql
