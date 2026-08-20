@@ -57,6 +57,10 @@ from ..api.v1.documents import chunk_text, extract_text
 from ..config import settings
 from ..db import SessionLocal
 from ..infrastructure.security import redact_secrets
+from ..infrastructure.retrieval.indexing import (
+    build_search_vector_stmt,
+    chunk_identifiers,
+)
 from ..infrastructure.storage import object_keys
 from ..infrastructure.storage.minio_storage import MinioObjectStorage
 from ..llm import PASSAGE_INSTRUCTION, embed_texts
@@ -402,6 +406,7 @@ def run_ingestion_job(
                 chunk_type="text",
                 content=content,
                 embedding=embedding,
+                identifiers=chunk_identifiers(content),
                 content_hash=hashlib.sha256(content.encode("utf-8")).hexdigest(),
                 created_at=datetime.utcnow(),
             )
@@ -414,6 +419,14 @@ def run_ingestion_job(
                     embedding=embedding,
                     created_at=datetime.utcnow(),
                 )
+            )
+        # Build the lexical (tsvector) index so LexicalRetriever can find these
+        # chunks; identifiers were set per-chunk above (Aşama 5.2). Guarded for
+        # the DB-free test doubles (which have no ``execute``): the real
+        # SQLAlchemy session always supports it.
+        if hasattr(db, "execute"):
+            db.execute(
+                build_search_vector_stmt(document.id), {"document_id": document.id}
             )
         db.commit()
 

@@ -105,6 +105,35 @@ class DenseVectorRetriever:
         session: Any = None,
     ) -> List[RetrievalCandidate]:
         spec = self.build_spec(query_embedding, top_k, filters)
+        result = self._search_spec(spec, session)
+        if result:
+            return result
+
+        # Legacy dense-index fallback. The default source is the versioned
+        # ``chunk_embeddings`` table, but the synchronous upload path (and any
+        # deployment before the versioned schema) writes the dense vector into
+        # the HNSW-indexed ``chunks.embedding`` column and leaves
+        # ``chunk_embeddings`` empty. When the primary source returns nothing we
+        # fall back to reading the dense vector straight off ``chunks`` so every
+        # indexed document stays retrievable, not just versioned/profile-ingested
+        # ones. This does NOT run when the retriever is already pointed at
+        # ``chunks`` (avoids an infinite self-fallback).
+        if self.table != "chunks":
+            legacy = dict(spec)
+            legacy.update(
+                {
+                    "embedding_table": "chunks",
+                    "join_table": "chunks",
+                    "chunk_id_column": "id",
+                    "vector_column": "embedding",
+                }
+            )
+            result = self._search_spec(legacy, session)
+        return result
+
+    def _search_spec(
+        self, spec: Dict[str, Any], session: Any = None
+    ) -> List[RetrievalCandidate]:
         sql, params = dense_sql_from_spec(spec)
         session = session or self.session
         if session is None:
@@ -129,14 +158,28 @@ def dense_sql_from_spec(spec: Dict[str, Any]) -> "tuple[str, Dict[str, Any]]":
     params["query_embedding"] = list(spec["query_embedding"])
     params["candidate_k"] = int(spec["candidate_k"])
 
-    sql = (
-        f"SELECT {ce}.{cid} AS chunk_id,\n"
-        f"       1 - ({ce}.{vec} <=> CAST(:query_embedding AS vector)) AS score\n"
-        f"FROM {ce}\n"
-        f"JOIN {c} ON {c}.id = {ce}.{cid}\n"
-        f"JOIN documents AS d ON d.id = {c}.document_id\n"
-        f"{where_sql}\n"
-        f"ORDER BY {ce}.{vec} <=> CAST(:query_embedding AS vector)\n"
-        f"LIMIT :candidate_k"
-    )
+    if ce == c:
+        # Legacy layout: the dense vector lives directly on the chunk row
+        # (``chunks.embedding``), so there is no separate embedding table to
+        # join; the chunk table carries BOTH the id and the vector.
+        sql = (
+            f"SELECT {c}.{cid} AS chunk_id,\n"
+            f"       1 - ({c}.{vec} <=> CAST(:query_embedding AS vector)) AS score\n"
+            f"FROM {c}\n"
+            f"JOIN documents AS d ON d.id = {c}.document_id\n"
+            f"{where_sql}\n"
+            f"ORDER BY {c}.{vec} <=> CAST(:query_embedding AS vector)\n"
+            f"LIMIT :candidate_k"
+        )
+    else:
+        sql = (
+            f"SELECT {ce}.{cid} AS chunk_id,\n"
+            f"       1 - ({ce}.{vec} <=> CAST(:query_embedding AS vector)) AS score\n"
+            f"FROM {ce}\n"
+            f"JOIN {c} ON {c}.id = {ce}.{cid}\n"
+            f"JOIN documents AS d ON d.id = {c}.document_id\n"
+            f"{where_sql}\n"
+            f"ORDER BY {ce}.{vec} <=> CAST(:query_embedding AS vector)\n"
+            f"LIMIT :candidate_k"
+        )
     return sql, params
