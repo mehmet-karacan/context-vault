@@ -98,8 +98,8 @@ def test_sql_includes_filter_order_limit_and_dense_columns():
     sql, params = dense_sql_from_spec(spec)
     assert "JOIN chunks ON chunks.id = chunk_embeddings.chunk_id" in sql
     assert "JOIN documents AS d ON d.id = chunks.document_id" in sql
-    assert "1 - (chunk_embeddings.embedding <=> :query_embedding) AS score" in sql
-    assert "ORDER BY chunk_embeddings.embedding <=> :query_embedding" in sql
+    assert "1 - (chunk_embeddings.embedding <=> CAST(:query_embedding AS vector)) AS score" in sql
+    assert "ORDER BY chunk_embeddings.embedding <=> CAST(:query_embedding AS vector)" in sql
     assert "WHERE d.project_id = :fp0" in sql
     assert "LIMIT :candidate_k" in sql
     assert params["fp0"] == "proj-9"
