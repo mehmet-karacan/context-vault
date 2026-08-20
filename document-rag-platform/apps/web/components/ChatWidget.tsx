@@ -195,95 +195,7 @@ function uniqueSourceNames(citations: CitationPayload[], sources?: LegacySource[
   return Array.from(new Set(names));
 }
 
-function formatRange(start?: number | null, end?: number | null): string | null {
-  if (start == null && end == null) return null;
-  if (start == null) return `${end}`;
-  if (end == null || end === start) return `${start}`;
-  return `${start}–${end}`;
-}
 
-function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
-  if (value === null || value === undefined || value === "") return null;
-  return (
-    <div className="flex gap-2 text-[11px] leading-relaxed">
-      <dt className="text-ink-soft/70 shrink-0 w-[72px] font-mono">{label}</dt>
-      <dd className="text-ink min-w-0 break-words">{value}</dd>
-    </div>
-  );
-}
-
-function SourceTypeBadge({ sourceType }: { sourceType?: string }) {
-  if (!sourceType || sourceType === "document") return null;
-  const classes: Record<string, string> = {
-    code: "bg-paper-dim text-brass-dim border-ink-line",
-    image: "bg-brass/15 text-brass-dim border-brass/20",
-  };
-  return (
-    <span
-      className={`inline-flex items-center px-1.5 py-0.5 rounded font-mono text-[10px] uppercase tracking-wide border ${classes[sourceType] ?? classes.image}`}
-    >
-      {sourceType}
-    </span>
-  );
-}
-
-function CitationPanel({ citation }: { citation: CitationPayload }) {
-  const [open, setOpen] = useState(false);
-  const sourceType = citation.source_type as string | undefined;
-  const isCode = sourceType === "code";
-  const heading = citation.heading_path?.length
-    ? citation.heading_path.join(" > ")
-    : null;
-  const location = [
-    isCode ? null : formatRange(citation.page_start, citation.page_end),
-    isCode ? formatRange(citation.line_start, citation.line_end) : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
-  return (
-    <div className="folio bg-surface border border-ink-line shadow-folio overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-paper-dim/50 transition-colors"
-      >
-        <FileIcon className="w-3.5 h-3.5 text-ink/40 shrink-0" />
-        <span className="font-mono text-[11px] text-brass-dim shrink-0">{citation.label}</span>
-        <span className="font-mono text-[11px] text-ink truncate flex-1">{citation.document_name}</span>
-        <SourceTypeBadge sourceType={sourceType} />
-        <span className="font-mono text-[10px] text-ink-soft shrink-0">{location}</span>
-        <ChevronDownIcon
-          className={`w-3 h-3 text-ink-soft shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
-        />
-      </button>
-      {open && (
-        <dl className="border-t border-ink-line px-3 py-2.5 flex flex-col gap-1.5 bg-paper-dim/40">
-          <DetailRow label="Belge" value={citation.document_name} />
-          <DetailRow label="Bölüm" value={heading} />
-          <DetailRow
-            label="Sayfa"
-            value={
-              citation.page_start != null || citation.page_end != null
-                ? formatRange(citation.page_start, citation.page_end)
-                : null
-            }
-          />
-          <DetailRow label="Sembol" value={citation.symbol_name} />
-          <DetailRow label="Dosya" value={citation.file_path} />
-          <DetailRow label="Satırlar" value={formatRange(citation.line_start, citation.line_end)} />
-          <DetailRow label="Sıra" value={citation.rank != null ? `${citation.rank}.` : null} />
-          {citation.snippet && (
-            <div className="flex gap-2 text-[11px] leading-relaxed">
-              <dt className="text-ink-soft/70 shrink-0 w-[72px] font-mono">Paragraf</dt>
-              <dd className="text-ink min-w-0 break-words italic">{citation.snippet}</dd>
-            </div>
-          )}
-        </dl>
-      )}
-    </div>
-  );
-}
 
 function RetrievalDebugPanel({ retrievalDebug }: { retrievalDebug: RetrievalDebug | null }) {
   const [open, setOpen] = useState(true);
@@ -524,27 +436,29 @@ export default function ChatWidget() {
 
               {message.role === "assistant" && message.answerable === false && <NoAnswerBlock />}
 
-              {message.role === "assistant" && message.citations && message.citations.length > 0 && (
-                <div className="flex flex-col gap-1.5 w-full">
-                  {message.citations.map((citation, i) => (
-                    <CitationPanel key={`${citation.label}-${i}`} citation={citation} />
-                  ))}
-                </div>
-              )}
-
               {message.role === "assistant" &&
-                (!message.citations || message.citations.length === 0) &&
-                message.sources &&
-                message.sources.length > 0 && (
-                  <div className="flex flex-col gap-1 pl-3.5">
-                    {uniqueSourceNames(message.citations ?? [], message.sources).map((name) => (
-                      <div key={name} className="flex items-center gap-1.5 font-mono text-[11px] text-ink-soft">
-                        <FileIcon className="w-3 h-3 text-ink/40 shrink-0" />
-                        <span className="truncate">{name}</span>
+                (() => {
+                  const names = uniqueSourceNames(message.citations ?? [], message.sources);
+                  if (names.length === 0) return null;
+                  return (
+                    <div className="flex flex-col gap-1 pl-3.5 w-full">
+                      <span className="font-mono text-[10px] uppercase tracking-wide text-ink-soft/70">
+                        Kaynaklar:
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {names.map((name) => (
+                          <span
+                            key={name}
+                            className="inline-flex items-center gap-1.5 font-mono text-[11px] text-ink-soft bg-paper-dim/60 border border-ink-line rounded px-2 py-0.5"
+                          >
+                            <FileIcon className="w-3 h-3 text-ink/40 shrink-0" />
+                            <span className="truncate">{name}</span>
+                          </span>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
+                    </div>
+                  );
+                })()}
 
               {message.role === "assistant" && devMode && message.retrievalDebug && (
                 <RetrievalDebugPanel retrievalDebug={message.retrievalDebug} />
