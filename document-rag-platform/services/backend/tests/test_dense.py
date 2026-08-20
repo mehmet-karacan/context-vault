@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from src.infrastructure.retrieval import DenseVectorRetriever, dense_sql_from_spec
 from src.infrastructure.retrieval.base import normalize_filters
+from src.infrastructure.retrieval.dense import legacy_spec_from_spec, merge_dense_candidates
+from src.infrastructure.retrieval.base import RetrievalCandidate
 
 
 class _Row:
@@ -33,6 +35,28 @@ class FakeSession:
         return self
 
     def fetchall(self):
+        return self.rows
+
+
+class SourceAwareFakeSession(FakeSession):
+    """Returns per-source rows based on the table the emitted SQL reads from.
+
+    Distinguishes the canonical source query (``FROM chunk_embeddings``) from
+    the legacy query (``FROM chunks``) so a test can hand each one its own rows,
+    proving partial-coverage merging.
+    """
+
+    def __init__(self, chunk_embeddings_rows, chunks_rows):
+        super().__init__([])
+        self.chunk_embeddings_rows = chunk_embeddings_rows
+        self.chunks_rows = chunks_rows
+
+    def fetchall(self):
+        sql = self.executed_sql or ""
+        if "FROM chunk_embeddings" in sql:
+            return self.chunk_embeddings_rows
+        if "FROM chunks" in sql:
+            return self.chunks_rows
         return self.rows
 
 
@@ -116,3 +140,83 @@ def test_search_returns_candidate_shape_via_fake_session():
     assert [c.score for c in results] == [0.93, 0.71]
     assert {c.source for c in results} == {"dense"}
     assert session.executed_sql is not None
+
+
+def test_chunks_embedding_only_chunk_is_not_masked_by_unrelated_primary_row():
+    # The masking bug: chunk_embeddings has an unrelated single row (so the
+    # primary is never empty), while the query's nearest chunk lives ONLY in the
+    # legacy chunks.embedding column. Before hardening, the empty-only fallback
+    # never fired and the legacy chunk was silently masked -> no dense evidence.
+    session = SourceAwareFakeSession(
+        chunk_embeddings_rows=[_Row("unrelated-1", 0.50)],
+        chunks_rows=[_Row("legacy-nearest-1", 0.95)],
+    )
+    retriever = DenseVectorRetriever(session=session)
+    results = retriever.search([0.1, 0.2], top_k=5)
+
+    ids = [c.chunk_id for c in results]
+    assert "legacy-nearest-1" in ids, "legacy-only chunk must not be masked"
+    # Highest-scoring (the legacy nearest) ranks first; both sources merged.
+    assert ids[0] == "legacy-nearest-1"
+    by_id = {c.chunk_id: c for c in results}
+    assert by_id["legacy-nearest-1"].metadata["source"] == "chunks.embedding"
+    assert by_id["unrelated-1"].metadata["source"] == "chunk_embeddings"
+    assert by_id["legacy-nearest-1"].score == 0.95
+
+
+def test_chunk_in_both_sources_merged_once_keeps_higher_score():
+    # A chunk present in BOTH sources must appear exactly once, retaining the
+    # higher score and the source tag of whichever source produced that score.
+    session = SourceAwareFakeSession(
+        chunk_embeddings_rows=[_Row("dup-1", 0.70)],
+        chunks_rows=[_Row("dup-1", 0.92)],
+    )
+    retriever = DenseVectorRetriever(session=session)
+    results = retriever.search([0.1, 0.2], top_k=5)
+
+    assert [c.chunk_id for c in results] == ["dup-1"]
+    assert results[0].score == 0.92
+    assert results[0].metadata["source"] == "chunks.embedding"
+
+
+def test_candidate_k_bounds_merged_result():
+    # Merging both sources must never exceed candidate_k, and the kept set is
+    # the highest-scoring union (dedup by chunk_id).
+    primary = [RetrievalCandidate(chunk_id=f"p{i}", rank=i, score=0.9 - i * 0.01) for i in range(5)]
+    legacy = [RetrievalCandidate(chunk_id=f"l{i}", rank=i, score=0.5 - i * 0.01) for i in range(5)]
+    merged = merge_dense_candidates(primary, legacy, candidate_k=7)
+    assert len(merged) <= 7
+    assert [c.chunk_id for c in merged] == [
+        "p0", "p1", "p2", "p3", "p4", "l0", "l1"
+    ]
+    assert [c.rank for c in merged] == list(range(1, 8))
+    # Solely legacy overlaps (candidate appears in both) still dedupes to one.
+    dup = [
+        RetrievalCandidate(chunk_id="x", rank=1, score=0.8),
+        RetrievalCandidate(chunk_id="x", rank=1, score=0.9),
+    ]
+    one = merge_dense_candidates([dup[0]], [dup[1]], candidate_k=5)
+    assert len(one) == 1 and one[0].chunk_id == "x" and one[0].score == 0.9
+
+
+def test_legacy_spec_and_sql_carry_both_sources():
+    # The spec carries the canonical source and derives a legacy spec; the
+    # emitted legacy SQL reads the HNSW-indexed chunks.embedding column, joined
+    # to documents, with legacy-only rows (NULL embedding) excluded.
+    spec = DenseVectorRetriever().build_spec(
+        [0.1, 0.2], top_k=3, filters={"document_ids": ["docA"]}
+    )
+    assert spec["embedding_table"] == "chunk_embeddings"
+    legacy = legacy_spec_from_spec(spec)
+    assert legacy["embedding_table"] == "chunks"
+    assert legacy["vector_column"] == "embedding"
+    assert legacy["chunk_id_column"] == "id"
+
+    sql, params = dense_sql_from_spec(legacy)
+    assert "FROM chunks AS c" in sql
+    assert "1 - (chunks.embedding <=> CAST(:query_embedding AS vector)) AS score" in sql
+    assert "JOIN documents AS d ON d.id = c.document_id" in sql
+    assert "c.embedding IS NOT NULL" in sql
+    assert "c.document_id IN" in sql
+    assert "LIMIT :candidate_k" in sql
+    assert params["candidate_k"] == 3
