@@ -46,6 +46,10 @@ from typing import Any, Callable, Dict, List, Optional
 from src.config import Settings, settings as default_settings
 from src.infrastructure.retrieval.base import RetrievalCandidate
 from src.infrastructure.retrieval.context_builder import ContextBuilder, ContextBuildResult
+from src.infrastructure.retrieval.lexical import (
+    content_has_any_term,
+    significant_query_terms,
+)
 from src.infrastructure.retrieval.no_answer import AnswerPolicy, Answerability
 from src.infrastructure.retrieval.rrf import dedupe as _dedupe
 from src.infrastructure.retrieval.rrf import fuse as _fuse
@@ -69,6 +73,20 @@ NeighborResolver = Callable[[str, int], Optional[Any]]
 #: (mirrors the score ladder in ``identifier.py``: 1.0 array / 0.9 symbol /
 #: 0.6 substring). Used to feed AnswerPolicy's ``exact_identifier`` signal.
 _EXACT_IDENTIFIER_SCORE: float = 0.9
+
+
+def _candidate_lexical_presence(c, terms: "List[str]") -> bool:
+    """Content-verified term presence for a candidate (chunk text check)."""
+    if not terms:
+        return False
+    chunk = getattr(c, "chunk", None)
+    if chunk is None:
+        return False
+    if isinstance(chunk, dict):
+        content = chunk.get("content") or ""
+    else:
+        content = getattr(chunk, "content", None) or ""
+    return content_has_any_term(content, terms)
 
 
 def default_chunk_resolver() -> None:
@@ -279,7 +297,7 @@ class RetrievalService:
 
         # 6) No-answer / intent classification ---
         answerability = self.policy.classify(
-            query, self._evidence(reranked, dense, lexical, identifier)
+            query, self._evidence(query, reranked, dense, lexical, identifier)
         )
 
         # 7) Citations summary from the final ranked candidates ---
@@ -399,6 +417,7 @@ class RetrievalService:
 
     def _evidence(
         self,
+        query: str,
         ranked: List[RetrievalCandidate],
         dense: List[RetrievalCandidate],
         lexical: List[RetrievalCandidate],
@@ -410,7 +429,17 @@ class RetrievalService:
         whether the identifier retriever produced an exact (or any) match so a
         low dense score can be overridden by lexical/identifier evidence
         (AKTIF_GOREV.md 5.6).
+
+        ``lexical_presence`` is a content-verified boolean computed from each
+        ranked candidate's attached chunk *text*: True when a significant query
+        term (see ``significant_query_terms``) literally appears in that chunk.
+        It grounds AnswerPolicy's term-presence rescue even for multi-term /
+        split-acronym / comparative queries whose terms the AND-based lexical
+        retriever cannot surface (e.g. "ttnet sis" -> content lexeme
+        "ttnetsis"), while still never fabricating — presence is verified
+        against the real source text.
         """
+        presence_terms = significant_query_terms(query)
         dense_scores: Dict[str, float] = {c.chunk_id: c.score for c in dense}
         lexical_scores: Dict[str, float] = {c.chunk_id: c.score for c in lexical}
         identifier_scores: Dict[str, float] = {c.chunk_id: c.score for c in identifier}
@@ -425,6 +454,9 @@ class RetrievalService:
                     "identifier": ident_score is not None,
                     "exact_identifier": (
                         ident_score is not None and ident_score >= _EXACT_IDENTIFIER_SCORE
+                    ),
+                    "lexical_presence": _candidate_lexical_presence(
+                        c, presence_terms
                     ),
                 }
             )

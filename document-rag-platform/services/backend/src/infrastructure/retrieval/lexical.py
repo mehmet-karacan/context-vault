@@ -46,7 +46,7 @@ LEXICAL_STOPWORDS: frozenset = frozenset({
     "that", "the", "this", "to", "was", "were", "what", "when", "where",
     "which", "who", "why", "with",
     # Turkish question / connector / filler words.
-    "nedir", "nasil", "nasıl", "neler", "neden", "hangi", "kac", "kaç",
+    "nedir", "nasil", "nasıl", "neler", "nelerdir", "neden", "hangi", "kac", "kaç",
     "icin", "için", "ile", "ve", "bir", "bu", "su", "şu", "ne",
 })
 
@@ -69,6 +69,49 @@ def filter_query_terms(query_text: str) -> str:
     if not tokens:
         return query_text
     return " ".join(tokens)
+
+
+def significant_query_terms(query_text: str) -> "List[str]":
+    """Significant content terms of a query, lower-cased and de-duplicated.
+
+    Returns the stopword-filtered word tokens (see :data:`LEXICAL_STOPWORDS`)
+    plus the space-collapsed joins of adjacent letter-only token pairs, so a
+    split acronym in the query ("ttnet sis") also yields the contiguous form
+    that actually appears in the source text ("ttnetsis"). Pure and
+    deterministic; used by the retrieval layer for the content-verified term
+    presence signal.
+    """
+    if not query_text:
+        return []
+    tokens = [
+        t for t in re.findall(r"\w+", query_text.lower())
+        if len(t) > 1 and t not in LEXICAL_STOPWORDS
+    ]
+    if not tokens:
+        return []
+    terms: "List[str]" = list(dict.fromkeys(tokens))
+    for i in range(len(tokens) - 1):
+        a, b = tokens[i], tokens[i + 1]
+        if a.isalpha() and b.isalpha():
+            joined = a + b
+            if joined not in terms:
+                terms.append(joined)
+    return [t for t in terms if len(t) > 1]
+
+
+def content_has_any_term(content: str, terms: "List[str]") -> bool:
+    """True if ``content`` (case-insensitive) contains any of ``terms`` (pure).
+
+    A blunt but content-verified substring presence check: if a significant
+    query term literally appears in the chunk text, the chunk is genuine
+    evidence for that term — regardless of how the AND-based full-text query
+    tokenized/acronym-split the caller's phrasing. Empty content or an empty
+    term list yields ``False``.
+    """
+    if not content or not terms:
+        return False
+    lowered = content.lower()
+    return any(t in lowered for t in terms)
 
 
 class LexicalRetriever:

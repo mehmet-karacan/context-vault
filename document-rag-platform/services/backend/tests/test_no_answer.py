@@ -178,6 +178,46 @@ def test_evidence_signal_from_dict_and_object_equivalent():
     assert signal_obj.dense_score == 0.6
 
 
+def test_content_lexical_presence_rescues_split_acronym_near_threshold():
+    # Comparison query phrased with split acronyms ("ttnet sis" / "tt sis").
+    # The AND-based lexical retriever returns nothing (lexical_score stays
+    # None) because content lexemes are the single "ttnetsis"/"ttsis", but the
+    # content-verified lexical_presence signal confirms the term is present,
+    # so a near-threshold dense prompt must not be rejected.
+    policy = AnswerPolicy()  # presence floor 0.45
+    evidence = [
+        {"dense_score": 0.51, "lexical_presence": True},
+    ]
+
+    decision = policy.classify(
+        "ttnet sis ve tt sis arasındaki farklar nelerdir", evidence=evidence
+    )
+
+    assert decision.answerable is True
+    assert decision.intent == INTENT_DOCUMENT
+    assert decision.inputs["has_lexical_presence"] is True
+
+
+def test_content_lexical_presence_still_requires_dense_floor():
+    # Content presence alone cannot rescue a very low dense score (content may
+    # coincidentally contain the term without answering the question).
+    policy = AnswerPolicy()  # presence floor 0.45
+    evidence = [
+        {"dense_score": 0.2, "lexical_presence": True},
+    ]
+
+    decision = policy.classify("ttnet sis nedir?", evidence=evidence)
+
+    assert decision.answerable is False
+    assert decision.inputs["has_lexical_presence"] is True
+
+
+def test_evidence_signal_parses_lexical_presence():
+    sig = EvidenceSignal.from_raw({"dense_score": 0.5, "lexical_presence": True})
+    assert sig.lexical_presence is True
+    assert EvidenceSignal.from_raw({"dense_score": 0.5}).lexical_presence is False
+
+
 def test_scores_and_inputs_recorded_in_decision():
     policy = AnswerPolicy()
     decision = policy.classify("renk kodu nedir?", evidence=[_dense(0.8)])
