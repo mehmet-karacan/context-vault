@@ -1542,12 +1542,12 @@ Bu bölüm her çalışma oturumunda güncellenmelidir.
 Son güncelleme: 2026-08-19
 Çalışan ajan/model: opencode (DeepSeek-V4-Flash) — KRCN native-parallel, 3-4 subagent
 Branch: main
-Tamamlanan son aşama: Aşama 9 (Değerlendirme, gözlemlenebilirlik ve güvenlik)
-Aktif aşama: Aşama 10 (Dokümantasyon, temizlik ve son aktivasyon)
-Çalıştırılan testler: pytest (backend full suite, venv) — 3 ardışık koşu stabil
-Test sonucu: 492 passed, 8 skipped, 1 failed (tek hata FastAPI 0.141 vs kilitli 0.109 sürüm artefaktı); Aşama 9 testleri stabildi. Kullanıcı backend'in docker compose ile ayağa kalkmadığını bildirdi (chat: "Sunucuya bağlanılamadı") — teşhis ve düzeltme devam ediyor.
-Bilinen engeller: backend container başlatma/bağlantı sorunu teşhis ediliyor
-Bir sonraki kesin adım: Backend'in docker compose ile ayağa kalkmasını sağla, ardından Aşama 10 — Dokümantasyon ve aktivasyon
+Tamamlanan son aşama: Aşama 10 (Dokümantasyon, temizlik ve son aktivasyon)
+Aktif aşama: TAMAMLANDI (Aşama 0-10)
+Çalıştırılan testler: pytest (backend full suite, venv) + docker compose runtime smoke
+Test sonucu: 492 passed, 8 skipped, 1 failed (tek hata FastAPI 0.141 vs kilitli 0.109 sürüm artefaktı — yalnız geçici venv). Backend docker compose ile ayağa kalktı; senkron/asenkron ingestion indeksleme + dense fallback + no-answer sorunu çözüldü; e2e (soru→cevap+citation, no-answer, smalltalk) doğrulandı. Dokümantasyon (ADR'ler, README, 6 runbook, durum dokümanları) gerçek kodla eşleşti; feature flag'ler aktive edildi (FEATURE_REPOSITORY_INGESTION=true, STRUCTURED_PARSING/HYBRID_RETRIEVAL rollback anahtarları eklendi).
+Bilinen engeller: yok (tree-sitter/OCR engel kurulumu/uzak reranker gateway zorunluluğu bilinen sınırlamalar olarak dokümante edildi)
+Bir sonraki kesin adım: Son commit'ler sonrası AKTIF_GOREV.md final durumunu işaretle
 ```
 
 ## Aşama Durumları
@@ -1562,7 +1562,7 @@ Bir sonraki kesin adım: Backend'in docker compose ile ayağa kalkmasını sağl
 - [x] Aşama 7 — Repository/klasör ingestion (git/archive/directory kaynakları, güvenlik, ignore kuralları, kod+PL/SQL parser/chunker, incremental re-index, API)
 - [x] Aşama 8 — Görsel ve OCR (OCR provider'ları Docling/Tesseract, ön işleme, image parser + OCR yönlendirme, bbox citation, ocr_json artifact)
 - [x] Aşama 9 — Eval, observability ve güvenlik (golden dataset 66, metriker, structured log, health/readiness, rate limiting, MIME/magic, redaction, prompt-injection)
-- [ ] Aşama 10 — Dokümantasyon ve aktivasyon
+- [x] Aşama 10 — Dokümantasyon ve aktivasyon (ADR'ler, README, runbook'lar, durum dokümanları, feature flag aktivasyonu)
 
 ---
 
