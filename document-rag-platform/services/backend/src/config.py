@@ -135,6 +135,23 @@ class Settings(BaseSettings):
     # so the old chat path can be restored for rollback safety.
     FEATURE_NEW_CITATIONS: bool = True
 
+    # Aşama 3: structure-preserving document parsing (AKTIF_GOREV.md §3 / §16).
+    # This field is declared so every mandatory §16 rollback flag exists in
+    # config, but the current implementation is ALWAYS-ON — the flag is not yet
+    # wired into the parser pipeline (no gate exists today). It is the rollback
+    # switch for future trimming: flipping it to False would let a deployment
+    # disable structured parsing without code change. Default True because the
+    # feature is live right now.
+    FEATURE_STRUCTURED_PARSING: bool = True
+
+    # Aşama 5: hybrid (dense + lexical + identifier, RRF-fused) retrieval
+    # (AKTIF_GOREV.md §5 / §16). Like FEATURE_STRUCTURED_PARSING, this field is
+    # declared so the mandatory §16 rollback flag exists in config, but the
+    # current implementation is ALWAYS-ON — retrieval_service.py does not gate
+    # on it today. It is the rollback switch for future trimming; the default is
+    # True because hybrid retrieval is live right now.
+    FEATURE_HYBRID_RETRIEVAL: bool = True
+
     # --- Parsing (Aşama 3.1) ----------------------------------------------
     # Per-file wall-clock budget for a single parser call (seconds). A parse
     # exceeding this is aborted by the ParserRouter as a hard timeout rather
@@ -215,8 +232,10 @@ class Settings(BaseSettings):
     # Gates the whole repository/archive/directory source-ingestion feature
     # behind a flag so it can be rolled back safely (AKTIF_GOREV.md §11 / §16:
     # FEATURE_REPOSITORY_INGESTION). The API routes in ``api/v1/repositories.py``
-    # refuse to run when this is off.
-    FEATURE_REPOSITORY_INGESTION: bool = False
+    # refuse to run when this is off. Default True per §11 example and Global
+    # DoD (§17: "Repository URL, archive ve izinli klasör tarama çalışıyor");
+    # set to False only to roll the feature back.
+    FEATURE_REPOSITORY_INGESTION: bool = True
     # Archive "zip bomb" / traversal protective limits (AKTIF_GOREV.md §7.2:
     # "Archive path traversal ve zip bomb koruması uygula", "Maksimum dosya
     # sayısı, tek dosya boyutu, toplam byte ve tarama süresi limiti koy").
