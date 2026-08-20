@@ -14,9 +14,42 @@ from typing import List, Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Development origins used by default for CORS when APP_ENV=development and
+# no explicit CORS_ALLOW_ORIGINS is configured (AKTIF_GOREV.md §9.5: CORS'u
+# üretim için `*` bırakmama).
+DEV_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:8000",
+]
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # --- Runtime environment / security (Aşama 9.4-9.5 / §11) ----------
+    # APP_ENV selects runtime behaviour (development | production). API_DEBUG
+    # and FEATURE_RETRIEVAL_DEBUG are only honored outside production so a
+    # production deployment can never accidentally expose stack traces or the
+    # retrieval-debug surface (AKTIF_GOREV.md §9.5 / §11).
+    APP_ENV: str = "development"
+    API_DEBUG: bool = False
+    FEATURE_RETRIEVAL_DEBUG: bool = True
+    # Comma-separated allow-list of CORS origins. Defaults to DEV_CORS_ORIGINS
+    # in development and to an empty (restrictive) list in production — never
+    # "*" (AKTIF_GOREV.md §9.5: "CORS'u üretim için `*` bırakmama").
+    CORS_ALLOW_ORIGINS: Optional[str] = None
+
+    # --- Rate limiting (Aşama 9.5) --------------------------------------
+    # Lightweight in-memory sliding-window rate limiter keyed by client IP,
+    # applied to the expensive chat/upload/retrieval endpoints. Relaxed by
+    # default (disabled) so existing deployments are unaffected; enable via
+    # env in production (§11 style).
+    RATE_LIMIT_ENABLED: bool = False
+    RATE_LIMIT_MAX_REQUESTS: int = 60
+    RATE_LIMIT_WINDOW_SECONDS: int = 60
+    RATE_LIMIT_KEY_PREFIX: str = "rl"
 
     # --- Database -----------------------------------------------------
     # Required. There is no safe default for a real deployment; if it's
@@ -208,6 +241,37 @@ class Settings(BaseSettings):
     OCR_LANGUAGES: str = "tur+eng"
     OCR_MIN_TEXT_COVERAGE: float = 0.02
 
+    # --- Security / file validation (Aşama 9.5) --------------------------------
+    # Upload and ingestion resource limits + policy knobs the reusable security
+    # helpers (src/infrastructure/security) read from config so thresholds can be
+    # varied per deployment/test. Defaults per AKTIF_GOREV.md §11 / §9.5.
+    # Maximum bytes for a single uploaded document; a larger upload is refused
+    # (Aşama 9.5 "dosya boyutu ... limitleri").
+    MAX_DOCUMENT_BYTES: int = 20971520  # 20 MB
+    # Maximum cumulative bytes across one ingestion batch; exceeding it refuses
+    # the batch (Aşama 9.5 "toplam ingestion limitleri").
+    MAX_TOTAL_INGESTION_BYTES: int = 1073741824  # 1 GB
+    # Maximum number of files in a single ingestion batch.
+    MAX_INGESTION_FILES: int = 20000
+    # Wall-clock budget (seconds) for a single parser call; the ParserRouter
+    # already enforces this (Aşama 3.1). Declared here as the single knob the
+    # security suite asserts against.
+    PARSER_TIMEOUT_SECONDS: float = 300.0
+    # Soft upper bound for a single parse's peak memory usage (MB). The parser
+    # output-size limit (MAX_PARSED_TEXT_CHARS) bounds output; this documents the
+    # memory budget and is surfaced by the security limits helpers.
+    PARSER_MEMORY_LIMIT_MB: int = 2048
+    # Whether extension-vs-magic mismatches that "look binary" are refused even
+    # when only the extension claims a binary type (Aşama 9.5 "MIME ve magic-byte
+    # doğrulama"). When False only a directly observed magic/extension conflict is
+    # refused; a claimed-but-unverified binary extension is still refused here for
+    # safety, so this flag mainly governs fringe ambiguity handling.
+    MIME_VALIDATION_STRICT: bool = True
+    # Comma-separated extra secret-detection regex patterns (extended by
+    # src/infrastructure/security/redaction.py). Empty by default — the built-in
+    # credential/secret patterns already ship inside the helper.
+    SECRET_PATTERNS: str = ""
+
     # --- No-answer / intent policy (Aşama 5.6) --------------------------------
     # These are configurable calibration defaults, NOT hardcoded constants and NOT
     # a single decision mechanism. The AnswerPolicy combines dense score, lexical /
@@ -229,6 +293,36 @@ class Settings(BaseSettings):
         raw = self.CHAT_MODELS if self.CHAT_MODELS is not None else self.CHAT_MODEL
         models = [m.strip() for m in raw.split(",") if m.strip()]
         return models or [self.CHAT_MODEL]
+
+    # --- Security / observability derived config (Aşama 9) -------------
+    @property
+    def is_production(self) -> bool:
+        return self.APP_ENV.strip().lower() == "production"
+
+    @property
+    def debug_enabled(self) -> bool:
+        """API_DEBUG is only honored in non-production envs. In production it
+        is forced off so unhandled exceptions never leak a stack trace to the
+        user (AKTIF_GOREV.md §9.5)."""
+        return bool(self.API_DEBUG) and not self.is_production
+
+    @property
+    def retrieval_debug_enabled(self) -> bool:
+        """FEATURE_RETRIEVAL_DEBUG gated off in production so the
+        debug/retrieval endpoint is never exposed there (AKTIF §9.5 / §11)."""
+        return bool(self.FEATURE_RETRIEVAL_DEBUG) and not self.is_production
+
+    @property
+    def cors_origins(self) -> List[str]:
+        """Resolved CORS allow-list. Explicit CORS_ALLOW_ORIGINS wins;
+        otherwise dev origins in development and an empty (restrictive) list
+        in production. Never resolves to "*" (§9.5)."""
+        if self.CORS_ALLOW_ORIGINS:
+            return [o.strip() for o in self.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
+        if not self.is_production:
+            return list(DEV_CORS_ORIGINS)
+        return []
+
 
 
 settings = Settings()

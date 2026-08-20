@@ -24,6 +24,7 @@ from ...db import get_db
 from ...llm import QUERY_INSTRUCTION, embed_text
 from ...models import Chunk, Document
 from src.application.retrieval_service import RetrievalService
+from src.infrastructure.rate_limiter import rate_limiter
 from src.infrastructure.retrieval.dense import DenseVectorRetriever
 from src.infrastructure.retrieval.identifier import IdentifierRetriever
 from src.infrastructure.retrieval.lexical import LexicalRetriever
@@ -99,7 +100,11 @@ def _build_resolvers(db: Session):
 
 
 @router.post("/debug/retrieval")
-def debug_retrieval(req: RetrievalDebugRequest, db: Session = Depends(get_db)):
+def debug_retrieval(
+    req: RetrievalDebugRequest,
+    _: None = Depends(rate_limiter),
+    db: Session = Depends(get_db),
+):
     """Run the coordinated Aşama 5 retrieval and return the full debug payload."""
     filters: Dict[str, Any] = {}
     if req.project_id:

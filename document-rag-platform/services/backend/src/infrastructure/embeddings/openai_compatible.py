@@ -8,9 +8,12 @@ request/response behavior (model, prefixing, endpoint, parameters).
 
 from __future__ import annotations
 
+import time
 from typing import List
 
 from openai import OpenAI
+
+from ..observability import metrics
 
 
 class OpenAICompatibleEmbeddingProvider:
@@ -29,9 +32,12 @@ class OpenAICompatibleEmbeddingProvider:
         # This gateway's /v1/embeddings only accepts a single string per
         # call, not a batch array — so callers must loop for multiple
         # chunks (see embed()).
+        metrics.incr("embedding.calls")
+        start = time.perf_counter()
         response = self._client.embeddings.create(
             model=self._model, input=f"{instruction}{text}"
         )
+        metrics.record_duration("embedding.call", time.perf_counter() - start)
         return response.data[0].embedding
 
     def embed(self, texts: List[str], instruction: str = "") -> List[List[float]]:
