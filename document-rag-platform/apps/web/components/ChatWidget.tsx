@@ -25,6 +25,8 @@ import {
 } from "../lib/types";
 
 const markdownComponents = {
+  text: ({ children }: any) =>
+    typeof children === "string" ? renderTextTokens(children) : children,
   p: ({ children }: any) => <p className="mb-3 last:mb-0">{children}</p>,
   strong: ({ children }: any) => <strong className="font-semibold text-ink">{children}</strong>,
   ul: ({ children }: any) => <ul className="list-disc pl-5 mb-3 space-y-1 last:mb-0">{children}</ul>,
@@ -189,12 +191,56 @@ function ThinkingIndicator({ stageIndex }: { stageIndex: number }) {
   );
 }
 
-function uniqueSourceNames(citations: CitationPayload[], sources?: LegacySource[]): string[] {
-  const names = citations.map((c) => c.document_name).filter(Boolean) as string[];
-  if (sources) names.push(...sources.map((s) => s.document.name));
-  return Array.from(new Set(names));
+interface GroupedSource {
+  name: string;
+  labels: string[];
 }
 
+function groupSources(citations: CitationPayload[], sources?: LegacySource[]): GroupedSource[] {
+  const map = new Map<string, string[]>();
+  for (const c of citations) {
+    const name = c.document_name;
+    if (!name) continue;
+    const labels = map.get(name) ?? [];
+    const label = c.label;
+    if (label && !labels.includes(label)) labels.push(label);
+    map.set(name, labels);
+  }
+  if (sources) {
+    for (const s of sources) {
+      const name = s.document.name;
+      if (!name) continue;
+      if (!map.has(name)) map.set(name, []);
+    }
+  }
+  return Array.from(map.entries())
+    .map(([name, labels]) => ({
+      name,
+      labels: labels.sort(
+        (a, b) =>
+          (parseInt(a.replace(/\D/g, ""), 10) || 0) - (parseInt(b.replace(/\D/g, ""), 10) || 0) ||
+          a.localeCompare(b)
+      ),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+const CITATION_TOKEN = /^\[S\d+\]$/;
+
+// Renders ordinary inline text, splitting out `[S\d+]` citation markers into
+// smaller, muted reference tokens so they read as metadata rather than body.
+function renderTextTokens(text: string): React.ReactNode {
+  const parts = text.split(/(\[S\d+\])/g);
+  return parts.map((part, i) =>
+    CITATION_TOKEN.test(part) ? (
+      <span key={i} className="text-[10.5px] text-ink-soft/70 align-super">
+        {part}
+      </span>
+    ) : (
+      part
+    )
+  );
+}
 
 
 function RetrievalDebugPanel({ retrievalDebug }: { retrievalDebug: RetrievalDebug | null }) {
@@ -438,21 +484,33 @@ export default function ChatWidget() {
 
               {message.role === "assistant" &&
                 (() => {
-                  const names = uniqueSourceNames(message.citations ?? [], message.sources);
-                  if (names.length === 0) return null;
+                  const grouped = groupSources(message.citations ?? [], message.sources);
+                  if (grouped.length === 0) return null;
                   return (
                     <div className="flex flex-col gap-1 pl-3.5 w-full">
                       <span className="font-mono text-[10px] uppercase tracking-wide text-ink-soft/70">
                         Kaynaklar:
                       </span>
                       <div className="flex flex-wrap gap-1.5">
-                        {names.map((name) => (
+                        {grouped.map((group) => (
                           <span
-                            key={name}
+                            key={group.name}
                             className="inline-flex items-center gap-1.5 font-mono text-[11px] text-ink-soft bg-paper-dim/60 border border-ink-line rounded px-2 py-0.5"
                           >
                             <FileIcon className="w-3 h-3 text-ink/40 shrink-0" />
-                            <span className="truncate">{name}</span>
+                            <span className="truncate">{group.name}</span>
+                            {group.labels.length > 0 && (
+                              <span className="inline-flex items-center gap-0.5">
+                                {group.labels.map((label) => (
+                                  <span
+                                    key={label}
+                                    className="text-[9.5px] text-brass-dim bg-brass/10 rounded px-1 py-px"
+                                  >
+                                    {label}
+                                  </span>
+                                ))}
+                              </span>
+                            )}
                           </span>
                         ))}
                       </div>
