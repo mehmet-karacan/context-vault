@@ -13,7 +13,9 @@ Uses FastAPI's ``TestClient`` against the real ``app`` object assembled in
 
 from fastapi.testclient import TestClient
 
+from src.api.v1.health import get_readiness_checker
 from src.db import get_db
+from src.infrastructure.observability import ReadinessChecker
 from src.main import app
 
 
@@ -88,3 +90,56 @@ def test_health_endpoint_handles_zero_documents(monkeypatch):
     body = response.json()
     assert body["documents_count"] == 0
     assert body["indexed_count"] == 0
+
+
+# --- Aşama 9.4: health vs readiness split ----------------------------------
+
+
+def test_liveness_endpoint_returns_ok(monkeypatch):
+    """GET /health/live is a pure process-up probe — no dependencies."""
+    monkeypatch.setattr("src.main.init_db", lambda: None)
+    with TestClient(app) as client:
+        response = client.get("/health/live")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_readiness_reports_ok_when_all_dependencies_up(monkeypatch):
+    monkeypatch.setattr("src.main.init_db", lambda: None)
+    checker = ReadinessChecker(
+        {"db": lambda: True, "redis": lambda: True, "minio": lambda: True, "gateway": lambda: True}
+    )
+
+    def override():
+        app.dependency_overrides[get_readiness_checker] = lambda: checker
+
+    override()
+    try:
+        with TestClient(app) as client:
+            response = client.get("/ready")
+    finally:
+        app.dependency_overrides.pop(get_readiness_checker, None)
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+    assert response.json()["dependencies"]["db"] == "ok"
+
+
+def test_readiness_is_degraded_not_crash_when_dependency_down(monkeypatch):
+    """A single down dependency degrades readiness instead of crashing it."""
+    monkeypatch.setattr("src.main.init_db", lambda: None)
+    checker = ReadinessChecker(
+        {"db": lambda: True, "redis": lambda: False, "minio": lambda: True, "gateway": lambda: True}
+    )
+    app.dependency_overrides[get_readiness_checker] = lambda: checker
+    try:
+        with TestClient(app) as client:
+            for path in ("/ready", "/health/readiness"):
+                response = client.get(path)
+                assert response.status_code == 200
+                body = response.json()
+                assert body["status"] == "degraded"
+                assert body["dependencies"]["redis"] == "down"
+                assert body["dependencies"]["db"] == "ok"
+    finally:
+        app.dependency_overrides.pop(get_readiness_checker, None)

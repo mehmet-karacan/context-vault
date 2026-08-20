@@ -56,6 +56,7 @@ from sqlalchemy.orm import Session
 from ..api.v1.documents import chunk_text, extract_text
 from ..config import settings
 from ..db import SessionLocal
+from ..infrastructure.security import redact_secrets
 from ..infrastructure.storage import object_keys
 from ..infrastructure.storage.minio_storage import MinioObjectStorage
 from ..llm import PASSAGE_INSTRUCTION, embed_texts
@@ -374,6 +375,11 @@ def run_ingestion_job(
         chunks = chunk_text_fn(text, chunk_size=chunk_size, overlap=chunk_overlap)
         if not chunks:
             raise IngestionJobError("Chunking produced zero chunks")
+        # Aşama 9.5 secret policy: redact credential values before they reach the
+        # embedding gateway or are persisted as chunk content (AKTIF §15: no
+        # .env/private-key/credential content to the embedding gateway). The
+        # normalized_md artifact above keeps the original text for traceability.
+        chunks = [redact_secrets(c) for c in chunks]
 
         # --- embedding -----------------------------------------------------
         _advance_stage(db, job, "embedding")

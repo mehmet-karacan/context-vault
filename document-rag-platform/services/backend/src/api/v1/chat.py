@@ -31,6 +31,7 @@ from ...llm import (
 from ...models import Chunk, Conversation, Document, Project
 from src.application.answer_service import ensure_conversation, generate_answer
 from src.application.retrieval_service import RetrievalService
+from src.infrastructure.rate_limiter import rate_limiter
 from src.infrastructure.retrieval.dense import DenseVectorRetriever
 from src.infrastructure.retrieval.identifier import IdentifierRetriever
 from src.infrastructure.retrieval.lexical import LexicalRetriever
@@ -132,7 +133,11 @@ def list_chat_models():
 
 
 @router.post("/chat/query")
-def query_chat(chat_query: ChatQuery, db: Session = Depends(get_db)):
+def query_chat(
+    chat_query: ChatQuery,
+    _: None = Depends(rate_limiter),
+    db: Session = Depends(get_db),
+):
     filters: Dict[str, Any] = {}
     if chat_query.project_id:
         filters["project_id"] = chat_query.project_id

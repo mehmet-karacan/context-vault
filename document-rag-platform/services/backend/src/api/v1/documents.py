@@ -19,10 +19,12 @@ from sqlalchemy.orm import Session
 
 from ...config import settings
 from ...db import get_db
+from ...infrastructure.security import UploadValidationResult, validate_upload
 from ...infrastructure.storage import object_keys
 from ...infrastructure.storage.minio_storage import MinioObjectStorage
 from ...llm import PASSAGE_INSTRUCTION, embed_texts
 from ...models import Chunk, Document, DocumentVersion, IngestionJob, Project
+from src.infrastructure.rate_limiter import rate_limiter
 
 router = APIRouter(tags=["documents"])
 
@@ -151,6 +153,21 @@ def serialize_document(
     }
 
 
+# --- Security ----------------------------------------------------------------
+
+
+def guard_upload(file_bytes: bytes, filename: str, mime_type: str) -> None:
+    """Reject an upload that fails MIME/magic/size/safety validation.
+
+    Aşama 9.5 guard: on violation we raise an HTTP 400 with a short, safe
+    message — never a stack trace. Non-breaking: only rejects clearly unsafe
+    inputs (oversize, extension-vs-magic mismatch, total-limit breach).
+    """
+    result: UploadValidationResult = validate_upload(file_bytes, filename, mime_type)
+    if not result.ok:
+        raise HTTPException(status_code=400, detail=result.error or "Upload rejected")
+
+
 # --- Routes --------------------------------------------------------------
 
 
@@ -175,6 +192,7 @@ def _upload_document_async(
     from ...workers.ingestion_tasks import process_ingestion_job
 
     file_bytes = file.file.read()
+    guard_upload(file_bytes, file.filename or "", file.content_type or "")
     document_id = uuid.uuid4()
     version_id = uuid.uuid4()
     job_id = uuid.uuid4()
@@ -252,6 +270,7 @@ def upload_document(
     project_id: str = Form(...),
     chunk_size: int = Form(500),
     instruction: str = Form(PASSAGE_INSTRUCTION),
+    _: None = Depends(rate_limiter),
     db: Session = Depends(get_db),
 ):
     project = db.get(Project, project_id)
@@ -276,9 +295,11 @@ def upload_document(
 
     tmp_path = None
     try:
+        file_bytes = file.file.read()
+        guard_upload(file_bytes, file.filename or "", file.content_type or "")
         suffix = os.path.splitext(file.filename)[1]
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
-            tmp_file.write(file.file.read())
+            tmp_file.write(file_bytes)
             tmp_path = tmp_file.name
 
         document.status = "processing"
