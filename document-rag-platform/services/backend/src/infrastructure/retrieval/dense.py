@@ -178,12 +178,12 @@ def dense_sql_from_spec(spec: Dict[str, Any]) -> "tuple[str, Dict[str, Any]]":
         if filter_sql:
             where_parts.append(filter_sql)
         sql = (
-            f"SELECT {c}.{cid} AS chunk_id,\n"
-            f"       1 - ({c}.{vec} <=> CAST(:query_embedding AS vector)) AS score\n"
+            f"SELECT c.{cid} AS chunk_id,\n"
+            f"       1 - (c.{vec} <=> CAST(:query_embedding AS vector)) AS score\n"
             f"FROM {c} AS c\n"
             f"JOIN documents AS d ON d.id = c.document_id\n"
             f"WHERE {' AND '.join(where_parts)}\n"
-            f"ORDER BY {c}.{vec} <=> CAST(:query_embedding AS vector)\n"
+            f"ORDER BY c.{vec} <=> CAST(:query_embedding AS vector)\n"
             f"LIMIT :candidate_k"
         )
     else:
