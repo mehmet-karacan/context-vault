@@ -302,6 +302,17 @@ class Settings(BaseSettings):
     # A lexical score at/above this counts as "strong lexical" evidence that can
     # rescue a candidate whose dense score is below NO_ANSWER_SCORE_THRESHOLD.
     LEXICAL_STRONG_SCORE: float = 0.4
+    # Cross-lingual note: ts_rank_cd of a short acronym ("STP") inside a large
+    # chunk is inherently tiny (usually << 0.4) because it is normalized by the
+    # whole tsvector length, so LEXICAL_STRONG_SCORE can never fire for it. To
+    # avoid silently rejecting a genuine low-dense cross-lingual match whose
+    # term is actually present in the retrieved content, AnswerPolicy treats a
+    # plain lexical *term-presence* match (the query's significant term appears
+    # in the retrieved chunk's search vector) as rescuing evidence whenever the
+    # top dense score is at/above this floor. This is a content-verified gate —
+    # it never fabricates, because it only admits evidence that demonstrably
+    # contains the queried term.
+    LEXICAL_PRESENCE_DENSE_FLOOR: float = 0.45
     # Minimum normalized token length below which a query is too short to be an
     # informative document question (one input into small-talk detection).
     SMALLTALK_MIN_CONTENT_LEN: int = 20

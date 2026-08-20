@@ -77,6 +77,49 @@ def test_lexical_evidence_rescues_low_dense_score():
     assert "lexical" in decision.reason
 
 
+def test_lexical_presence_rescues_near_threshold_dense_score():
+    # A cross-lingual short-acronym query surfaces a dense score just under the
+    # 0.55 threshold (ts_rank_cd of one acronym in a large chunk is tiny, so
+    # LEXICAL_STRONG_SCORE never fires). Because the term is *present* in the
+    # retrieved content (lexical_score is not None) and the dense score clears
+    # the presence floor, the real evidence must not be rejected.
+    policy = AnswerPolicy()  # default presence floor 0.45
+    evidence = [
+        {"dense_score": 0.548, "lexical_score": 0.002},
+    ]
+
+    decision = policy.classify("what is stp?", evidence=evidence)
+
+    assert decision.answerable is True
+    assert decision.intent == INTENT_DOCUMENT
+    assert decision.inputs["has_lexical_presence"] is True
+
+
+def test_lexical_presence_requires_dense_floor():
+    # Lexical presence alone cannot rescue a very low dense score: content may
+    # coincidentally mention a term without actually answering the question.
+    policy = AnswerPolicy()  # presence floor 0.45
+    evidence = [
+        {"dense_score": 0.2, "lexical_score": 0.05},
+    ]
+
+    decision = policy.classify("ne renk?", evidence=evidence)
+
+    assert decision.answerable is False
+
+
+def test_no_lexical_presence_no_rescue():
+    # No chunk contains the query's terms -> no lexical presence -> the strict
+    # dense-only gate still applies and a modest dense score is rejected.
+    policy = AnswerPolicy()
+    evidence = [{"dense_score": 0.54}]  # below 0.55, and below presence floor anyway
+
+    decision = policy.classify("what is the meaning of life?", evidence=evidence)
+
+    assert decision.answerable is False
+    assert decision.inputs["has_lexical_presence"] is False
+
+
 def test_exact_identifier_rescues_low_dense_score():
     policy = AnswerPolicy()
     evidence = [{"dense_score": 0.1, "exact_identifier": True}]

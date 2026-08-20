@@ -14,6 +14,7 @@ string. ``search`` only executes that SQL against a supplied session.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import text
@@ -28,6 +29,46 @@ from src.infrastructure.retrieval.base import (
 )
 
 DEFAULT_TEXT_SEARCH_CONFIG: str = "simple"
+
+#: Cross-lingual filler / question / connector tokens that are almost never
+#: meaningful content terms in the (largely Turkish) document corpus. They are
+#: stripped from the FTS query so a real content term is not silently vetoed by
+#: an English/Turkish filler word that can never occur in the source text.
+#: Example: "what is stp?" -> plainto_tsquery('simple', 'what is stp') would be
+#: ``'what' & 'is' & 'stp'`` — all three must co-occur, but "what"/"is" never
+#: appear in Turkish content, so the meaningful term "stp" never matches even
+#: though it is present in the corpus. Dropping the fillers keeps the remaining
+#: significant terms (here just "stp") as the FTS query.
+LEXICAL_STOPWORDS: frozenset = frozenset({
+    # English function / question / auxiliary filler words.
+    "a", "an", "and", "are", "as", "at", "be", "by", "did", "do", "does",
+    "for", "from", "how", "in", "into", "is", "it", "its", "of", "on", "or",
+    "that", "the", "this", "to", "was", "were", "what", "when", "where",
+    "which", "who", "why", "with",
+    # Turkish question / connector / filler words.
+    "nedir", "nasil", "nasıl", "neler", "neden", "hangi", "kac", "kaç",
+    "icin", "için", "ile", "ve", "bir", "bu", "su", "şu", "ne",
+})
+
+
+def filter_query_terms(query_text: str) -> str:
+    """Return ``query_text`` with cross-lingual filler tokens removed (pure).
+
+    Tokenizes on word characters, keeps only tokens that are not
+    :data:`LEXICAL_STOPWORDS` and are longer than one character, and rejoins
+    with a single space. Non-filler input is returned effectively unchanged
+    (e.g. ``"PAYMENT_FLAG"`` -> ``"PAYMENT_FLAG"``). Empty result collapses to
+    the original text so a stopword-only query still follows the same path.
+    """
+    if not query_text:
+        return query_text
+    tokens = [
+        t for t in re.findall(r"\w+", query_text)
+        if len(t) > 1 and t.lower() not in LEXICAL_STOPWORDS
+    ]
+    if not tokens:
+        return query_text
+    return " ".join(tokens)
 
 
 class LexicalRetriever:
@@ -63,11 +104,18 @@ class LexicalRetriever:
         top_k: Optional[int] = None,
         filters: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Serializable, self-describing lexical search request (pure)."""
+        """Serializable, self-describing lexical search request (pure).
+
+        ``query_text`` is first stripped of cross-lingual filler tokens
+        (``filter_query_terms``) so meaningful content terms survive even when
+        surrounded by English/Turkish question fillers that the ``simple``
+        text-search config would otherwise AND into the query and block.
+        """
+        cleaned = filter_query_terms(query_text)
         return {
             "kind": "lexical",
             "ts_config": self.ts_config,
-            "query_text": query_text,
+            "query_text": cleaned,
             "chunk_table": "chunks",
             "search_vector_column": "search_vector",
             "candidate_k": self.resolve_k(top_k),

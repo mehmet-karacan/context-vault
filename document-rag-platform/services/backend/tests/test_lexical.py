@@ -8,6 +8,7 @@ result shape via a fake session.
 from __future__ import annotations
 
 from src.infrastructure.retrieval import LexicalRetriever, lexical_sql_from_spec
+from src.infrastructure.retrieval.lexical import filter_query_terms
 
 
 class _Row:
@@ -46,6 +47,21 @@ def test_spec_candidate_k_and_config():
     assert spec["candidate_k"] == 8
     assert spec["ts_config"] == "simple"
     assert spec["query_text"] == "hello"
+
+
+def test_filter_query_terms_keeps_real_terms():
+    # Cross-lingual filler must not veto the meaningful acronym term.
+    assert filter_query_terms("what is stp?") == "stp"
+    assert filter_query_terms("what is STP?") == "STP"
+    assert filter_query_terms("STP nedir") == "STP"
+    # Non-filler / multi-term content queries are effectively unchanged.
+    assert filter_query_terms("PAYMENT_FLAG") == "PAYMENT_FLAG"
+    assert filter_query_terms("talep tablosu") == "talep tablosu"
+
+
+def test_build_spec_strips_fillers_from_query_text():
+    spec = LexicalRetriever().build_spec("what is stp?", top_k=8)
+    assert spec["query_text"] == "stp"
 
 
 def test_sql_uses_simple_config_and_filters():

@@ -218,6 +218,7 @@ class AnswerPolicy:
         min_evidence: Optional[int] = None,
         lexical_strong_score: Optional[float] = None,
         smalltalk_min_content_len: Optional[int] = None,
+        lexical_presence_dense_floor: Optional[float] = None,
     ):
         self.score_threshold = (
             float(score_threshold)
@@ -238,6 +239,11 @@ class AnswerPolicy:
             int(smalltalk_min_content_len)
             if smalltalk_min_content_len is not None
             else settings.SMALLTALK_MIN_CONTENT_LEN
+        )
+        self.lexical_presence_dense_floor = (
+            float(lexical_presence_dense_floor)
+            if lexical_presence_dense_floor is not None
+            else settings.LEXICAL_PRESENCE_DENSE_FLOOR
         )
 
     def classify(
@@ -265,6 +271,14 @@ class AnswerPolicy:
             s.lexical_score is not None and s.lexical_score >= self.lexical_strong_score
             for s in signals
         )
+        # A lexical term-presence match: the query's significant term actually
+        # appears in at least one retrieved chunk's content (search vector).
+        # ts_rank_cd of a short acronym inside a large chunk is inherently tiny,
+        # so this uses presence, not the "strong" ts_rank magnitude, to rescue a
+        # near-threshold dense result whose content genuinely contains the term.
+        has_lexical_presence = any(
+            s.lexical_score is not None for s in signals
+        )
         has_exact_identifier = any(s.exact_identifier for s in signals)
         has_identifier = any(s.identifier for s in signals)
         evidence_count = len(signals)
@@ -272,6 +286,7 @@ class AnswerPolicy:
             "normalized": normalize_query(query),
             "top_dense_score": top_dense,
             "has_strong_lexical": has_strong_lexical,
+            "has_lexical_presence": has_lexical_presence,
             "has_exact_identifier": has_exact_identifier,
             "has_identifier": has_identifier,
         }
@@ -294,6 +309,27 @@ class AnswerPolicy:
                 intent=INTENT_DOCUMENT,
                 answerable=True,
                 reason="lexical/identifier evidence overrides low dense score",
+                evidence_count=evidence_count,
+                scores=scores,
+                inputs=base_inputs,
+            )
+
+        # Content-verified rescue: the query's significant term demonstrably
+        # occurs in the retrieved evidence (lexical term presence) and the top
+        # dense score is at least a modest relevance floor. This admits a genuine
+        # cross-lingual / short-acronym near-threshold match whose dense score
+        # sits just under NO_ANSWER_SCORE_THRESHOLD, without fabricating: the
+        # term really is in the source text. A no-answer query whose terms never
+        # appear in any chunk has no lexical presence and is not rescued.
+        if (
+            has_lexical_presence
+            and top_dense is not None
+            and top_dense >= self.lexical_presence_dense_floor
+        ):
+            return Answerability(
+                intent=INTENT_DOCUMENT,
+                answerable=True,
+                reason="lexical term presence in retrieved evidence confirms answer",
                 evidence_count=evidence_count,
                 scores=scores,
                 inputs=base_inputs,
