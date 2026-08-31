@@ -1,14 +1,7 @@
 name: ci-frontend
 
 on:
-  push:
-    paths:
-      - "document-rag-platform/apps/web/**"
-      - ".github/workflows/ci-frontend.yml"
-  pull_request:
-    paths:
-      - "document-rag-platform/apps/web/**"
-      - ".github/workflows/ci-frontend.yml"
+  workflow_dispatch:
 
 jobs:
   frontend:

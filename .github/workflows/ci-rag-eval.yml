@@ -2,16 +2,6 @@ name: ci-rag-eval
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - "document-rag-platform/services/backend/**"
-      - "document-rag-platform/tests/evals/**"
-      - ".github/workflows/ci-rag-eval.yml"
-  pull_request:
-    paths:
-      - "document-rag-platform/services/backend/**"
-      - "document-rag-platform/tests/evals/**"
-      - ".github/workflows/ci-rag-eval.yml"
 
 jobs:
   rag-eval:

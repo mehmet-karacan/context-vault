@@ -1,14 +1,7 @@
 name: ci-backend
 
 on:
-  push:
-    paths:
-      - "document-rag-platform/services/backend/**"
-      - ".github/workflows/ci-backend.yml"
-  pull_request:
-    paths:
-      - "document-rag-platform/services/backend/**"
-      - ".github/workflows/ci-backend.yml"
+  workflow_dispatch:
 
 jobs:
   backend:
