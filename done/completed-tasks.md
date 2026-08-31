@@ -1,3 +1,15 @@
+## 2026-08-31 — Aşama 0: Git sahiplik temizliği ve araç-bağımsızlaştırma
+
+- Eski aktif görev `AKTIF_GOREV.md` → `done/active-tasks/2026-08-19-context-vault-rag-v2.md` arşivlendi.
+- Yeni görev dokümanı root'ta `AKTIF_GOREV.md` olarak etkinleştirildi (hedef: main).
+- İstenmeyen `Co-Authored-By: Claude` trailer'ları (15) ``main`` geçmişinden kaldırıldı; dosya ağacı, commit sayısı ve author/committer metadata korundu.
+- Tam backup bundle ve doğrulama manifest'i üretildi.
+- Sahiplik politikası dosyaları eklendi (`scripts/check_commit_ownership.py`, `.githooks/commit-msg`, `.github/workflows/commit-ownership.yml`, `CONTRIBUTING.md`).
+- `.claude/` içeriği (16 dosya) repo dışı arşive kopyalanıp kaldırıldı; provenance kaydı eklendi.
+- Son gerçek commit: 6243b78963471d367b96df0b2a46f416096659ac (chore(history): sahiplik ve araç-bağımsızlık politikası).
+
+---
+
 # Tamamlanan Görevler
 
 **Son güncelleme:** 2026-08-20

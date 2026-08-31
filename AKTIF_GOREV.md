@@ -1,1616 +1,1687 @@
-# Context Vault — RAG, Kod Deposu ve Çok Modlu İçerik Altyapısı Uygulama Görevi
+# Context Vault — RAG Güvenilirlik, Arama Kalitesi ve Ürünleştirme Aktif Görevi
 
-## Görev Kimliği
-
-| Alan | Değer |
-|---|---|
-| Durum | **ONAYLI — UYGULANABİLİR AKTİF GÖREV** |
-| Hedef repository | `https://github.com/mehmet-karacan/context-vault` |
-| Hedef branch tabanı | `main` |
-| İncelenen başlangıç commit'i | `763703ddf45e40cbe2d7b7799d95b03c77fb0e39` |
-| Kanonik uygulama dizini | `document-rag-platform/` |
-| Mevcut embedding modeli | `openai/BAAI/bge-m3` |
-| Mevcut embedding boyutu | `1024` |
-| Görev dosyasının repository içindeki yeri | Repository kökü: `AKTIF_GOREV.md` |
-| Dil | Kod adları İngilizce, kullanıcı metinleri ve dokümantasyon Türkçe olabilir |
-
----
-
-## 1. Görevin Amacı
-
-Mevcut Context Vault uygulamasını, yalnızca basit Word/PDF metni parçalayıp dense vektör araması yapan bir MVP olmaktan çıkarıp aşağıdaki içerikleri güvenilir biçimde işleyebilen, kaynak gösterebilen, yeniden indekslenebilen ve modelden bağımsız devam ettirilebilen bir bilgi platformuna dönüştür:
-
-1. Yapısal Word belgeleri.
-2. Dijital ve taranmış PDF belgeleri.
-3. TXT ve Markdown belgeleri.
-4. PNG, JPEG ve benzeri görseller.
-5. OCR gerektiren belgeler ve görseller.
-6. ZIP/TAR olarak yüklenen proje kodları.
-7. Git repository URL'si üzerinden alınan kod tabanları.
-8. Sunucuda izin verilen kökler altındaki klasörlerin recursive taranması.
-9. Çoklu belge ve çoklu kaynak üzerinde hibrit arama, reranking ve kanıta dayalı cevap üretimi.
-
-Bu çalışma **embedding modelini değiştirme projesi değildir**. İlk uygulamada `openai/BAAI/bge-m3` ve `Vector(1024)` korunacaktır. Ana dönüşüm; ingestion, parse, chunking, metadata, retrieval, reranking, citation, değerlendirme ve yeniden indeksleme katmanlarında yapılacaktır.
+> **Dosya adı sabittir:** `AKTIF_GOREV.md`  
+> **Durum:** **ONAYLI — AŞAMA 0 İLERLEMEDE (rewrite, sahiplik policy ve .claude temizliği tamamlandı); AŞAMA 1 runtime baseline ve CI başlıyor**  
+> **Onay sahibi:** Mehmet KARACAN  
+> **Onay tarihi:** 2026-08-31 — Europe/Istanbul  
+> **Repository:** `https://github.com/mehmet-karacan/context-vault`  
+> **Hedef branch:** `main`  
+> **İncelenen başlangıç commit’i:** `38c6ac5697431475351e577b2794399b349fb210`  
+> **Aşama 0 rewrite-sonrası main head:** `6243b78963471d367b96df0b2a46f416096659ac`  
+> **İncelenen eski aktif görev blob SHA’sı:** `1e39813d7afd0e57600e6959eeeb30d42227d4dd`  
+> **Kanonik uygulama dizini:** `document-rag-platform/`  
+> **Kanonik görev dosyası:** repository kökü `/AKTIF_GOREV.md`  
+> **Sahiplik ilkesi:** Commit author ve committer yalnız Mehmet KARACAN; yapay zekâ veya araç adları `Co-Authored-By` trailer’ı olarak kullanılmayacak.  
+> **Yürütme ilkesi:** Önce Git geçmişindeki istenmeyen ortak-yazar kaydı temizlenecek ve doğrulanacak; bundan önce hiçbir ürün geliştirmesi, refactor veya feature commit’i yapılmayacak.
 
 ---
 
-## 2. Başlangıç ve Devam Protokolü
+## 0. Bu Görevin Bağlayıcı Sırası
 
-Bu dosyayı alan herhangi bir yapay zekâ ajanı veya geliştirici aşağıdaki sırayı uygulamalıdır:
+Bu görev üç kapılıdır ve sıra değiştirilemez:
 
-1. Bu dosyanın tamamını oku.
-2. Repository çalışma ağacını, son commit'i ve `git status` çıktısını kontrol et.
-3. Gerçek durumu koddan doğrula; `context-summary.md`, `IMPLEMENTATION_CHECKLIST.md` veya eski görev özetlerini tek başına doğru kabul etme.
-4. Kanonik uygulama dizini olarak `document-rag-platform/` altında çalış.
-5. Kullanıcıya ait kaynak dosyaları, belgeleri, proje kodlarını ve mevcut verileri silme.
-6. Büyük kapsamlı tek commit yerine aşama bazlı küçük ve geri alınabilir commit'ler üret.
-7. Her aşamadan sonra testleri çalıştır, sonucu bu dosyanın **İlerleme Kaydı** bölümüne işle.
-8. Tamamlanan işi tekrar yapma; dosyadaki işaretler ile gerçek kodu birlikte doğrula.
-9. Yalnızca haricî ve çözülemeyen bir engel varsa dur. Eksik servis, erişim veya credential varsa engeli tam komut ve hata mesajıyla kaydet.
-10. Görev kapsamını genişletme. Yeni özellikler ancak bu planda tanımlı adaptör veya extension point sınırları içinde eklenebilir.
+1. **Aşama 0 — Git sahiplik temizliği**
+   - Git geçmişindeki `Co-Authored-By: Claude ...` trailer’ları mesajlardan çıkarılır.
+   - Dosya ağaçları, commit sayısı ve gerçek Mehmet author/committer bilgileri korunur.
+   - `main` güvenli `force-with-lease` ile güncellenir.
+   - Contributor görünümü ve tüm ref’ler doğrulanır.
+   - Araç-özel `.claude/` içerikleri ayrıca envanterlenir; yararlı içerik lisans/provenance kontrolünden sonra araçtan bağımsız yapıya taşınmeden silinmez.
 
-Önerilen çalışma branch'i:
+2. **Aşama 1–7 — RAG doğruluk ve güvenilirlik çekirdeği**
+   - Veri izolasyonu, aktif sürüm, embedding profili, retrieval, context, citation, ingestion ve gerçek eval hataları düzeltilir.
+   - Her aşama gerçek entegrasyon testi ve geri dönüş planı ile tamamlanır.
 
-```text
-feat/context-vault-ingestion-retrieval-v2
-```
+3. **Aşama 8–11 — Ürünleştirme ve genişleme**
+   - Gözlemlenebilirlik, UI, geri bildirim, araçtan bağımsız skill’ler ve yalnız ölçümle gerekli olduğu kanıtlanan deneysel retrieval seçenekleri eklenir.
 
----
-
-## 3. Mevcut Kodun Doğrulanmış Başlangıç Durumu
-
-Aşağıdaki maddeler başlangıç gerçekliğidir ve uygulama sırasında yeniden doğrulanmalıdır:
-
-- FastAPI backend ağırlıklı olarak `services/backend/src/main.py` içinde monolitik yapıdadır.
-- Embedding ve chat gateway çağrıları `services/backend/src/llm.py` içindedir.
-- `EMBEDDING_MODEL` ortam değişkeni varsayılan olarak `openai/BAAI/bge-m3` değerini kullanır.
-- Embedding sonucu OpenAI uyumlu `/embeddings` cevabından yalnızca tek dense vektör olarak alınır.
-- `Chunk.embedding` alanı `Vector(1024)` olarak tanımlıdır.
-- PostgreSQL üzerinde cosine HNSW index oluşturulur.
-- DOCX parser yalnızca `doc.paragraphs` içindeki düz metni birleştirir; tablo, başlık hiyerarşisi ve diğer yapılar korunmaz.
-- Mevcut chunking yaklaşık `500 karakter + 50 karakter overlap` ile yapılır; token bazlı değildir.
-- Sorguda dense cosine adayları ve basit `ILIKE` kelime eşleşmeleri kullanılır.
-- Final bağlama en fazla `TOP_K = 3` chunk gönderilir.
-- Global benzerlik eşiği kodda `0.55`, README'de farklı bir değer olarak geçmektedir.
-- Kaynak bulunamadığında belge sorusu ile günlük sohbet doğru ayrılmamaktadır.
-- Reranker yoktur.
-- Gerçek PostgreSQL full-text search, BM25 benzeri lexical sıralama veya RRF yoktur.
-- Chunk metadata'sında başlık yolu, sayfa, satır, sembol, parser sürümü ve embedding sürümü yoktur.
-- Orijinal dosya MinIO'da kalıcı tutulmaz; geçici dosya işlem sonunda silinir.
-- Redis, MinIO ve Celery servisleri compose içinde bulunmasına rağmen ingestion hattına tam bağlı değildir.
-- Worker komutu gerçek bir `celery_app` modülüne bağlanmamış olabilir; doğrulanmalı ve düzeltilmelidir.
-- Test ve evaluation klasörleri büyük ölçüde boştur.
-- Repo kökünde ve `document-rag-platform/` altında yinelenen iskelet dizinler vardır. Otomatik silme yapılmayacaktır.
-- Proje durum dokümanları birbiriyle ve gerçek kodla çelişmektedir.
+**Aşama 0 tamamlanmadan Aşama 1 veya sonrasına ait herhangi bir repository mutasyonu yasaktır.**
 
 ---
 
-## 4. Değişmeyecek Temel Kararlar
+# 1. Görevin Amacı
 
-1. İlk sürümde embedding modeli `openai/BAAI/bge-m3` olarak kalır.
-2. İlk aktif dense embedding profili 1024 boyutunda kalır.
-3. PostgreSQL + pgvector korunur.
-4. Backend FastAPI, frontend Next.js olarak kalır.
-5. Uygulama bir anda mikroservislere bölünmez; modüler monolit olarak düzenlenir.
-6. Belge içeriği hiçbir zaman sistem talimatı sayılmaz.
-7. Kullanıcı kodu ingestion sırasında hiçbir koşulda çalıştırılmaz.
-8. Repository tararken paket kurulmaz, build alınmaz, hook çalıştırılmaz ve submodule otomatik çekilmez.
-9. Orijinal kaynak ve normalize edilmiş parse çıktısı korunmadan yalnızca embedding saklama yaklaşımı devam ettirilmez.
-10. Model, parser veya chunker değiştiğinde kontrollü re-index zorunludur.
-11. Kod içinde sabit model adı, sabit eşik ve sabit top-k değerleri bırakılmaz; tümü doğrulanmış config üzerinden yönetilir.
-12. Kullanıcıya ait mevcut dosyalar ve repo içeriği otomatik silinmez.
+Context Vault’u yalnız “dense + lexical + identifier araması var” seviyesinden çıkarıp aşağıdaki nitelikleri gerçek çalışma yolunda sağlayan, ölçülebilir ve genişletilebilir bir bilgi platformuna dönüştür:
 
----
+- Her sorgu zorunlu proje/erişim kapsamı altında çalışır.
+- Yalnız belgenin aktif ve hazır sürümü aranır; eski veya yarım sürüm sonuçlara sızmaz.
+- Sorgu embedding’i yalnız doğru ve aktif embedding profiliyle karşılaştırılır.
+- Dense, lexical ve identifier adayları kayıpsız bir ortak sonuç sözleşmesine taşınır.
+- Fusion, reranking, deduplication ve context genişletme gerçekten LLM’e giden kanıt paketini belirler.
+- Cevapta kullanılan citation etiketleri doğrulanır; kullanılmayan adaylar otomatik citation sayılmaz.
+- Ingestion’ın doküman, repository, archive, OCR, sync ve async yolları tek kanonik pipeline kullanır.
+- Evaluation, golden cevaptan sentetik sonuç üretmeden gerçek indeks ve gerçek servis yolunu ölçer.
+- Arama kalitesi, veri izolasyonu, citation doğruluğu, latency ve maliyet gözlemlenebilir olur.
+- Skill ve ajan yönergeleri herhangi bir modele/CLI’a kilitlenmez.
+- Dış projeler yalnız teknik örüntü kaynağıdır; Context Vault’un kanonik otoritesi değildir.
 
-## 5. Hedef Üst Seviye Mimari
-
-```text
-Kaynak
-  ├─ DOCX / PDF / TXT / MD
-  ├─ PNG / JPEG / TIFF
-  ├─ ZIP / TAR proje paketi
-  ├─ Git repository URL
-  └─ İzinli yerel klasör
-        ↓
-Kaynak doğrulama ve güvenlik kontrolleri
-        ↓
-Orijinal içeriği object storage'a yazma
-        ↓
-Ingestion job ve durum olayları
-        ↓
-Parser Router
-  ├─ Document Parser
-  ├─ PDF Parser
-  ├─ OCR Provider
-  ├─ Code Repository Parser
-  └─ Plain Text Parser
-        ↓
-Normalize Edilmiş İçerik Modeli
-        ↓
-İçerik türüne duyarlı Chunker Registry
-        ↓
-Dense Embedding + Lexical Index + Identifier Index
-        ↓
-PostgreSQL / pgvector
-        ↓
-Sorgu hazırlama
-        ↓
-Dense Retrieval + Lexical Retrieval + Exact Identifier Retrieval
-        ↓
-RRF Fusion
-        ↓
-Opsiyonel Reranker
-        ↓
-Deduplication + Komşu/Parent Genişletme
-        ↓
-Kanıt paketleme
-        ↓
-LLM cevap üretimi
-        ↓
-Citations + Retrieval Debug + Evaluation
-```
+Bu çalışma “bir framework’e geçiş” görevi değildir. Haystack, RAGFlow, LightRAG, GraphRAG, Ragas, RAGChecker, BEIR veya ColBERT doğrudan ürün bağımlılığı yapılmayacaktır. Uygun fikirler Context Vault’un mevcut Python/FastAPI/PostgreSQL/pgvector mimarisine temiz ve kontrollü biçimde uyarlanacaktır.
 
 ---
 
-## 6. Ortak Normalize Edilmiş İçerik Modeli
+# 2. İnceleme Yöntemi ve Kapsam
 
-DOCX, PDF, görsel, OCR ve kaynak kodu aynı ingestion altyapısına bağlamak için ortak bir ara model oluşturulacaktır.
+Aşağıdaki alanlar kod, migration, test, dokümantasyon ve commit geçmişi üzerinden incelendi:
 
-Önerilen domain modelleri:
+- Repository sahipliği ve contributor kaynağı.
+- Root ve kanonik uygulama dizini ayrımı.
+- API sorgu kapsamı ve conversation sahipliği.
+- Dense, lexical ve identifier retriever’lar.
+- RRF, reranker, dedupe ve context builder.
+- No-answer ve smalltalk ayrımı.
+- Citation üretimi ve persistence.
+- Document upload, worker ingestion ve repository re-index.
+- Versioning ve embedding profile şeması.
+- Alembic indeksleri ve constraint’ler.
+- Eval dataset, runner ve mevcut rapor.
+- CI/CD, dependency ve deployment yapılandırması.
+- `.claude/` altındaki tool-specific skill paketleri.
+- Benzer RAG ve değerlendirme projelerinin uyguladığı kalıplar.
 
-```python
-NormalizedSource
-- source_id
-- version_id
-- source_type
-- title
-- language
-- metadata
-- units: list[ContentUnit]
-
-ContentUnit
-- unit_id
-- unit_type
-- text
-- markdown
-- order
-- hierarchy
-- locator
-- metadata
-
-Hierarchy
-- heading_path
-- parent_unit_id
-- depth
-
-SourceLocator
-- page_start
-- page_end
-- bbox
-- file_path
-- line_start
-- line_end
-- symbol_name
-- symbol_type
-- block_index
-```
-
-Zorunlu `unit_type` değerleri:
-
-```text
-heading
-paragraph
-list_item
-table
-code
-formula
-image
-image_caption
-ocr_text
-page_break
-file_header
-symbol
-configuration
-```
-
-Kurallar:
-
-- Parser doğrudan chunk üretmez; önce normalize içerik üretir.
-- Normalize model kayıpsız veya yeniden üretilebilir JSON olarak saklanır.
-- İnsan tarafından okunabilir Markdown temsili ayrıca üretilebilir.
-- Kaynak konumu mevcutsa her içerik biriminde korunur.
-- DOCX için gerçek sayfa numarası garanti edilmez; başlık yolu ve blok sırası temel citation olur. Sayfa numarası yalnız render/convert edilen sürümden üretilebilir.
-- PDF ve görsellerde sayfa/bounding-box bilgisi korunur.
-- Kodda dosya yolu, satır aralığı ve sembol bilgisi korunur.
+Statik repository analizi, gerçek runtime ortamının kanıtı değildir. Veritabanı migration durumu, gerçek servis sağlığı ve üretim verisi Aşama 1’de yeniden ölçülerek doğrulanacaktır.
 
 ---
 
-## 7. Hedef Backend Dizin Yapısı
+# 3. Dış Proje ve Skill İncelemesinden Alınan Kararlar
 
-Mevcut kod big-bang yeniden yazılmayacak; endpoint'ler ve servisler aşamalı taşınacaktır.
+## 3.1 Haystack’ten alınacak örüntüler
 
-```text
-document-rag-platform/services/backend/src/
-├── main.py
-├── config.py
-├── db.py
-├── models.py
-├── api/
-│   └── v1/
-│       ├── router.py
-│       ├── projects.py
-│       ├── documents.py
-│       ├── repositories.py
-│       ├── ingestion_jobs.py
-│       ├── chat.py
-│       └── debug.py
-├── application/
-│   ├── ingestion_service.py
-│   ├── reindex_service.py
-│   ├── retrieval_service.py
-│   ├── answer_service.py
-│   └── source_service.py
-├── domain/
-│   ├── normalized_content.py
-│   ├── ingestion.py
-│   ├── retrieval.py
-│   ├── citations.py
-│   └── ports.py
-├── infrastructure/
-│   ├── parsers/
-│   │   ├── router.py
-│   │   ├── docling_parser.py
-│   │   ├── docx_parser.py
-│   │   ├── pdf_parser.py
-│   │   ├── plain_text_parser.py
-│   │   ├── image_parser.py
-│   │   └── code_parser.py
-│   ├── chunkers/
-│   │   ├── registry.py
-│   │   ├── document_chunker.py
-│   │   ├── table_chunker.py
-│   │   ├── code_chunker.py
-│   │   └── token_counter.py
-│   ├── embeddings/
-│   │   ├── openai_compatible.py
-│   │   ├── profiles.py
-│   │   └── cache.py
-│   ├── retrieval/
-│   │   ├── dense.py
-│   │   ├── lexical.py
-│   │   ├── identifier.py
-│   │   ├── rrf.py
-│   │   └── context_builder.py
-│   ├── rerankers/
-│   │   ├── noop.py
-│   │   └── remote.py
-│   ├── repositories/
-│   │   ├── discovery.py
-│   │   ├── git_source.py
-│   │   ├── archive_source.py
-│   │   ├── directory_source.py
-│   │   ├── ignore_rules.py
-│   │   └── language_detection.py
-│   ├── ocr/
-│   │   ├── base.py
-│   │   ├── tesseract_provider.py
-│   │   ├── docling_provider.py
-│   │   └── preprocessing.py
-│   └── storage/
-│       ├── minio_storage.py
-│       └── local_storage.py
-├── workers/
-│   ├── celery_app.py
-│   └── ingestion_tasks.py
-└── llm.py
-```
+Haystack’in güçlü tarafı retrieval, routing, memory, generation ve evaluation adımlarını açık bileşenler/pipeline’lar olarak ele almasıdır. Context Vault için alınacak dersler:
 
-`llm.py` ilk aşamada uyumluluk için kalabilir; embedding ve chat kodları adaptörlere taşındıkça ince bir facade'a dönüştürülmeli veya kontrollü biçimde kaldırılmalıdır.
+- Her pipeline adımı açık giriş/çıkış sözleşmesine sahip olmalı.
+- Adayların hangi retriever’dan geldiği, hangi aşamada elendiği ve hangi context öğesinin LLM’e gittiği izlenebilmeli.
+- Senkron ve asenkron yollar aynı uygulama servisinin adaptörleri olmalı.
+- Skill açıklamaları gerektiğinde keşfedilmeli; tamamı her sorguda modele yüklenmemeli.
+- Vendor/model bağımsız portlar korunmalı.
+
+**Alınmayacak karar:** Haystack’i uygulamanın çekirdeğine doğrudan eklemek veya mevcut domain katmanını framework nesneleriyle değiştirmek.
+
+## 3.2 RAGFlow’dan alınacak örüntüler
+
+RAGFlow; yapı koruyan parsing, template/strateji bazlı chunking, chunk görselleştirme, çoklu recall, fused reranking, grounded citation ve veri kaynağı senkronizasyonunu ürün deneyimine taşır. Context Vault için alınacak dersler:
+
+- Chunk’lar UI’dan incelenebilir ve kaynağa geri izlenebilir olmalı.
+- Ingestion pipeline adımları ve hata noktaları görünür olmalı.
+- Dense/lexical/identifier aşamaları search playground’da ayrı ayrı gösterilmeli.
+- Citation yalnız metin etiketi değil; document/version/source-file/locator/quote snapshot içermeli.
+- Yeni connector’lar ancak kanonik ingestion sözleşmesini kullanmalı.
+
+**Alınmayacak karar:** RAGFlow’un servis topolojisini, UI’ını veya bağımlılıklarını kopyalamak.
+
+## 3.3 LightRAG ve GraphRAG’dan alınacak örüntüler
+
+Graph tabanlı retrieval; çok belgeli ilişki, varlık ve global özet sorgularında değer üretebilir. Fakat indeks maliyeti, veri güncelleme karmaşıklığı ve doğrulama yükü yüksektir.
+
+Karar:
+
+- Graph retrieval başlangıç çözümü değildir.
+- Önce mevcut hybrid retrieval gerçek eval setinde ölçülür ve düzeltilir.
+- Cross-document ilişki sorularında ölçülen ve tekrarlanabilir açık kalırsa graph/late-interaction deneyleri ayrı feature flag altında yapılır.
+- GraphRAG maintenance/research konumunda olduğu için ürün çekirdeğine bağımlılık yapılmaz.
+- LightRAG yaklaşımındaki incremental update, selective deletion, tracing ve context-return fikirleri referans alınabilir; proje iddiaları bağımsız benchmark kabul edilmez.
+
+## 3.4 Ragas, RAGChecker, BEIR ve ColBERT’ten alınacak örüntüler
+
+- Retrieval ve generation tek “başarı” skoruna indirgenmeyecek.
+- Context relevance/precision, faithfulness, citation doğruluğu, answer sufficiency ve no-answer davranışı ayrı ölçülecek.
+- Dense-only, lexical-only ve hybrid sonuçlar karşılaştırılacak.
+- BM25/lexical-benzeri güçlü ve ucuz baseline korunacak.
+- Late interaction/ColBERT yalnız baseline’ı anlamlı geliştirir ve latency/maliyet sınırını karşılar ise deneysel seçenek olacak.
+- RAGChecker benzeri bileşen bazlı teşhis raporu üretilecek: retrieval failure, context construction failure, grounding failure ve citation failure birbirinden ayrılacak.
 
 ---
 
-## 8. Hedef Veri Modeli
+# 4. Repository’de Doğrulanan Mevcut Durum
 
-Mevcut `projects`, `documents` ve `chunks` kayıtları korunarak Alembic migration ile genişletilecektir.
+## 4.1 Sahiplik ve araç bağımlılığı
 
-### 8.1 `documents`
+- Contributor görünümündeki ikinci kişi gerçek commit author/committer değişikliğinden değil, **15 commit mesajındaki** `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>` trailer’ından kaynaklanıyor.
+- `.mailmap` bu trailer’ı geçmişten kaldırmaz ve contributor sorununu güvenilir biçimde çözmez.
+- Root’ta `.claude/settings.local.json` bulunuyor.
+- `document-rag-platform/.claude/skills/` altında:
+  - `beautify-github-readme`
+  - `find-skills`
+  - `frontend-design`
+  paketleri bulunuyor.
+- Bu paketler RAG çekirdeğinin parçası değildir; tool-specific dizin altında olmaları taşınabilirlik ve provenance problemi oluşturur.
+- `find-skills` içeriği dış paket yöneticisi ve popülerlik iddialarını kanonik öneri mekanizması gibi sunuyor; bu yaklaşım güvenlik, lisans ve supply-chain kontrolü olmadan korunmayacak.
 
-Eklenecek alanlar:
+## 4.2 Dokümantasyon ve gerçek kod uyuşmazlığı
+
+Eski `AKTIF_GOREV.md`:
+
+- Aşama 0–10’u tamamlandı işaretliyor.
+- Global Definition of Done maddelerini işaretsiz bırakıyor.
+- “CI testleri geçiyor” hedefini içeriyor fakat `.github/workflows/` yalnız `.gitkeep`.
+- 492 test geçtiğini ve pipeline’ın aktif olduğunu söylüyor; ancak üretim çalışma yolunda parser/chunker/context/eval entegrasyonlarının bir bölümü bağlı değil.
+- Bir sonraki adımı hâlâ “final durumu işaretle” olarak bırakıyor.
+
+Karar:
+
+- Eski aktif görev sessizce silinmeyecek.
+- Yeni görev repository’ye alınırken eski dosya:
+  `done/active-tasks/2026-08-19-context-vault-rag-v2.md`
+  altında arşivlenecek.
+- Root’ta yalnız bu dosyanın yeni sürümü `AKTIF_GOREV.md` olarak kalacak.
+- Tamamlanan işler tarih ve commit ile arşivlenecek; “tamamlandı” iddiası kod ve test kanıtı olmadan yazılmayacak.
+
+---
+
+# 5. Kritik Teknik Bulgular
+
+Aşağıdaki bulgular çözülmeden yeni özellik eklemek yasaktır.
+
+| No | Seviye | Alan | Doğrulanan sorun | Zorunlu sonuç |
+|---:|---|---|---|---|
+| 1 | P0 | Proje izolasyonu | `project_id` verilmezse chat retrieval tüm projelere açılabiliyor. | Sorgu kapsamı zorunlu ve fail-closed olacak. |
+| 2 | P0 | Conversation sahipliği | Var olan `conversation_id` proje/kimlik sahipliği doğrulanmadan kabul ediliyor. | Conversation erişimi principal + project ile doğrulanacak. |
+| 3 | P0 | Retriever filtreleri | Geniş `TypeError` catch filtresiz tekrar arama yapabiliyor. | Uyum fallback’i kaldırılacak; typed protocol ve açık hata kullanılacak. |
+| 4 | P0 | Aktif sürüm | Dense/lexical/identifier SQL’leri `documents.active_version_id` filtresini varsayılan olarak uygulamıyor. | Eski ve yarım sürüm sızıntısı sıfır olacak. |
+| 5 | P0 | Embedding profili | Dense retrieval aktif `embedding_profile_id` ile sınırlanmıyor; farklı profiller karışabilir. | Tek aktif profil constraint’i ve sorgu filtresi eklenecek. |
+| 6 | P0 | Neighbor expansion | Komşu resolver `version_id` kullanmıyor; sürümler arası chunk karışabilir. | Parent/neighbor çözümü document + version + source kapsamında yapılacak. |
+| 7 | P1 | Context kullanımı | ContextBuilder sonucu hesaplanıyor fakat AnswerService LLM prompt’unu `ranked_candidates` üzerinden kuruyor. | LLM yalnız `context.items` içeriğini alacak. |
+| 8 | P1 | Parent expansion | ContextBuilder’a yalnız seçilmiş chunk pool’u veriliyor; parent çoğunlukla çözülemiyor. | Eksik parent/neighbor DB’den güvenli ve toplu çözülecek. |
+| 9 | P1 | Reranker skoru | Rank yeniden atanırken dinamik `rerank_score` kayboluyor. | Tüm stage skorları typed hit üzerinde korunacak. |
+| 10 | P1 | Citation doğruluğu | Tüm reranked adaylar citation sayılabiliyor; cevabın gerçekten kullandığı label doğrulanmıyor. | Structured output + citation label validator uygulanacak. |
+| 11 | P1 | Citation snapshot | Persistence yalnız ilişki ve locator tutuyor; kullanılan quote/digest immutable değil. | Quote snapshot, hash ve retrieval run bağı eklenecek. |
+| 12 | P1 | Dedupe | Dedupe content_hash metadata’sından önce çalışıyor; retriever adaylarında hash yok ve pratikte etkisiz. | Chunk metadata attach sonrası veya SQL aşamasında gerçek dedupe yapılacak. |
+| 13 | P1 | RRF | Aynı liste içindeki duplicate id’ler dokümana aykırı biçimde birden fazla katkı yapıyor. | Retriever başına unique rank uygulanacak. |
+| 14 | P1 | HNSW | `ef_search` spec’e yazılıyor fakat sorguda `SET LOCAL hnsw.ef_search` uygulanmıyor. | Transaction-scoped HNSW ayarı ve benchmark eklenecek. |
+| 15 | P1 | Vektör indeks | Yeni `chunk_embeddings.embedding` üzerinde HNSW/IVFFlat index migration’da yok. | Profile-aware vektör index stratejisi uygulanacak. |
+| 16 | P1 | Lexical indeks | `search_vector` ve identifier alanlarının gerekli GIN/trigram indeksleri eksik. | GIN/pg_trgm indeksleri migration ile eklenecek. |
+| 17 | P1 | Lexical recall | `plainto_tsquery` AND semantiği ve manuel stopword yaklaşımı çok terimli sorguları düşürebilir. | Query planner ile phrase/websearch/OR/exact yolları ölçümlü birleştirilecek. |
+| 18 | P1 | Identifier | Modül açıklamasındaki trigram yeteneği SQL/index tarafında gerçek değil. | Exact, prefix ve trigram yolları açıkça ayrılacak. |
+| 19 | P1 | No-answer | Sabit/heuristic threshold ve “term presence + dense floor” bazı zayıf adayları answerable yapabilir. | Gerçek eval ile query-type/profile bazlı kalibrasyon yapılacak. |
+| 20 | P0 | Eval güvenilirliği | Mevcut runner golden `expected_sources` üzerinden sentetik aday üretiyor. | Release eval gerçek indeks ve servis yolunu kullanacak. |
+| 21 | P0 | Eval raporu | Mevcut 1.000 Recall/MRR/nDCG sentetik fake path sonucu; generation metrikleri `n/a`. | Eski rapor “contract smoke” olarak yeniden adlandırılacak; kalite kanıtı sayılmayacak. |
+| 22 | P1 | Ingestion wiring | Async worker legacy `extract_text` ve karakter bazlı `chunk_text` kullanıyor; ParserRouter/ChunkerRegistry bypass ediliyor. | Tüm kaynaklar tek yapı-koruyan ingestion servisine bağlanacak. |
+| 23 | P1 | Sync/async ayrışması | Sync upload version/profile/artifact yolundan farklı çalışıyor. | Sync yalnız kanonik servisin blocking adapter’ı olacak. |
+| 24 | P1 | Re-index | Repository re-index lexical vector/identifier/symbol metadata’sını tam üretmiyor. | Değişen ve kopyalanan dosyalar aynı index sözleşmesini sağlayacak. |
+| 25 | P1 | Re-index embedding | Unchanged copy legacy `pc.embedding` alanına güveniyor; aktif profile satırı olmayabilir. | Profile-specific embedding row kopyalanacak veya cache’den çözülecek. |
+| 26 | P1 | Event/outbox | DB commit ile Celery enqueue arasında transactional outbox yok; job stuck kalabilir. | Outbox + idempotent dispatcher eklenecek. |
+| 27 | P1 | Object storage | MinIO yazımı DB commit öncesi orphan obje bırakabilir; delete GC yok. | Staged object + outbox/compensation + GC policy uygulanacak. |
+| 28 | P1 | Feature flag | `FEATURE_STRUCTURED_PARSING` ve `FEATURE_HYBRID_RETRIEVAL` tanımlı fakat gerçek gate değil. | Her flag ya gerçek gate olacak ya kaldırılıp ADR ile açıklanacak. |
+| 29 | P1 | Config | `RERANK_TOP_K` tekrar tanımlı; corporate endpoint ve varsayılan MinIO credential’ları public config’e gömülü. | Config sadeleştirilecek; environment overlay uygulanacak. |
+| 30 | P1 | CI | Repository’de çalışan workflow yok. | Test, migration, eval, security ve build gate’leri eklenecek. |
+| 31 | P2 | Şema bütünlüğü | Chunk document/version ilişkisi composite constraint ile korunmuyor; version_id nullable. | Backfill sonrası composite FK ve NOT NULL uygulanacak. |
+| 32 | P2 | Zaman | Naive UTC datetime kullanımı yaygın. | Timezone-aware UTC standardı uygulanacak. |
+| 33 | P2 | Dependency | Requirements pin’li fakat lock/hash, SBOM ve otomatik security scan yok. | Reproducible lock ve supply-chain gate eklenecek. |
+| 34 | P2 | Root yapısı | Root’ta kanonik uygulama dışında placeholder/skeleton dizinler bulunuyor. | Kullanılmayan iskeletler arşivlenip/silinecek; tek kanonik ağaç kalacak. |
+
+---
+
+# 6. Hedef Mimari
+
+## 6.1 Sorgu çalışma yolu
 
 ```text
-source_type          document | image | repository | directory | archive
-origin_uri           nullable
-mime_type            nullable
-checksum             nullable
-active_version_id    nullable
-created_at
-updated_at
-deleted_at            nullable
+HTTP/API
+  -> Authentication / Principal
+  -> ProjectScopeResolver (zorunlu, fail-closed)
+  -> QueryNormalizer
+  -> QueryPlanner
+       -> DenseRetriever(active version + active embedding profile)
+       -> LexicalRetriever(active version)
+       -> IdentifierRetriever(active version)
+  -> CandidateNormalizer (typed RetrievalHit)
+  -> Retriever-local dedupe
+  -> RRF / weighted RRF
+  -> Metadata attach
+  -> Cross-source content dedupe
+  -> Optional Reranker
+  -> ContextBuilder(parent/neighbor/version-safe + tokenizer budget)
+  -> AnswerPolicy(calibrated)
+  -> EvidencePack(JSON/data-only)
+  -> LLM
+  -> CitationValidator / GroundingValidator
+  -> Persistence(retrieval run + messages + immutable citations)
+  -> Response
 ```
 
-İlk aşamada tablo adı değiştirilmez; API uyumluluğu korunur.
-
-### 8.2 `document_versions`
+## 6.2 Ingestion çalışma yolu
 
 ```text
-id
-document_id
-version_no
-source_revision       dosya checksum'u veya Git commit SHA
-status
-parser_profile
-chunker_profile
-storage_key
-normalized_artifact_id
-created_at
-activated_at
-error_message
+Source Adapter
+  -> Validation / Security policy
+  -> Staged object storage
+  -> DocumentVersion + IngestionJob
+  -> ParserRouter
+  -> NormalizedSource artifact
+  -> ChunkerRegistry
+  -> Metadata/identifier extraction
+  -> EmbeddingProfile
+  -> Dense + lexical + identifier indexing
+  -> Version validation
+  -> Atomic activation
+  -> Outbox events / cleanup
 ```
 
-Her yeni upload, repository commit'i veya re-index sonucu ayrı version üretir. Yeni version tamamen hazır olmadan aktif version değiştirilmez.
+Document upload, repository, archive, directory, OCR, sync ve async yollar bu tek sözleşmeyi kullanacaktır.
 
-### 8.3 `source_files`
+## 6.3 Kanonik sonuç modeli
 
-Repository, klasör veya arşiv içindeki her dosya için:
-
-```text
-id
-version_id
-relative_path
-language
-mime_type
-size_bytes
-content_hash
-is_binary
-is_generated
-is_ignored
-metadata_json
-```
-
-### 8.4 `document_artifacts`
+Yeni `RetrievalHit`/eşdeğer typed sözleşme en az şu alanları taşımalıdır:
 
 ```text
-id
-version_id
-artifact_type         original | normalized_json | normalized_md | page_image | thumbnail | ocr_json
-storage_key
-checksum
-size_bytes
-metadata_json
-created_at
-```
-
-### 8.5 `ingestion_jobs`
-
-```text
-id
-version_id
-status                queued | running | completed | failed | cancelled
-stage                 validating | storing | parsing | ocr | normalizing | chunking | embedding | indexing | activating
-progress
-attempt
-error_code
-error_message
-started_at
-finished_at
-created_at
-```
-
-### 8.6 `ingestion_events`
-
-Kalıcı ilerleme ve hata olayları tutulur. Redis yalnız canlı iletim katmanı olur; gerçek durum PostgreSQL'dedir.
-
-### 8.7 `chunks`
-
-Mevcut alanlara ek olarak:
-
-```text
-version_id
-source_file_id        nullable
-sequence_no
-chunk_type
-heading_path          JSONB veya text[]
-page_start
-page_end
-line_start
-line_end
-bbox                   JSONB
-symbol_name
-symbol_type
-token_count
-content_hash
-parent_chunk_id       nullable
-metadata_json
-search_vector         TSVECTOR
-identifiers           text[]
-created_at
-```
-
-### 8.8 `embedding_profiles`
-
-```text
-id
-provider
-model
-dimension
-distance_metric
-query_prefix
-passage_prefix
-profile_version
-config_hash
-is_active
-created_at
-```
-
-### 8.9 `chunk_embeddings`
-
-```text
-chunk_id
-embedding_profile_id
-embedding             Vector(1024) — ilk aktif profil
-created_at
-UNIQUE(chunk_id, embedding_profile_id)
-```
-
-Bu görev sırasında farklı boyutlu embedding'ler aynı indeksli kolonda karıştırılmayacaktır. İleride farklı boyut gerekiyorsa `EmbeddingStore` adaptörü arkasında ayrı fiziksel tablo/index profili oluşturulacaktır.
-
-### 8.10 Sohbet ve citation tabloları
-
-```text
-conversations
-messages
-message_citations
-```
-
-`message_citations` en az şunları tutar:
-
-```text
-message_id
 chunk_id
 document_id
 version_id
 source_file_id
-rank
-retrieval_score
-reranker_score
-page_start
-page_end
-line_start
-line_end
-citation_label
-```
-
----
-
-# 9. Uygulama Aşamaları
-
-Her aşama ayrı doğrulanmalı ve tamamlanmadan bir sonraki aşamanın üretim davranışı varsayılan hâle getirilmemelidir.
-
----
-
-## Aşama 0 — Gerçek Durumu Sabitle ve Güvenli Başlangıç Oluştur
-
-### Yapılacaklar
-
-- [ ] `main` branch ve başlangıç commit'ini kaydet.
-- [ ] Mevcut Docker Compose akışını çalıştır ve çalışan/çalışmayan servisleri raporla.
-- [ ] Mevcut DB şemasının dump'ını veya en azından şema çıktısını al.
-- [ ] En az 20 gerçek belge sorusundan başlangıç golden dataset oluştur.
-- [ ] Her soru için mevcut top-10 retrieval sonuçlarını JSONL olarak kaydet.
-- [ ] Mevcut cevapların ve kaynakların baseline çıktısını üret.
-- [ ] `README.md`, `context-summary.md`, `IMPLEMENTATION_CHECKLIST.md` ve `active/current-tasks.md` çelişkilerini işaretle.
-- [ ] Repo kökünde kanonik dizinin `document-rag-platform/` olduğunu belirten kısa root README ekle veya mevcut README'yi düzelt.
-- [ ] Yinelenen kök iskelet dizinleri silme; yalnızca `docs/cleanup-candidates.md` altında listele.
-
-### Kabul kriterleri
-
-- [ ] Baseline retrieval dosyası repository içinde `tests/evals/baseline/` altında bulunuyor.
-- [ ] En az Recall@1, Recall@3, Recall@5 ve MRR@10 hesaplayan script var.
-- [ ] Uygulamanın mevcut hâli için tekrar üretilebilir başlangıç komutları yazılı.
-- [ ] Hiçbir kullanıcı verisi silinmedi.
-
----
-
-## Aşama 1 — Konfigürasyon ve Modüler Backend İskeleti
-
-### Yapılacaklar
-
-- [ ] `pydantic-settings` veya eşdeğer typed settings katmanı ekle.
-- [ ] Dağınık `os.getenv` çağrılarını `config.py` altında topla.
-- [ ] Proje, belge, chat ve health endpoint'lerini `api/v1` router'larına taşı.
-- [ ] Domain portlarını tanımla:
-  - [ ] `DocumentParser`
-  - [ ] `OcrProvider`
-  - [ ] `Chunker`
-  - [ ] `TokenCounter`
-  - [ ] `EmbeddingProvider`
-  - [ ] `VectorRetriever`
-  - [ ] `LexicalRetriever`
-  - [ ] `Reranker`
-  - [ ] `ObjectStorage`
-  - [ ] `SourceScanner`
-- [ ] Mevcut API response yapısını mümkün olduğunca geriye uyumlu tut.
-- [ ] `llm.py` içindeki embedding ve generation sorumluluklarını adaptörlere ayır.
-- [ ] Unit test iskeletini gerçek testlerle doldurmaya başla.
-
-### Kabul kriterleri
-
-- [ ] `main.py` uygulama oluşturma ve router bağlama dışında iş kuralı içermez.
-- [ ] Eski endpoint'ler çalışmaya devam eder.
-- [ ] Typed settings doğrulaması eksik zorunlu credential'da açık hata verir.
-- [ ] Unit testler ve backend startup testi geçer.
-
----
-
-## Aşama 2 — Sürümlü Ingestion, MinIO, Alembic ve Worker
-
-### Yapılacaklar
-
-- [ ] Gerçek Alembic yapılandırması oluştur.
-- [ ] Bölüm 8'deki tabloları/alanları ekleyen migration'ları yaz.
-- [ ] Mevcut belgeleri `document_versions.version_no = 1` olacak şekilde backfill et.
-- [ ] Mevcut chunk'ları version ve embedding profile ile ilişkilendir.
-- [ ] MinIO `ObjectStorage` adaptörünü uygula.
-- [ ] Upload edilen orijinal dosyayı immutable object key ile MinIO'ya yaz.
-- [ ] Normalize JSON ve Markdown artifact'larını MinIO'da sakla.
-- [ ] `celery_app.py` ve gerçek ingestion task'larını oluştur.
-- [ ] Compose içindeki worker komutunu çalışır hâle getir.
-- [ ] Worker'a DB, Redis, MinIO, embedding gateway ve gerekli model ayarlarını geçir.
-- [ ] Upload endpoint'ini senkron tam işleme yerine job oluşturacak biçimde dönüştür.
-- [ ] Geçiş süresince senkron mod için feature flag bırak.
-- [ ] Job retry, idempotency ve stage transition kontrolü ekle.
-- [ ] `GET /ingestion-jobs/{job_id}` ve event endpoint'i ekle.
-
-### Object key standardı
-
-```text
-projects/{project_id}/documents/{document_id}/versions/{version_id}/original/{safe_filename}
-projects/{project_id}/documents/{document_id}/versions/{version_id}/normalized/document.json
-projects/{project_id}/documents/{document_id}/versions/{version_id}/normalized/document.md
-projects/{project_id}/documents/{document_id}/versions/{version_id}/artifacts/...
-```
-
-### Kabul kriterleri
-
-- [ ] Upload isteği uzun embedding süresince HTTP bağlantısını açık tutmaz.
-- [ ] Worker yeniden başlatılsa job verisi kaybolmaz.
-- [ ] Aynı job tekrar alınırsa duplicate chunk/embedding oluşmaz.
-- [ ] Orijinal dosyadan re-index yapılabilir.
-- [ ] Yeni version hazır olmadan eski aktif version kullanılmaya devam eder.
-- [ ] Migration upgrade ve downgrade testleri geçer.
-
----
-
-## Aşama 3 — Yapısal Belge Parser Altyapısı
-
-### 3.1 Parser Router
-
-- [ ] MIME, extension ve magic-byte sonuçlarına göre parser seç.
-- [ ] Extension ile MIME çelişirse dosyayı otomatik güvenilir sayma.
-- [ ] Parser timeout ve maksimum çıktı limiti uygula.
-- [ ] Parse sonucunu ortak `NormalizedSource` modeline dönüştür.
-
-### 3.2 DOCX
-
-- [ ] Paragraf ve tabloları document body sırasına göre birlikte dolaş.
-- [ ] Heading style seviyelerini ve heading path'i koru.
-- [ ] Liste ve numaralandırma bilgisini mümkün olduğu ölçüde koru.
-- [ ] Tabloları Markdown ve yapısal JSON olarak üret.
-- [ ] Bir tablo hücresi içindeki paragraf sırasını koru.
-- [ ] Header/footer ve textbox desteğini parser yeteneği varsa ekle; yoksa açık metadata uyarısı üret.
-- [ ] Boş paragraf gürültüsünü temizle fakat bölüm sınırlarını kaybetme.
-- [ ] DOCX citation için heading path + block index kullan.
-- [ ] Gerçek sayfa numarası yoksa uydurma page değeri üretme.
-
-### 3.3 PDF
-
-- [ ] Dijital PDF ve taranmış PDF'yi ayırt eden text-coverage kontrolü ekle.
-- [ ] İlk tercih olarak yapısal PDF anlayışı sağlayan Docling adaptörünü uygula.
-- [ ] Metin, heading, tablo, okuma sırası, sayfa ve bounding-box bilgisini normalize modele aktar.
-- [ ] Docling kullanılamazsa sınırlı fallback parser sağla ve capability metadata'sı üret.
-- [ ] Dijital metin yeterliyse OCR'ı gereksiz çalıştırma.
-- [ ] Karma PDF'de yalnız düşük text-coverage sayfaları OCR'a yönlendir.
-
-### 3.4 TXT / Markdown
-
-- [ ] Encoding tespiti veya kontrollü UTF-8 fallback uygula.
-- [ ] Markdown heading, code fence, liste ve tablo yapılarını koru.
-- [ ] Büyük düz metin dosyalarında satır bilgisi üret.
-
-### Kabul kriterleri
-
-- [ ] DOCX tablo hücreleri retrieval sonucu içinde bulunabiliyor.
-- [ ] Başlık altındaki paragraf chunk embedding metninde başlık bağlamını taşıyor.
-- [ ] PDF citation sayfa numarası doğru.
-- [ ] Dijital PDF boş yere OCR'a gitmiyor.
-- [ ] Parse test fixture'ları repository içinde bulunuyor.
-
----
-
-## Aşama 4 — Yapıya Duyarlı Chunking ve Embedding Profilleri
-
-### Yapılacaklar
-
-- [ ] Tek bir genel `chunk_text` fonksiyonu yerine `ChunkerRegistry` oluştur.
-- [ ] Token sayımı için `TokenCounter` portu ekle.
-- [ ] BGE-M3 tokenizer erişilebiliyorsa model uyumlu sayım kullan; erişilemiyorsa konservatif fallback uygula ve kullanılan yöntemi metadata'da belirt.
-- [ ] Varsayılan hedefleri config yap:
-
-```text
-CHUNK_TARGET_TOKENS=600
-CHUNK_MIN_TOKENS=250
-CHUNK_MAX_TOKENS=900
-CHUNK_OVERLAP_RATIO=0.12
-PARENT_CHUNK_MAX_TOKENS=2400
-```
-
-- [ ] Heading'i altındaki chunk'ların embedding metnine kontrollü context header olarak ekle.
-- [ ] Ham içerik ile embedding'e gönderilen `embedding_text` ayrımını koru.
-- [ ] Tabloyu hücre ortasında bölme; büyük tabloları header tekrar ederek satır gruplarına böl.
-- [ ] Kod bloklarını normal paragraf gibi bölme.
-- [ ] Parent-child chunk ilişkisi oluştur.
-- [ ] Komşu chunk bilgisi için sequence numarası tut.
-- [ ] `content_hash` ile duplicate içeriği tespit et.
-- [ ] Embedding cache anahtarını aşağıdaki bileşimden üret:
-
-```text
-content_hash + embedding_profile.config_hash
-```
-
-- [ ] Gateway batch array desteklemiyorsa kontrollü concurrency ile tekli çağrı fallback'i kullan.
-- [ ] Retry, timeout, rate-limit backoff ve finite-vector doğrulaması ekle.
-- [ ] Dönen vektör boyutu aktif profil boyutuyla eşleşmiyorsa job'ı fail et.
-
-### BGE-M3 instruction kararı
-
-BGE-M3 resmî model kartına göre dense retrieval için query instruction zorunlu değildir. Bu nedenle:
-
-- [ ] Mevcut Türkçe query/passage prefix'lerini feature flag yap.
-- [ ] Varsayılanı boş prefix olarak ayarla veya baseline A/B test sonucuna göre belirle.
-- [ ] Frontend'deki kullanıcıya açık serbest embedding talimatını kaldır veya yalnız yönetici/debug moduna taşı.
-- [ ] Farklı belgeleri farklı serbest prefix'lerle aynı index'e yazma.
-
-### Kabul kriterleri
-
-- [ ] Chunk boyutu artık karakter değil token hedeflidir.
-- [ ] Her chunk parser, chunker ve embedding profile sürümünü taşır.
-- [ ] Aynı içerik aynı profil ile tekrar embed edilmez.
-- [ ] Prefix açık/kapalı karşılaştırma raporu oluşturulur.
-- [ ] Parser veya chunker değişince re-index job oluşturulabilir.
-
----
-
-## Aşama 5 — Retrieval V2: Hybrid Search, RRF ve Reranking
-
-### 5.1 Dense retrieval
-
-- [ ] pgvector cosine search korunur.
-- [ ] Aday sayısı config üzerinden yönetilir.
-- [ ] Project, document, active version ve source type filtreleri sorgu içinde uygulanır.
-- [ ] HNSW `ef_search` değerlendirme sonucuna göre ayarlanabilir olmalıdır.
-
-### 5.2 Lexical retrieval
-
-- [ ] `chunks.search_vector` için GIN index oluştur.
-- [ ] Teknik identifier'ları bozmayacak `simple` text-search profili kullan.
-- [ ] Gerekirse Türkçe doğal dil için ikinci profil deneysel tutulabilir.
-- [ ] `identifiers` alanına tablo, kolon, class, method, package, error code ve benzeri teknik tokenları yaz.
-- [ ] `identifiers` için GIN index oluştur.
-- [ ] Dosya yolu ve sembol adlarında exact/trigram eşleşme desteği ekle.
-- [ ] Mevcut geniş `OR ILIKE '%kelime%'` yaklaşımını ana ranking mekanizması olmaktan çıkar.
-
-### 5.3 Fusion
-
-Başlangıç config'i:
-
-```text
-VECTOR_CANDIDATE_K=40
-LEXICAL_CANDIDATE_K=40
-IDENTIFIER_CANDIDATE_K=20
-FUSION_CANDIDATE_K=20
-RRF_K=60
-RERANK_TOP_K=8
-CONTEXT_MAX_CHUNKS=8
-```
-
-- [ ] Dense, lexical ve identifier listelerini Reciprocal Rank Fusion ile birleştir.
-- [ ] Ham skorları doğrudan toplama; farklı skor ölçeklerini rank üzerinden birleştir.
-- [ ] Duplicate chunk ve aynı içeriğin farklı kopyalarını temizle.
-
-### 5.4 Reranker
-
-- [ ] `Reranker` portu ve `NoopReranker` ekle.
-- [ ] Gateway veya ayrı servis destekliyorsa remote reranker adaptörü ekle.
-- [ ] Reranker kullanımı feature flag olsun.
-- [ ] Reranker başarısız olursa fusion sıralamasına güvenli fallback yap.
-- [ ] Reranker model adı ve sürümünü response debug metadata'sına ekle.
-
-### 5.5 Context genişletme
-
-- [ ] Seçilen chunk'ın parent veya kontrollü önceki/sonraki chunk'larını ekle.
-- [ ] Aynı metni birden fazla kez bağlama ekleme.
-- [ ] Context token bütçesini aşma.
-- [ ] Tablonun header chunk'ını satır chunk'larıyla birlikte ekle.
-- [ ] Kod sembolünün imza/header bilgisini gövde chunk'larıyla birlikte ekle.
-
-### 5.6 No-answer ve intent ayrımı
-
-Üç ayrı davranış uygulanacaktır:
-
-```text
-A. Günlük sohbet / selamlaşma
-B. Belge sorusu ve yeterli kanıt bulundu
-C. Belge sorusu fakat yeterli kanıt bulunamadı
-```
-
-- [ ] Selamlaşma için deterministik kısa kurallar kullan; gerekirse küçük intent modeline geçiş noktası bırak.
-- [ ] Retrieval sonucu boş diye soruyu otomatik günlük sohbet sayma.
-- [ ] Sabit global `0.55` eşiğini ana karar mekanizması olmaktan çıkar.
-- [ ] No-answer politikasını golden dataset ile kalibre et.
-- [ ] Exact identifier veya güçlü lexical eşleşme varsa düşük dense skor yüzünden sonucu atma.
-- [ ] Yetersiz kanıtta açıkça seçili kaynaklarda bilgi bulunamadığını söyle.
-
-### Kabul kriterleri
-
-- [ ] Golden set üzerinde Recall@5 mevcut baseline'dan ölçülebilir biçimde yüksek.
-- [ ] Teknik identifier soruları dense-only baseline'dan daha iyi sonuç verir.
-- [ ] `selam` ile gerçek fakat bulunamayan belge sorusu farklı davranır.
-- [ ] Final context 3 sabit chunk ile sınırlı değildir; config ve token bütçesiyle yönetilir.
-- [ ] Retrieval debug endpoint'i bütün candidate rank ve skorlarını gösterebilir.
-
----
-
-## Aşama 6 — Kanıt Paketleme, Cevap Üretimi ve Kaynak UI
-
-### Backend
-
-- [ ] LLM'e yalnız ham chunk dizisi gönderme.
-- [ ] Her kanıtı benzersiz label ile paketle:
-
-```text
-[S1]
-Belge: GPU_Mimari.docx
-Bölüm: Veri Akışı > Tekilleştirme
-Sayfa: 12
-İçerik: ...
-```
-
-Kod kaynağı örneği:
-
-```text
-[S2]
-Repository: context-vault
-Dosya: services/backend/src/main.py
-Sembol: query_chat
-Satırlar: 220-315
-İçerik: ...
-```
-
-- [ ] Prompt injection korumasını koru ve test et.
-- [ ] Modelin kaynakta olmayan bilgi üretmemesi için no-answer davranışını prompt ve uygulama katmanında birlikte uygula.
-- [ ] Cevap ile kullanılan chunk'lar arasındaki citation kayıtlarını DB'ye yaz.
-- [ ] Response'a `answerable`, `citations` ve isteğe bağlı `retrieval_debug` alanları ekle.
-
-### Frontend
-
-- [ ] Yalnız belge adı göstermek yerine citation detay paneli ekle.
-- [ ] Kullanıcı belge adı, bölüm, sayfa, dosya yolu, satır aralığı, snippet ve skorları görebilsin.
-- [ ] Geliştirici modunda dense/lexical/RRF/reranker sıraları görüntülenebilsin.
-- [ ] Serbest embedding instruction alanını kaldır veya debug/admin bayrağına bağla.
-- [ ] Upload/job ilerlemesini gerçek backend event'lerinden göster.
-- [ ] Source type filtresi ekle: `all`, `documents`, `code`, `images`.
-
-### Kabul kriterleri
-
-- [ ] Birden fazla belgeden gelen her bilgi kaynağıyla eşleştirilebilir.
-- [ ] PDF sayfa citation'ı, kod satır citation'ı ve DOCX heading citation'ı UI'da gösterilir.
-- [ ] Kullanıcıya kaynak bulunamadığı durumda uydurma cevap verilmez.
-- [ ] Chat endpoint response şeması OpenAPI'de tanımlıdır.
-
----
-
-## Aşama 7 — Repository, Arşiv ve Klasör Taraması
-
-Bu aşama proje kodlarının tamamını güvenli biçimde tarayıp vektörleyebilecek altyapıyı kurar.
-
-### 7.1 Desteklenen kaynaklar
-
-- [ ] Public veya credential referanslı Git repository URL.
-- [ ] ZIP ve TAR.GZ proje yüklemesi.
-- [ ] Sunucuda izin verilen kökler altında local directory scan.
-- [ ] Mevcut repository'nin belirli branch/tag/commit'i.
-
-### 7.2 Güvenlik sınırları
-
-- [ ] Web isteğinden gelen herhangi bir mutlak path'i doğrudan tarama.
-- [ ] Yalnız `CODE_ALLOWED_ROOTS` altında kalan canonical path'lere izin ver.
-- [ ] Symlink ile izinli kökün dışına çıkışı engelle.
-- [ ] Git hook çalıştırma.
-- [ ] Submodule otomatik çekme.
-- [ ] Git LFS büyük objelerini varsayılan olarak indirme.
-- [ ] Repository içindeki script, build, test veya package manager komutlarını çalıştırma.
-- [ ] Archive path traversal ve zip bomb koruması uygula.
-- [ ] Maksimum dosya sayısı, tek dosya boyutu, toplam byte ve tarama süresi limiti koy.
-- [ ] `.env`, private key, credential, secret ve binary certificate benzeri hassas dosyaları varsayılan olarak skip et.
-- [ ] İçerik gateway'e gönderilmeden önce secret policy kontrolünden geçir.
-
-### 7.3 Ignore kuralları
-
-Aşağıdaki sıra uygulanır:
-
-1. Sistem güvenlik ignore listesi.
-2. `.contextvaultignore`.
-3. Repository `.gitignore` kuralları.
-4. Kullanıcı tarafından izin verilen ek include/exclude kalıpları.
-
-Varsayılan ignore örnekleri:
-
-```text
-.git/
-node_modules/
-.venv/
-venv/
-dist/
-build/
-target/
-coverage/
-.next/
-.cache/
-vendor/
-*.min.js
-*.map
-*.lock         opsiyonel ve config ile açılabilir
-*.png
-*.jpg
-*.pdf          repo kod taramasında belge parser'a ayrı yönlendirilebilir
-*.exe
-*.dll
-*.so
-*.class
-*.jar
-*.zip
-*.tar
-*.gz
-.env
-.env.*
-*.pem
-*.key
-*.p12
-*.jks
-id_rsa*
-```
-
-### 7.4 Dosya keşfi ve metadata
-
-Her dosya için:
-
-```text
-repository_url
-branch_or_ref
-commit_sha
-relative_path
-language
-mime_type
-size_bytes
-content_hash
-is_generated
-is_test
-module
-package
-imports
-symbols
-```
-
-### 7.5 Kod parser ve chunking
-
-- [ ] Tree-sitter destekli diller için AST/symbol bazlı chunking uygula.
-- [ ] İlk hedef diller: Python, Java, JavaScript, TypeScript, JSON, YAML, SQL ve Markdown.
-- [ ] PL/SQL için özel chunker ekle:
-  - [ ] `PACKAGE`, `PACKAGE BODY`, `PROCEDURE`, `FUNCTION`, `TRIGGER`, `TYPE` sınırlarını tanı.
-  - [ ] String ve yorum içindeki anahtar kelimelerle yanlış bölme yapma.
-  - [ ] İmza, declaration ve enclosing package bilgisini her chunk'a ekle.
-- [ ] Tree-sitter grammar olmayan dilde satır ve sembol farkındalıklı fallback kullan.
-- [ ] Çok büyük fonksiyonları iç bloklara böl fakat signature ve enclosing symbol context'ini tekrar ekle.
-- [ ] README, ADR ve mimari dokümanları belge parser hattına yönlendir.
-- [ ] JSON/YAML/XML gibi config dosyalarını top-level key/object bazlı böl.
-- [ ] Kod chunk embedding metnine dosya yolu, dil, sembol ve signature header'ı ekle.
-
-### 7.6 Incremental re-index
-
-- [ ] Repository snapshot'ını commit SHA ile sürümle.
-- [ ] Dosya `content_hash` değişmediyse yeniden parse/embed etme.
-- [ ] Değişen ve yeni dosyaları işle.
-- [ ] Silinen dosyaların yeni aktif version'da görünmemesini sağla.
-- [ ] Önce yeni snapshot'ı tamamen hazırla, sonra atomik aktivasyon yap.
-
-### 7.7 API
-
-Önerilen endpoint'ler:
-
-```text
-POST /repositories/ingest
-POST /archives/upload
-POST /directories/scan
-POST /documents/{document_id}/refresh
-GET  /documents/{document_id}/files
-GET  /documents/{document_id}/versions
-```
-
-### Kabul kriterleri
-
-- [ ] `context-vault` benzeri bir repository recursive taranabilir.
-- [ ] `.gitignore` ve `.contextvaultignore` uygulanır.
-- [ ] Kod hiçbir şekilde çalıştırılmaz.
-- [ ] Soruya verilen cevap dosya yolu, sembol ve satır citation'ı taşır.
-- [ ] Tek dosya değiştiğinde bütün repository yeniden embed edilmez.
-- [ ] PL/SQL package/procedure sorularında ilgili sembol ilk sonuçlarda bulunur.
-
----
-
-## Aşama 8 — Görsel, PNG ve OCR Altyapısı
-
-### 8.1 Provider sözleşmesi
-
-```python
-OcrProvider.extract(image_or_page, languages, options) -> OcrResult
-
-OcrResult
-- full_text
-- blocks
-- confidence
-- language
-- orientation
-- preprocessing_steps
-- engine
-- engine_version
-```
-
-Her OCR block:
-
-```text
-text
-bbox
-confidence
-page_number
-reading_order
-```
-
-### 8.2 OCR provider'ları
-
-- [ ] Docling tabanlı OCR/structured document adaptörü.
-- [ ] Tesseract local fallback adaptörü.
-- [ ] İsteğe bağlı PaddleOCR adaptörü için extension point.
-- [ ] Provider seçimi config ve capability kontrolüyle yapılır.
-- [ ] Türkçe ve İngilizce için varsayılan dil profili `tur+eng` veya provider eşdeğeri olur.
-
-### 8.3 Görsel ön işleme
-
-- [ ] EXIF orientation düzeltme.
-- [ ] Rotation/orientation detection.
-- [ ] Deskew.
-- [ ] Denoise.
-- [ ] Contrast normalization.
-- [ ] Gerekirse upscale.
-- [ ] Binarization seçeneği.
-- [ ] Ön işlenmiş görseli artifact olarak saklama veya config'e göre geçici tutma.
-
-### 8.4 OCR yönlendirme
-
-- [ ] Dijital PDF sayfasında yeterli metin varsa OCR yapma.
-- [ ] Metin yoğunluğu düşük sayfayı OCR'a yönlendir.
-- [ ] PNG/JPEG gibi görselleri doğrudan OCR'a yönlendir.
-- [ ] OCR confidence düşükse `needs_review` metadata'sı üret.
-- [ ] OCR sonucunu normalize içerik modeline `ocr_text` block olarak ekle.
-- [ ] Bounding-box citation'ı UI'da gösterilebilecek biçimde sakla.
-
-### 8.5 Görsel açıklama extension point'i
-
-OCR yalnız yazıyı çıkarır; diyagram, mimari çizim veya grafik anlamı için ayrıca:
-
-```text
-VisionDescriptionProvider
-```
-
-portu tanımlanacaktır. Bu görevde provider zorunlu olarak devreye alınmayabilir, ancak veri modeli `image_caption`, `chart_data` ve `diagram_description` birimlerini desteklemelidir.
-
-### Kabul kriterleri
-
-- [ ] Türkçe metin içeren PNG'den aranabilir OCR text üretilir.
-- [ ] Taranmış PDF'de sayfa citation'ı korunur.
-- [ ] 90 derece dönmüş örnek üzerinde orientation düzeltmesi test edilir.
-- [ ] OCR sonucu düşük güvenliyse sistem bunu metadata'da belirtir.
-- [ ] OCR kapalı/açık feature flag ile test edilebilir.
-
----
-
-## Aşama 9 — Değerlendirme, Gözlemlenebilirlik ve Güvenlik
-
-### 9.1 Golden dataset
-
-En az aşağıdaki kategorileri kapsayan 50+ soru oluştur:
-
-```text
-DOCX heading soruları
-DOCX table soruları
-PDF sayfa soruları
-Taranmış PDF OCR soruları
-PNG OCR soruları
-Exact teknik identifier soruları
-Parafraz soruları
-Çoklu belge sentez soruları
-Kod dosya/symbol soruları
-PL/SQL package/procedure soruları
-Cevabı olmayan sorular
-Selamlaşma/günlük sohbet
-Prompt injection içeren belge soruları
-Çelişkili version soruları
-```
-
-Önerilen JSONL formatı:
-
-```json
-{
-  "id": "docx-table-001",
-  "query": "PAYMENT_FLAG 1 olduğunda ne olur?",
-  "project_fixture": "gpu-docs",
-  "scope": "documents",
-  "answerable": true,
-  "expected_sources": [
-    {
-      "document": "rules.docx",
-      "must_contain": ["PAYMENT_FLAG", "ödenmiş"]
-    }
-  ],
-  "tags": ["tr", "docx", "table", "identifier"]
-}
-```
-
-### 9.2 Retrieval metrikleri
-
-- [ ] Recall@1
-- [ ] Recall@3
-- [ ] Recall@5
-- [ ] Recall@10
-- [ ] MRR@10
-- [ ] nDCG@10
-- [ ] No-answer false-positive ve false-negative oranı
-- [ ] Retrieval latency p50/p95
-
-İlk kalite kapısı:
-
-```text
-Recall@5 >= 0.85
-MRR@10  >= 0.75
-No-answer sınıflandırmasında ölçülmüş ve raporlanmış hata oranı
-```
-
-Bu değerler gerçek veri setiyle ulaşılamıyorsa saklanmaz; nedenleri ve yeni hedef önerisi rapora yazılır.
-
-### 9.3 Generation metrikleri
-
-- [ ] Citation coverage.
-- [ ] Citation doğruluğu.
-- [ ] Kaynakta bulunmayan iddia oranı.
-- [ ] Cevap yeterliliği.
-- [ ] Çelişkili kaynak davranışı.
-
-### 9.4 Gözlemlenebilirlik
-
-Structured log alanları:
-
-```text
-request_id
+embedding_profile_id
 project_id
-document_id
-version_id
-job_id
-parser
-ocr_engine
-chunker_profile
-embedding_profile
-query_id
-retrieval_stage
-candidate_count
-latency_ms
-error_code
+rank
+source_retrievers[]
+stage_scores {
+  dense
+  lexical
+  identifier
+  rrf
+  reranker
+}
+content_hash
+chunk_type
+heading_path
+locator
+symbol_name
+token_count
+content (yalnız attach sonrası)
 ```
 
-- [ ] Health ve readiness endpoint'lerini ayır.
-- [ ] Gateway, DB, Redis ve MinIO dependency health bilgisi ekle.
-- [ ] Job stage sürelerini ölç.
-- [ ] Embedding çağrı sayısı, retry ve cache hit oranını ölç.
-- [ ] Hassas içerik ve full document text loglama.
-
-### 9.5 Güvenlik
-
-- [ ] MIME ve magic-byte doğrulama.
-- [ ] Dosya boyutu ve toplam ingestion limitleri.
-- [ ] Archive bomb ve path traversal koruması.
-- [ ] Parser timeout/memory limit.
-- [ ] Prompt injection testleri.
-- [ ] Secret/credential dosya skip ve redaction politikası.
-- [ ] Arbitrary local path engeli.
-- [ ] CORS'u üretim için `*` bırakmama.
-- [ ] Debug/retrieval endpoint'lerini production'da kapatma.
-- [ ] Stack trace'i kullanıcıya döndürmeme.
-
-### Kabul kriterleri
-
-- [ ] CI içinde unit, integration ve retrieval eval smoke testleri çalışır.
-- [ ] Güvenlik fixture'ları path traversal ve zip bomb girişimlerini reddeder.
-- [ ] Prompt injection belgesi sistem davranışını değiştirmez.
-- [ ] Ölçümler dokümante edilmiş tek komutla üretilebilir.
+Dinamik attribute ekleme yasaktır. Rank yeniden atama hiçbir skoru veya provenance bilgisini kaybetmemelidir.
 
 ---
 
-## Aşama 10 — Dokümantasyon, Temizlik ve Son Aktivasyon
+# 7. Aşama 0 — Git Sahiplik Temizliği ve Araçtan Bağımsızlaştırma
 
-### Yapılacaklar
+## 7.1 Zorunlu hazırlık
 
-- [ ] `README.md` gerçek çalışma biçimine göre güncellenir.
-- [ ] README içindeki model, threshold, top-k ve servis bilgileri kodla eşleştirilir.
-- [ ] `context-summary.md` gerçek durumla güncellenir.
-- [ ] `IMPLEMENTATION_CHECKLIST.md` ya bu dosyaya yönlendirilir ya da güncel gerçek checklist'e dönüştürülür.
-- [ ] `active/current-tasks.md` yanıltıcı tamamlandı iddialarından temizlenir.
-- [ ] En az aşağıdaki ADR'ler oluşturulur:
-  - [ ] Canonical application root.
-  - [ ] Normalized content model.
-  - [ ] Versioned ingestion and immutable artifacts.
-  - [ ] Hybrid retrieval and RRF.
-  - [ ] Repository scan security model.
-  - [ ] OCR provider strategy.
-- [ ] Operasyon dokümanları oluşturulur:
-  - [ ] Upload ve ingestion job yönetimi.
-  - [ ] Re-index.
-  - [ ] Embedding model/profile değişimi.
-  - [ ] OCR modelleri ve language pack kurulumu.
-  - [ ] Repository scan limits.
-  - [ ] Backup/restore.
-- [ ] Eski chunk'lar yalnız yeni version ve değerlendirme doğrulandıktan sonra kontrollü temizlenir.
-- [ ] Feature flag'ler aşamalı olarak yeni pipeline'a çevrilir.
-- [ ] `AKTIF_GOREV.md` ilerleme kaydı ve final sonuçlarla güncellenir.
+- [ ] GitHub App veya kullanılan kimlikte `Contents: Read and write` ve ref güncelleme yetkisi doğrulanır.
+- [ ] `main` son SHA’sı tekrar okunur.
+- [ ] Son SHA bu dosyadaki `38c6ac...` ile farklıysa işlem durur; yeni commit’ler ayrıca incelenir.
+- [ ] Tüm branch/tag/ref’lerde `Co-Authored-By: ... Claude` taranır.
+- [ ] Repository tam bundle yedeği alınır.
+- [ ] Contributor cleanup sırasında branch protection geçici ve kontrollü biçimde yönetilir.
+- [ ] Açık PR ve eski branch’lerin rewrite sonrası durumu kayıt altına alınır.
 
-### Kabul kriterleri
+## 7.2 Geçmiş rewrite sözleşmesi
 
-- [ ] Yeni kurulum dokümanla ayağa kalkar.
-- [ ] Mevcut DB migration ile yükseltilebilir.
-- [ ] Re-index işlemi orijinal dosyayı tekrar yüklemeden çalışır.
-- [ ] Repository, DOCX, PDF ve PNG için uçtan uca örnekler vardır.
-- [ ] Dokümanlar gerçek kodla çelişmez.
+Yalnız commit mesajındaki istenmeyen ortak-yazar trailer satırları çıkarılacaktır.
+
+Korunacaklar:
+
+- Commit author adı/e-postası.
+- Commit committer adı/e-postası.
+- Author/committer tarihleri.
+- Commit mesajının trailer dışındaki tüm içeriği.
+- Her commit’in tree içeriği.
+- Parent/merge topolojisi.
+- Commit sayısı.
+- Tag/branch kapsamı, önceden belirlenen ref listesi.
+
+Değişecekler:
+
+- Etkilenen commit SHA’ları.
+- Etkilenen commitlerin tüm descendant SHA’ları.
+- `main` head SHA’sı.
+
+Yasaklar:
+
+- Squash ederek geçmişi tek commit’e indirmek.
+- Dosya içeriğini rewrite sırasında değiştirmek.
+- `.mailmap` ile sorunu çözülmüş saymak.
+- `--force` ile lease kontrolü olmadan push etmek.
+- Yedek almadan ref değiştirmek.
+- Başka kişilerin gerçek commitlerini Mehmet adına çevirmek.
+
+## 7.3 Doğrulama kapısı
+
+Aşağıdaki kontrollerin tamamı geçmeden Aşama 0 tamamlanmış sayılmaz:
+
+- [ ] Rewrite öncesi ve sonrası commit sayısı eşit.
+- [ ] Rewrite öncesi ve sonrası her karşılık gelen commit tree dizisi eşit.
+- [ ] `main^{tree}` SHA’sı eşit.
+- [ ] `git log --all --format=%B` içinde istenmeyen trailer yok.
+- [ ] `git shortlog -sne --all` yalnız gerçek author’ları gösteriyor.
+- [ ] Remote push `--force-with-lease=refs/heads/main:<OLD_SHA>` ile yapılmış.
+- [ ] Push sonrası remote head beklenen yeni SHA.
+- [ ] Fresh clone alınmış ve çalışma ağacı temiz.
+- [ ] Uygulama dosya checksum manifest’i rewrite öncesiyle aynı.
+- [ ] GitHub Contributors ekranı yenilenmiş; cache gecikirse 24 saat sonra yeniden kontrol kaydı açılmış.
+- [ ] Tüm geliştiricilere “re-clone veya hard reset” talimatı verilmiş.
+- [ ] Yedek bundle güvenli yerde saklanmış.
+
+## 7.4 Gelecekte tekrarını önleme
+
+Repository’ye aşağıdakiler eklenecek:
+
+- `scripts/check_commit_ownership.py`
+- `.githooks/commit-msg`
+- `.github/workflows/commit-ownership.yml`
+- `CONTRIBUTING.md` içinde sahiplik politikası.
+- Optional local setup: `git config core.hooksPath .githooks`
+
+Kural:
+
+- Her türlü `Co-Authored-By:` trailer’ı varsayılan olarak reddedilir.
+- İstisna ancak Mehmet’in açık yazılı onayı ve allowlist ile yapılabilir.
+- Yapay zekâ kullanımı gerekiyorsa release note veya iç iş kaydında “araç desteği” olarak belirtilir; Git commit sahipliği değiştirilmez.
+
+## 7.5 `.claude/` içeriklerinin güvenli kaldırılması
+
+Contributor geçmişi temizlendikten sonra, ürün aşamalarından önce:
+
+1. Root `.claude/settings.local.json` silinir ve `.gitignore`a tool-local ayar deseni eklenir.
+2. `document-rag-platform/.claude/skills/` envanteri çıkarılır.
+3. Her skill için:
+   - lisans dosyası,
+   - orijinal kaynak,
+   - kullanılan script/binary,
+   - network erişimi,
+   - mutation yetkisi,
+   - ürünle ilişkisi
+   kontrol edilir.
+4. Yararlı ve lisansı açık içerik **kopyalanmadan önce temiz uyarlama** ile root `skills/` sözleşmesine dönüştürülür.
+5. RAG ürünüyle ilgisiz README/UI skill’leri ayrı araç repository’sine taşınır veya arşivlenir.
+6. `find-skills` doğrudan korunmaz; bunun yerine provenance/checksum/license zorunlu, allowlist’li bir skill registry yaklaşımı yazılır.
+7. Son durumda repository içinde `.claude/` dizini kalmaz.
+8. `git grep -i "claude"` sonucu yalnız tarihsel cleanup/runbook kaydı gibi açıkça gerekli belgelerle sınırlı olmalıdır.
+
+**Aşama 0 teslim commit’i:**  
+`chore(history): repository sahiplik ve araç-bağımsızlık politikasını tamamla`
+
+> Geçmiş rewrite push’u normal commit değildir. Yukarıdaki commit, rewrite sonrası policy/cleanup dosyalarını ekleyen ilk yeni commit olacaktır.
 
 ---
 
-# 10. İlk Değiştirilecek Dosyalar ve Sorumlulukları
+# 8. Aşama 1 — Gerçek Durum, Baseline ve CI Temeli
 
-| Mevcut dosya | İlk yapılacak değişiklik |
-|---|---|
-| `services/backend/src/main.py` | Parser, chunker, retrieval ve endpoint işlerini servis/router katmanlarına ayır; no-hit ile sohbet ayrımını düzelt |
-| `services/backend/src/llm.py` | Embedding ve chat adaptörlerini ayır; prefix'leri config/feature flag yap; kaynak metadata paketlemesini ekle |
-| `services/backend/src/models.py` | Version, artifact, job, metadata, lexical index ve citation şemasını ekle |
-| `services/backend/src/db.py` | Alembic esaslı migration düzenine geç; extension/index yönetimini migration'a taşı |
-| `services/backend/requirements.txt` | Parser/OCR/repository/test bağımlılıklarını profillere ayır; ağır bağımlılıkları API image'ına zorunlu koyma |
-| `docker-compose.yml` | Gerçek worker, MinIO entegrasyonu, env eşitliği, healthcheck ve opsiyonel OCR profile ekle |
-| `apps/web/app/page.tsx` | Upload ile ingestion job durumunu ayır; serbest embedding instruction alanını kaldır veya debug'a taşı |
-| `apps/web/components/ChatWidget.tsx` | Citation detay paneli, source type filtresi, no-answer ve retrieval debug desteği ekle |
-| `README.md` | Gerçek threshold/top-k, servisler ve kullanım akışıyla eşleştir |
-| `tests/evals/` | Golden dataset, baseline ve metric runner ekle |
+## 8.1 Eski görevi arşivle ve yeni görevi etkinleştir
 
----
+- [ ] Eski `AKTIF_GOREV.md` arşivlenir.
+- [ ] Bu dosya root’a yazılır.
+- [ ] Yeni rewrite sonrası `main` SHA bu dosyaya işlenir.
+- [ ] `done/completed-tasks.md` içerisine tarih, eski görev ve son gerçek commit kaydı eklenir.
+- [ ] README’de kanonik durum sayfası bu aktif göreve bağlanır.
 
-# 11. Ortam Değişkenleri
+## 8.2 Runtime gerçeklik denetimi
 
-Aşağıdaki yapı typed settings ile desteklenmelidir. Secret değerler örnek dosyada gerçek değer içermez.
+Aşağıdaki çıktılar tarih damgalı olarak `artifacts/audit/` altında tutulur; credential veya özel veri içermez:
 
-```dotenv
-# Core
-APP_ENV=development
-API_DEBUG=false
-DATABASE_URL=postgresql://...
-REDIS_URL=redis://redis:6379/0
+- Docker Compose service listesi ve health.
+- Alembic current/head/history.
+- Gerçek şema ve index envanteri.
+- Tablo satır sayıları.
+- Aktif document version bütünlük raporu.
+- Aktif embedding profile raporu.
+- Orphan object/chunk/version raporu.
+- PostgreSQL/pgvector sürümü.
+- Backend/frontend dependency lock özeti.
+- Worker queue ve stuck job raporu.
+- API endpoint smoke test sonucu.
+- Gerçek fixture üzerinde mevcut retrieval baseline.
 
-# Object storage
-OBJECT_STORAGE_PROVIDER=minio
-MINIO_ENDPOINT=http://minio:9000
-MINIO_ACCESS_KEY=...
-MINIO_SECRET_KEY=...
-MINIO_BUCKET=context-vault
+## 8.3 CI oluştur
 
-# Embedding
-EMBEDDING_PROVIDER=openai_compatible
-EMBEDDING_MODEL=openai/BAAI/bge-m3
-EMBEDDING_DIMENSION=1024
-EMBEDDING_DISTANCE=cosine
-EMBEDDING_QUERY_PREFIX=
-EMBEDDING_PASSAGE_PREFIX=
-EMBEDDING_BATCH_SIZE=16
-EMBEDDING_CONCURRENCY=4
-EMBEDDING_TIMEOUT_SECONDS=60
+Minimum workflow’lar:
 
-# Chunking
-CHUNK_TARGET_TOKENS=600
-CHUNK_MIN_TOKENS=250
-CHUNK_MAX_TOKENS=900
-CHUNK_OVERLAP_RATIO=0.12
-PARENT_CHUNK_MAX_TOKENS=2400
+```text
+ci-backend.yml
+  - dependency install from lock
+  - ruff format/check
+  - mypy
+  - unit tests
+  - integration tests
+  - migration upgrade/downgrade/upgrade
+  - coverage report
 
-# Retrieval
-VECTOR_CANDIDATE_K=40
-LEXICAL_CANDIDATE_K=40
-IDENTIFIER_CANDIDATE_K=20
-FUSION_CANDIDATE_K=20
-RRF_K=60
-RERANKER_ENABLED=false
-RERANKER_PROVIDER=none
-RERANKER_MODEL=
-RERANK_TOP_K=8
-CONTEXT_MAX_CHUNKS=8
-CONTEXT_MAX_TOKENS=12000
+ci-frontend.yml
+  - locked install
+  - lint
+  - typecheck
+  - unit/component tests
+  - production build
 
-# Parsing
-DOCUMENT_PARSER_PROVIDER=docling
-PARSER_TIMEOUT_SECONDS=300
-MAX_DOCUMENT_BYTES=104857600
-MAX_PARSED_TEXT_CHARS=20000000
+ci-rag-eval.yml
+  - deterministic fixture ingestion
+  - real retrieval service eval
+  - leakage and citation gates
+  - baseline comparison
 
-# OCR
-OCR_ENABLED=true
-OCR_PROVIDER=docling
-OCR_FALLBACK_PROVIDER=tesseract
-OCR_LANGUAGES=tur+eng
-OCR_MIN_TEXT_COVERAGE=0.02
-OCR_MIN_CONFIDENCE=0.60
-
-# Repository/directory scan
-CODE_ALLOWED_ROOTS=/imports,/workspace
-CODE_MAX_FILES=20000
-CODE_MAX_TOTAL_BYTES=1073741824
-CODE_MAX_FILE_BYTES=2097152
-CODE_SCAN_TIMEOUT_SECONDS=900
-CODE_FOLLOW_SYMLINKS=false
-CODE_ALLOW_SUBMODULES=false
-CODE_ALLOW_GIT_LFS=false
-CODE_SECRET_POLICY=skip
-
-# Features
-FEATURE_ASYNC_INGESTION=true
-FEATURE_HYBRID_RETRIEVAL=true
-FEATURE_RERANKER=false
-FEATURE_OCR=true
-FEATURE_REPOSITORY_INGESTION=true
-FEATURE_RETRIEVAL_DEBUG=true
+ci-security.yml
+  - secret scan
+  - dependency vulnerability scan
+  - SBOM
+  - container scan
+  - commit ownership check
 ```
 
-Notlar:
+Branch protection Aşama 0 rewrite sonrasında etkinleştirilir. `main`e doğrudan push kapatılır; yalnız zorunlu status check’leri geçen PR merge edilir.
 
-- Gateway batch input desteklemiyorsa `EMBEDDING_BATCH_SIZE` iç uygulama batch'ini, çağrı tarafı kontrollü tekli istekleri ifade eder.
-- `FEATURE_RETRIEVAL_DEBUG` production ortamında varsayılan `false` olmalıdır.
-- Serbest kullanıcı embedding instruction'ı varsayılan konfigürasyonda desteklenmemelidir.
+## 8.4 Kabul kriterleri
+
+- [ ] Sıfırdan clone + tek komutla dev ortamı kuruluyor.
+- [ ] Migration blank DB ve mevcut fixture DB üzerinde testli.
+- [ ] Unit/integration/eval ayrımı açık.
+- [ ] Fake eval release gate’e giremiyor.
+- [ ] CI gerçekten çalışıyor; `.gitkeep` workflow yok.
+- [ ] Runtime audit ile doküman iddiaları arasındaki fark raporlanmış.
+- [ ] Bu aşama hiçbir retrieval davranışını değiştirmiyor.
+
+**Commit:**  
+`chore(baseline): gerçek runtime envanteri ve CI kalite kapılarını kur`
 
 ---
 
-# 12. API Sözleşmesi Taslağı
+# 9. Aşama 2 — Veri İzolasyonu, Aktif Sürüm ve Embedding Profili
 
-## 12.1 Belge upload
+## 9.1 API kapsamı
 
-```http
-POST /documents/upload
-Content-Type: multipart/form-data
+- `project_id` chat/retrieval için zorunlu olacak.
+- Proje seçilmemişse “ilk projeyi seç” veya “default proje oluştur” davranışı kaldırılacak.
+- Belge listeleme, durum, silme, conversation ve source preview endpoint’leri project scope doğrulayacak.
+- Authentication katmanı yoksa minimum olarak API key/principal portu eklenecek; production mode kimliksiz başlamayacak.
+- `conversation_id` mevcutsa conversation’ın project/principal ile eşleşmesi doğrulanacak.
+- Model seçimi `settings.available_chat_models` allowlist’i dışında reddedilecek.
+- Query/message boyutu, top_k ve filtre limitleri typed request modelinde sınırlandırılacak.
+
+## 9.2 Fail-closed filtre sözleşmesi
+
+`filter_spec` bilinmeyen filtreleri sessizce atmayacak.
+
+- Filtreler Pydantic/typed model ile doğrulanacak.
+- Güvenlik filtreleri kullanıcı filtresinden ayrı “mandatory predicates” olarak eklenecek.
+- Retriever’ın imzası tek ve açık olacak; geniş `TypeError` fallback kaldırılacak.
+- Filter uygulayamayan retriever hata verecek; filtresiz arama yapmayacak.
+
+Zorunlu SQL predicate’leri:
+
+```text
+d.project_id = :project_id
+d.deleted_at IS NULL
+d.status = 'indexed'
+c.version_id = d.active_version_id
+dv.status = 'ready'
 ```
 
-Response:
+Legacy `version_id IS NULL` veri için yalnız süreli migration compatibility flag’i olabilir; normal sorguyla karıştırılamaz.
+
+## 9.3 Şema bütünlüğü
+
+Migration ile:
+
+- `chunks.version_id` backfill sonrası `NOT NULL`.
+- Document/version uyumunu koruyan composite unique/FK.
+- `documents.active_version_id` kendi document’ına ait olmak zorunda.
+- SourceFile/version ve Chunk/source-file uyumu korunur.
+- Tek aktif embedding profile için partial unique index.
+- Active profile dimension/model/config hash tutarlılık kontrolü.
+- `Project.name` global unique gereksinimi yeniden değerlendirilir; tenant varsa composite unique yapılır.
+- Soft-delete ve retention politikası yazılır.
+
+## 9.4 Dense profile doğruluğu
+
+- Sorgu embedding’i aktif profilin model/prefix/dimension değerleriyle üretilir.
+- `chunk_embeddings` sorgusu `embedding_profile_id` ile sınırlanır.
+- `chunks.embedding` legacy kolonu ana sorguda paralel taranmaz.
+- Geçiş tamamlanınca legacy kolon yalnız rollback/read-only olabilir; kaldırma ayrı onay gerektirir.
+- Query vector dimension yanlışsa DB sorgusundan önce açık hata verilir.
+- Model/prefix değişimi yeni profile + controlled re-index gerektirir.
+
+## 9.5 Güvenlik testleri
+
+- project A sorgusu project B chunk’ı döndürmez.
+- active version v2 iken v1 chunk’ı dönmez.
+- failed/pending version dönmez.
+- deleted document dönmez.
+- yanlış project conversation reddedilir.
+- bilinmeyen güvenlik filtresi aramayı genişletmez.
+- neighbor/parent başka sürüme geçmez.
+- profile A query profile B embedding’iyle karşılaştırılmaz.
+
+**Mutlak gate:** Cross-project, cross-version ve cross-profile leakage testlerinde kabul edilen hata sayısı **0**.
+
+**Commit:**  
+`fix(scope): proje sürüm ve embedding profil izolasyonunu fail-closed yap`
+
+---
+
+# 10. Aşama 3 — Retrieval Pipeline Doğruluğu ve İndeksleme
+
+## 10.1 Candidate sözleşmesi
+
+- `RetrievalCandidate` yerine veya onun kontrollü evrimi olarak typed `RetrievalHit` uygulanır.
+- Stage score’ları explicit alanlarda tutulur.
+- `_assign_ranks` yalnız rank değiştirir; skoru/provenance’ı yeniden nesneleyip kaybetmez.
+- Retriever kaynakları array olarak tutulur.
+- Serialization/debug API aynı sözleşmeyi kullanır.
+
+## 10.2 Dense retrieval
+
+- `chunk_embeddings.embedding` için HNSW index stratejisi uygulanır.
+- Profile filtrelemesinin approximate index recall etkisi gerçek fixture’da ölçülür.
+- Seçenekler benchmark edilir:
+  - profile başına partial HNSW index,
+  - profile partition,
+  - tek index + iterative scan.
+- `SET LOCAL hnsw.ef_search = ...` transaction içinde gerçekten uygulanır.
+- Gerekirse `hnsw.iterative_scan` feature/config olarak değerlendirilir.
+- Query plan `EXPLAIN (ANALYZE, BUFFERS)` ile kaydedilir.
+- Candidate K, ef_search ve latency/recall eğrisi eval raporunda bulunur.
+
+## 10.3 Lexical retrieval
+
+En az üç plan değerlendirilecek:
+
+1. Exact phrase / quoted technical token.
+2. `websearch_to_tsquery` veya kontrollü doğal dil sorgusu.
+3. OR/prefix fallback ve identifier join.
+
+Kurallar:
+
+- Teknik token’lar case-normalized fakat kayıpsız tutulur.
+- Türkçe ve İngilizce sorular ayrı fixture’larla ölçülür.
+- Stopword listesi tek başına recall düzeltmesi sayılmaz.
+- Query terimleri tek chunk’ta AND ile bulunmak zorunda bırakılmaz.
+- `search_vector` için GIN index eklenir.
+- Başlık, symbol, path ve content alanlarının ağırlıkları gerekirse ayrı TSVECTOR bileşenleriyle modellenir.
+- SQL injection’a açık dinamik config/column üretimi yapılmaz.
+
+## 10.4 Identifier retrieval
+
+- Exact array match.
+- Exact symbol match.
+- Prefix match.
+- `pg_trgm` similarity.
+- Source path match.
+
+Bu yollar ayrı skor ve provenance ile raporlanacak. Gerekli GIN/GiST trigram indeksleri eklenecek. “Trigram” adı yalnız gerçek SQL/index uygulandığında kullanılacak.
+
+## 10.5 RRF ve dedupe
+
+- Her retriever listesi chunk_id bazında unique yapılır.
+- Duplicate aynı retriever’dan ikinci katkı alamaz.
+- RRF deterministic tie-break kullanır.
+- Dense/lexical/identifier katkıları debug çıktısında görünür.
+- Weighted RRF ancak gerçek eval baseline sonrasında açılır.
+- Content dedupe, content_hash gerçekten yüklendikten sonra çalışır.
+- Aynı içeriğin farklı belge/sürüm kopyalarında citation provenance kaybolmaz; canonical hit + alternate sources tutulur.
+
+## 10.6 Reranker
+
+- Reranker giriş/çıkış sözleşmesi typed.
+- Timeout, maksimum batch ve circuit breaker.
+- Disabled/unavailable durumda fusion order korunur.
+- `rerank_score` persistence ve debug çıktısında kaybolmaz.
+- Reranker model/version/config hash retrieval run’a yazılır.
+- Reranker yalnız eval kazancı kanıtlandığında production default olur.
+
+## 10.7 Query planner
+
+İlk sürüm deterministic ve açıklanabilir olacak:
+
+```text
+smalltalk
+natural_language
+technical_identifier
+quoted_phrase
+path_or_symbol
+comparison_or_multi_document
+```
+
+LLM tabanlı query rewrite başlangıçta zorunlu değildir. Rewrite eklenirse:
+
+- original query saklanır,
+- rewrite’lar görünür,
+- her rewrite ayrı retrieval katkısı taşır,
+- prompt injection ve maliyet sınırı uygulanır,
+- eval’de açık kazanç olmadan default yapılmaz.
+
+**Commit:**  
+`fix(retrieval): typed hit fusion dedupe indeks ve rerank hattını doğrula`
+
+---
+
+# 11. Aşama 4 — Context, No-Answer, Grounding ve Citation
+
+## 11.1 ContextBuilder gerçek çalışma yoluna bağlanacak
+
+AnswerService prompt’u yalnız şu kaynaktan kurulacak:
+
+```text
+retrieval_result.context.items
+```
+
+`ranked_candidates` doğrudan LLM evidence’i olmayacak.
+
+ContextBuilder düzeltmeleri:
+
+- `selected_chunk_ids` gerçekten doldurulur.
+- Parent’lar batch resolver ile yüklenir.
+- Neighbor’lar project/document/version/source-file kapsamında çözülür.
+- Duplicate item `expanded_chunk_ids` listesine sahte eklenmez.
+- Relation türleri korunur: selected, parent, adjacent, table_header, code_signature.
+- Token sayımı hedef chat modelinin gerçek tokenizer’ına göre yapılır.
+- Prompt overhead, history ve answer budget hesaba katılır.
+- Context truncation deterministic ve debug edilebilir olur.
+- Citation label her ContextItem ile birebir eşleşir.
+
+## 11.2 Evidence packaging
+
+Raw XML benzeri string birleştirme yerine structured data kullanılır:
 
 ```json
 {
+  "label": "S1",
   "document_id": "...",
   "version_id": "...",
-  "job_id": "...",
-  "status": "queued"
+  "source_file": "...",
+  "locator": {},
+  "relation": "selected",
+  "content": "..."
 }
 ```
 
-## 12.2 Repository ingestion
+- Evidence “untrusted data” olarak işaretlenir.
+- Delimiter escape uygulanır.
+- Belge içindeki “talimat” metni system instruction sayılmaz.
+- Prompt injection detector yalnız engelleme değil, risk signal üretir.
+- Security testleri farklı dil ve formatlarda yapılır.
 
-```http
-POST /repositories/ingest
-```
+## 11.3 Structured answer ve citation validation
 
-```json
-{
-  "project_id": "...",
-  "repository_url": "https://github.com/org/repo.git",
-  "ref": "main",
-  "credential_ref": null,
-  "include_patterns": [],
-  "exclude_patterns": []
-}
-```
-
-## 12.3 Directory scan
-
-```http
-POST /directories/scan
-```
-
-```json
-{
-  "project_id": "...",
-  "allowed_root_alias": "workspace",
-  "relative_path": "project-a",
-  "include_patterns": [],
-  "exclude_patterns": []
-}
-```
-
-Mutlak path istemciden kabul edilmez.
-
-## 12.4 Chat query
-
-```http
-POST /chat/query
-```
-
-```json
-{
-  "query": "PAYMENT_FLAG nasıl belirleniyor?",
-  "project_id": "...",
-  "document_ids": [],
-  "scope": "all",
-  "model": null,
-  "debug": false
-}
-```
-
-Response:
-
-```json
-{
-  "answer": "...",
-  "answerable": true,
-  "citations": [
-    {
-      "label": "S1",
-      "document_id": "...",
-      "document_name": "rules.docx",
-      "source_type": "document",
-      "heading_path": ["Tahsilat", "PAYMENT_FLAG"],
-      "page_start": null,
-      "page_end": null,
-      "file_path": null,
-      "symbol_name": null,
-      "line_start": null,
-      "line_end": null,
-      "snippet": "...",
-      "rank": 1
-    }
-  ],
-  "retrieval_debug": null
-}
-```
-
----
-
-# 13. Migration ve Re-index Stratejisi
-
-1. PostgreSQL backup al.
-2. Yeni tabloları ve nullable kolonları ekle.
-3. Aktif embedding profile kaydını `openai/BAAI/bge-m3`, 1024, cosine olarak oluştur.
-4. Mevcut her document için version 1 oluştur.
-5. Mevcut chunk'ları version 1'e bağla.
-6. Mevcut embedding'leri profile ile ilişkilendir.
-7. Uygulamayı dual-read uyumlu hâle getir.
-8. Yeni parser/chunker ile yeni version üret.
-9. Golden eval ve manuel doğrulama geçerse yeni version'ı aktif et.
-10. Eski version'ı hemen silme; rollback süresi boyunca sakla.
-11. Stabilizasyon sonrasında retention politikasına göre temizle.
-
-Re-index tetikleyicileri:
+LLM’den yapılandırılmış çıktı istenir:
 
 ```text
-parser_profile değişti
-chunker_profile değişti
-embedding_profile değişti
-OCR provider/config değişti
-source revision değişti
-normalize model şeması değişti
+answer
+claims[]
+  text
+  citation_labels[]
+abstained
+abstention_reason
 ```
 
----
+Validator:
 
-# 14. Test Matrisi
+- Var olmayan label’ı reddeder.
+- Citation’sız factual claim’i işaretler.
+- Kullanılmayan candidate’ı citation olarak persist etmez.
+- Label’ın quote içeriği claim’i desteklemiyorsa repair/abstain yoluna gider.
+- Repair sınırlı sayıda ve gözlemlenebilir olur.
+- Validation başarısızsa uydurma cevabı yayınlamak yerine güvenli no-answer döner.
 
-## Unit testler
+## 11.4 Immutable citation snapshot
 
-- Parser router seçimi.
-- DOCX paragraph/table sırası.
-- Heading path.
-- Büyük tablo bölme.
-- Token chunk sınırları.
-- Content hash ve embedding cache.
-- RRF hesaplaması.
-- Exact identifier extraction.
-- No-answer karar politikası.
-- Path canonicalization.
-- Ignore rule precedence.
-- Archive traversal koruması.
-- PL/SQL symbol split.
-- OCR confidence mapping.
-
-## Integration testler
-
-- Upload → MinIO → worker → parse → chunk → embedding → active version.
-- PDF digital parse.
-- Scanned PDF OCR.
-- PNG OCR.
-- Repository clone/scan.
-- Directory allowed-root scan.
-- Incremental repository refresh.
-- Hybrid retrieval.
-- Reranker fallback.
-- Citation persistence.
-- Migration upgrade/downgrade.
-
-## E2E testler
-
-- UI'dan DOCX yükle, job tamamlanmasını gör, soru sor, heading citation aç.
-- PDF yükle, sayfa citation aç.
-- PNG yükle, OCR sonucu üzerinden soru sor.
-- Repository ekle, method/package sorusu sor, dosya/satır citation aç.
-- Cevabı olmayan soru sor, sistemin uydurmadığını doğrula.
-
----
-
-# 15. Özellikle Yapılmayacak Hatalar
-
-- BGE-M3 8192 token destekliyor diye 8192 tokenlık tek chunk oluşturma.
-- Embedding modeli değişmeden yalnız `.env` değiştirip eski vektörlerle devam etme.
-- Farklı embedding prefix'leriyle üretilmiş belgeleri aynı profil altında karıştırma.
-- Dense ve lexical ham skorları kalibrasyonsuz toplama.
-- Sadece top-3 chunk'a güvenme.
-- `ILIKE '%kelime%'` sonucunu gerçek lexical ranking sanma.
-- Retrieval boşsa belge sorusunu otomatik günlük sohbet sayma.
-- DOCX'e ait olmayan sayfa numarası uydurma.
-- OCR'ı tüm dijital PDF sayfalarına koşulsuz çalıştırma.
-- Repo ingestion sırasında `npm install`, `mvn`, `gradle`, `pip`, `make`, test veya build komutu çalıştırma.
-- Symlink veya archive path'i ile izinli kökün dışına çıkma.
-- `.env`, private key veya credential içeriğini embedding gateway'e gönderme.
-- MinIO ve Redis'i compose'a koyup uygulama içinde kullanmadan tamamlandı sayma.
-- Boş test klasörlerini değerlendirme altyapısı varmış gibi raporlama.
-- Gerçek kodla çelişen tamamlandı dokümanı bırakma.
-
----
-
-# 16. Feature Flag ve Rollback
-
-Zorunlu feature flag'ler:
+`message_citations` veya yeni normalized tablo en az:
 
 ```text
-FEATURE_ASYNC_INGESTION
-FEATURE_STRUCTURED_PARSING
-FEATURE_HYBRID_RETRIEVAL
-FEATURE_RERANKER
-FEATURE_OCR
-FEATURE_REPOSITORY_INGESTION
-FEATURE_NEW_CITATIONS
+message_id
+claim_id
+retrieval_run_id
+chunk_id
+document_id
+version_id
+source_file_id
+citation_label
+quote_text
+quote_hash
+source_content_hash
+locator_json
+retrieval_rank
+stage_scores_json
+created_at
 ```
 
-Rollback ilkeleri:
+Kaynak sonradan re-index edilse de “o cevapta hangi quote kullanıldı” denetlenebilir kalmalıdır.
 
-1. Eski aktif document version korunur.
-2. Yeni pipeline yeni version üzerinde çalışır.
-3. Yeni version eval ve smoke test geçmeden aktif edilmez.
-4. Chat katmanı feature flag ile eski retrieval'a dönebilir.
-5. DB migration downgrade komutu test edilmiş olmalıdır.
-6. Object storage artifact'ları migration rollback sırasında otomatik silinmez.
-7. Hatalı embedding profile pasif yapılabilir; fiziksel veri inceleme tamamlanmadan silinmez.
+## 11.5 Conversation ve history
 
----
+- User ve assistant mesajları birlikte persist edilir.
+- History yalnız aynı conversation/project/principal için alınır.
+- History token budget uygulanır.
+- Silinen/erişimi kaldırılan source eski conversation context’ine yeni sorguda otomatik taşınmaz.
+- Conversation title async yardımcı işlem olabilir; retrieval yolunu bloklamaz.
 
-# 17. Global Definition of Done
+## 11.6 No-answer kalibrasyonu
 
-Görev yalnız aşağıdaki maddelerin tamamı sağlandığında tamamlanmış sayılır:
+- Smalltalk, belge sorusu ve unsupported task ayrılır.
+- Candidate sayısı tek başına evidence count değildir.
+- Exact identifier, lexical, dense ve reranker sinyalleri query type’a göre kalibre edilir.
+- Threshold active embedding/reranker profile ile versiyonlanır.
+- Negative, adversarial ve near-miss dataset kullanılır.
+- Sistem emin değilse kaynak eksikliği ve aranan kapsamı açıkça söyler.
 
-- [ ] Mevcut BGE-M3 dense embedding hattı sürümlü profil altında çalışıyor.
-- [ ] DOCX başlık ve tabloları korunarak indeksleniyor.
-- [ ] PDF sayfa ve tablo bilgisi korunuyor.
-- [ ] Taranmış PDF ve PNG OCR ile aranabiliyor.
-- [ ] Orijinal dosyalar object storage'da saklanıyor.
-- [ ] Parser/chunker/model değişiminde re-index yapılabiliyor.
-- [ ] Ingestion worker ve job state kalıcı çalışıyor.
-- [ ] Dense + lexical + identifier retrieval RRF ile birleşiyor.
-- [ ] Reranker portu ve güvenli fallback var.
-- [ ] Cevap bulunamadığında sistem uydurmuyor.
-- [ ] Selamlaşma ile no-hit belge sorusu ayrılıyor.
-- [ ] Repository URL, archive ve izinli klasör tarama çalışıyor.
-- [ ] Kod taraması güvenlik sınırlarına uyuyor ve kod çalıştırmıyor.
-- [ ] Incremental repo re-index çalışıyor.
-- [ ] PDF page, DOCX heading ve code line citation UI'da gösteriliyor.
-- [ ] En az 50 soruluk eval seti ve metric runner var.
-- [ ] CI testleri geçiyor.
-- [ ] Docker Compose ile dokümante edilen servisler gerçekten çalışıyor.
-- [ ] README ve durum dokümanları gerçek kodla uyumlu.
-- [ ] Migration, re-index, OCR ve repository scan runbook'ları var.
-- [ ] Güvenlik ve prompt injection testleri geçiyor.
-- [ ] Uygulama raporu ve ölçüm sonuçları repository içinde bulunuyor.
+**Mutlak gate:**
+
+- Invalid citation label: 0.
+- Cross-version citation: 0.
+- Citation’sız factual claim release setinde: 0 veya açık abstention.
+- Prompt içindeki document instruction’ın system davranışını değiştirdiği test: 0.
+
+**Commit:**  
+`fix(grounding): gerçek context bütçesi no-answer ve doğrulanmış citation hattı`
 
 ---
 
-# 18. İlerleme Kaydı
+# 12. Aşama 5 — Kapsam Birleştirilmiş Ingestion ve Re-index
 
-Bu bölüm her çalışma oturumunda güncellenmelidir.
+## 12.1 Tek kanonik IngestionService
+
+Yeni servis/orkestratör tüm yolları birleştirecek:
 
 ```text
-Son güncelleme: 2026-08-19
-Çalışan ajan/model: opencode (DeepSeek-V4-Flash) — KRCN native-parallel, 3-4 subagent
-Branch: main
-Tamamlanan son aşama: Aşama 10 (Dokümantasyon, temizlik ve son aktivasyon)
-Aktif aşama: TAMAMLANDI (Aşama 0-10)
-Çalıştırılan testler: pytest (backend full suite, venv) + docker compose runtime smoke
-Test sonucu: 492 passed, 8 skipped, 1 failed (tek hata FastAPI 0.141 vs kilitli 0.109 sürüm artefaktı — yalnız geçici venv). Backend docker compose ile ayağa kalktı; senkron/asenkron ingestion indeksleme + dense fallback + no-answer sorunu çözüldü; e2e (soru→cevap+citation, no-answer, smalltalk) doğrulandı. Dokümantasyon (ADR'ler, README, 6 runbook, durum dokümanları) gerçek kodla eşleşti; feature flag'ler aktive edildi (FEATURE_REPOSITORY_INGESTION=true, STRUCTURED_PARSING/HYBRID_RETRIEVAL rollback anahtarları eklendi).
-Bilinen engeller: yok (tree-sitter/OCR engel kurulumu/uzak reranker gateway zorunluluğu bilinen sınırlamalar olarak dokümante edildi)
-Bir sonraki kesin adım: Son commit'ler sonrası AKTIF_GOREV.md final durumunu işaretle
+Document upload
+Repository URL
+Archive upload
+Allowed directory
+Image/OCR
+Re-index
+Sync adapter
+Async/Celery adapter
 ```
 
-## Aşama Durumları
+API veya worker içinde ayrı parsing/chunking iş kuralı kalmayacak.
 
-- [x] Aşama 0 — Baseline ve gerçek durum
-- [x] Aşama 1 — Config ve modüler backend
-- [x] Aşama 2 — Versioning, storage ve worker (2.1–2.5 + migration upgrade/downgrade gerçek DB'de doğrulandı)
-- [x] Aşama 3 — Yapısal belge parser'ları (Parser Router + DOCX/PDF-Docling-fallback/TXT-MD)
-- [x] Aşama 4 — Yapıya duyarlı chunking ve embedding profilleri (ChunkerRegistry, TokenCounter, token-bazlı chunking, parent-child, embedding cache)
-- [x] Aşama 5 — Retrieval V2: hybrid retrieval ve reranking (dense+lexical+identifier, RRF, reranker portu + safe fallback, context builder, no-answer/intent, debug endpoint)
-- [x] Aşama 6 — Cevap, citation ve UI (kanıt paketleme, no-answer/prompt-injection, citation persistance, kaynak UI: panel/dev modu/source filtresi/job ilerlemesi)
-- [x] Aşama 7 — Repository/klasör ingestion (git/archive/directory kaynakları, güvenlik, ignore kuralları, kod+PL/SQL parser/chunker, incremental re-index, API)
-- [x] Aşama 8 — Görsel ve OCR (OCR provider'ları Docling/Tesseract, ön işleme, image parser + OCR yönlendirme, bbox citation, ocr_json artifact)
-- [x] Aşama 9 — Eval, observability ve güvenlik (golden dataset 66, metriker, structured log, health/readiness, rate limiting, MIME/magic, redaction, prompt-injection)
-- [x] Aşama 10 — Dokümantasyon ve aktivasyon (ADR'ler, README, runbook'lar, durum dokümanları, feature flag aktivasyonu)
+## 12.2 ParserRouter ve ChunkerRegistry wiring
+
+- DOCX/PDF/TXT/MD/Image/Code parser’ları gerçekten worker yolunda kullanılır.
+- NormalizedSource kayıpsız artifact olarak saklanır.
+- ChunkerRegistry content type’a göre seçilir.
+- Heading, table, page, bbox, symbol, line ve parent metadata’sı DB’ye taşınır.
+- `chunk_type`, `symbol_type`, `source_type` enum/validated vocabulary olur.
+- Naive karakter chunker yalnız açık legacy fallback olarak, feature flag ile kalabilir.
+- Fallback kullanıldığında event ve metric yazılır; sessiz degrade olmaz.
+
+## 12.3 Embedding ve indexing
+
+- Passage prefix profile’dan gelir; endpoint form parametresiyle keyfi instruction kabul edilmez.
+- Embedding cache key:
+  `content_hash + profile_config_hash + passage_prefix_hash`
+- Her chunk için dense, lexical ve identifier index aynı transaction/stage sözleşmesinde tamamlanır.
+- Index tamamlanmadan version `ready` ve aktif olamaz.
+- Validation:
+  - chunk count,
+  - embedding count/dimension,
+  - search_vector doluluk,
+  - identifier metadata,
+  - artifact checksum,
+  - source-file coverage.
+
+## 12.4 Transactional outbox
+
+DB commit ve dış sistem işlemleri için:
+
+- `ingestion_outbox`
+- idempotency key
+- retry/backoff
+- dispatcher
+- dead-letter state
+- stuck job reconciler
+
+uygulanır.
+
+MinIO:
+
+- önce staged key,
+- checksum doğrulama,
+- DB version/job,
+- outbox,
+- final key/activation
+veya eşdeğer güvenli compensation tasarımı kullanır.
+
+## 12.5 Re-index düzeltmeleri
+
+- Version number row lock/advisory lock ile yarışa dayanıklı.
+- Failure version’ı `failed` yapar; aktif version değişmez.
+- Changed/new/unchanged/deleted file sayıları doğru isimlendirilir.
+- Unchanged file:
+  - source metadata,
+  - chunk metadata,
+  - profile-specific embedding,
+  - lexical/identifier indeks,
+  - artifact reference
+  bakımından yeni version sözleşmesini karşılar.
+- Deleted file yeni version’da yoktur; eski version retrieval’a sızmaz.
+- Incremental re-index ile full re-index aynı sonuç setini üretir; property/integration test yapılır.
+
+## 12.6 Storage lifecycle
+
+- Document delete DB + object storage için tombstone/outbox kullanır.
+- Orphan scan ve GC dry-run raporu.
+- Retention süresi dolmadan fiziksel silme yok.
+- Audit/citation’da referanslanan snapshot retention politikası ayrıdır.
+- Backup/restore runbook object + DB birlikte test edilir.
+
+**Commit:**  
+`refactor(ingestion): tüm kaynakları tek versioned pipeline ve outbox altında birleştir`
 
 ---
 
-# 19. Teknik Referanslar
+# 13. Aşama 6 — Gerçek Evaluation ve Kalite Kapıları
 
-- Context Vault repository: <https://github.com/mehmet-karacan/context-vault>
-- BGE-M3 model kartı: <https://huggingface.co/BAAI/bge-m3>
-- pgvector: <https://github.com/pgvector/pgvector>
-- Docling: <https://docling-project.github.io/docling/>
-- Docling supported formats: <https://docling-project.github.io/docling/usage/supported_formats/>
-- Docling normalized document model: <https://docling-project.github.io/docling/concepts/docling_document/>
-- Tree-sitter: <https://tree-sitter.github.io/tree-sitter/>
-- Tesseract OCR: <https://github.com/tesseract-ocr/tesseract>
-- Tesseract input formats: <https://tesseract-ocr.github.io/tessdoc/InputFormats.html>
-- PaddleOCR: <https://www.paddleocr.ai/>
+## 13.1 Mevcut fake eval’in yeniden konumlandırılması
+
+Mevcut `FakeRetriever` ve `FakeAnswerer`:
+
+- `contract_smoke` testine taşınır.
+- Golden `expected_sources` üzerinden aday üretmesi açıkça yazılır.
+- Release metric raporu üretemez.
+- CLI’da `--fake` varsayılan ve kapatılamaz davranışı kaldırılır.
+- Release eval fake dependency algılarsa hard fail verir.
+- Mevcut 1.000 skor raporu arşivlenir ve “sentetik sözleşme testi” olarak etiketlenir.
+
+## 13.2 Deterministic gerçek fixture
+
+`tests/evals/fixtures/` altında lisanslı/sentetik fakat gerçek pipeline’dan geçen corpus oluşturulur:
+
+- Türkçe ve İngilizce belgeler.
+- DOCX heading + table.
+- Dijital PDF.
+- OCR görsel/scanned PDF.
+- Markdown/TXT.
+- Python/TypeScript.
+- Oracle PL/SQL package/spec/body.
+- Aynı terimin farklı projelerde çakıştığı belgeler.
+- v1/v2 çelişkili belge sürümleri.
+- Aynı içeriğin duplicate kopyaları.
+- Prompt injection metni içeren belge.
+- Cevabı olmayan sorular.
+- Çok belgeli karşılaştırma.
+- Path/symbol/error-code soruları.
+
+Fixture gerçek ParserRouter, ChunkerRegistry, embedding adapter ve PostgreSQL index yolundan geçer.
+
+İki eval tier:
+
+1. **Offline deterministic**
+   - frozen local embedding fixture veya deterministic test embedder,
+   - her PR’da,
+   - retrieval/integration güvenilirliği.
+
+2. **Live model benchmark**
+   - gerçek embedding/reranker/chat gateway,
+   - nightly/manual,
+   - model kalite/maliyet/latency karşılaştırması.
+
+Offline skor, gerçek model kalitesi gibi sunulmayacak; live skor da nondeterminism notu olmadan gate yapılmayacak.
+
+## 13.3 Dataset boyutu ve kategoriler
+
+İlk release seti minimum **120 sorgu**:
+
+```text
+20 natural-language factual
+15 exact identifier / symbol / path
+10 table
+10 OCR
+10 code/PLSQL
+10 multi-document comparison
+10 Turkish-English cross-lingual
+10 no-answer
+10 stale-version traps
+10 cross-project isolation traps
+5 duplicate/noise
+5 prompt-injection/counterfactual
+```
+
+Her kayıt:
+
+```text
+id
+query
+project_fixture
+scope
+answerable
+expected_document/version/source_file
+relevant chunk/locator constraints
+must_contain / must_not_contain
+required answer aspects
+risk category
+```
+
+Golden cevabı retrieval girişine veya candidate üretimine sızdırmak yasaktır.
+
+## 13.4 Retrieval metrikleri
+
+- Recall@1/3/5/10.
+- MRR@10.
+- nDCG@10.
+- Precision@k/context precision.
+- Relevant document/version/source-file recall.
+- Identifier exact-hit rate.
+- Table/OCR/code kategori skorları.
+- Duplicate rate.
+- Stale-version leakage.
+- Cross-project leakage.
+- No-answer precision/recall/F1 ve FP/FN.
+- p50/p95/p99 stage latency.
+- Candidate counts ve stage drop-off.
+
+## 13.5 Generation/grounding metrikleri
+
+- Citation coverage.
+- Citation precision/accuracy.
+- Unsupported claim rate.
+- Faithfulness.
+- Required-aspect coverage.
+- Answer sufficiency.
+- Contradictory source behavior.
+- Abstention correctness.
+- Prompt-injection resistance.
+- Quote/claim entailment reviewer skoru.
+- Token ve maliyet.
+
+Otomatik LLM judge tek otorite olmayacak. Deterministic kontroller, curated labels ve periyodik insan review birlikte kullanılacak.
+
+## 13.6 Baseline karşılaştırma matrisi
+
+Aynı corpus üzerinde:
+
+```text
+dense-only
+lexical-only
+identifier-only
+dense + lexical RRF
+dense + lexical + identifier RRF
+hybrid + reranker
+hybrid + query planner
+experimental late interaction
+experimental graph
+```
+
+Yeni yöntem production default olmak için:
+
+- Mutlak güvenlik gate’lerini geçmeli.
+- Baseline Recall/nDCG/no-answer metriklerini belirlenen toleransın dışında düşürmemeli.
+- Hedef kategoride istatistiksel ve tekrarlanabilir kazanç göstermeli.
+- p95 latency ve maliyet bütçesi Mehmet tarafından onaylanmalı.
+- Rollback feature flag’i bulunmalı.
+
+Başlangıçta keyfi tek global kalite eşiği yazılmayacak. İlk gerçek baseline’dan sonra `quality-gates.yaml` versiyonlanacak.
+
+**Commit:**  
+`test(eval): gerçek indeks tabanlı retrieval grounding ve leakage benchmarkını kur`
 
 ---
 
-# 20. Nihai Uygulama Kararı
+# 14. Aşama 7 — Observability, Audit ve Operasyon
 
-İlk uygulanacak teknik sıra aşağıdaki gibidir:
+## 14.1 Retrieval run ledger
 
-```text
-Baseline ve eval
-→ Config/modülerleştirme
-→ Versioning + MinIO + worker
-→ DOCX/PDF yapısal parsing
-→ Token/yapı bazlı chunking
-→ Hybrid retrieval + RRF
-→ No-answer + citation
-→ Repository/klasör ingestion
-→ PNG/OCR
-→ Reranking kalibrasyonu
-→ Güvenlik, ölçüm ve dokümantasyon
-```
-
-Modeli değiştirmek veya BGE-M3 sparse/ColBERT altyapısını hemen eklemek ilk adım değildir. OpenAI uyumlu gateway mevcut durumda yalnız dense embedding döndürdüğü için ilk güvenilir geliştirme şu kombinasyon olacaktır:
+Yeni tablolar veya eşdeğer event store:
 
 ```text
-BGE-M3 dense
-+
-PostgreSQL full-text search
-+
-Exact identifier index
-+
-RRF
-+
-Opsiyonel reranker
+retrieval_runs
+retrieval_run_stages
+retrieval_run_candidates
+generation_runs
+feedback
 ```
 
-BGE-M3 sparse ve ColBERT desteği daha sonra ayrı bir inference provider/sidecar üzerinden, aynı `EmbeddingProvider` ve `Retriever` portlarına yeni adaptör olarak eklenebilir. Mevcut görev bu genişlemeyi engellemeyecek veri modeli ve portları kurmalı, fakat ilk teslimi bu özelliğe bağımlı hâle getirmemelidir.
+`retrieval_runs` en az:
+
+- request_id/trace_id
+- principal/project
+- query hash ve gerekirse redacted query
+- filters
+- active version/profile snapshot
+- retriever/reranker/config versions
+- stage durations
+- candidate counts
+- selected context ids
+- token counts
+- answerability decision/reason
+- model
+- cost
+- error/degradation signals
+
+Sensitive content varsayılan olarak raw log’a yazılmaz.
+
+## 14.2 Telemetry
+
+- OpenTelemetry trace/span.
+- Structured JSON logs.
+- Prometheus/OpenMetrics:
+  - ingestion queue age,
+  - job failure/retry,
+  - retrieval stage latency,
+  - empty-result rate,
+  - abstention rate,
+  - citation validation failures,
+  - cross-scope guard failures,
+  - embedding/reranker/chat error,
+  - cache hit,
+  - token/cost.
+- Correlation ID API → DB → worker → LLM.
+- Dashboard ve alert runbook.
+
+## 14.3 Operasyonel araçlar
+
+- Stuck job reconciler.
+- Failed version inspector.
+- Orphan storage dry-run/GC.
+- Re-index planner.
+- Embedding profile activation/deactivation.
+- Index health/ANALYZE/REINDEX runbook.
+- Backup/restore drill.
+- Golden eval regression report.
+- Security incident export.
+
+**Commit:**  
+`feat(observability): retrieval ve ingestion run ledger telemetry ve runbook ekle`
+
+---
+
+# 15. Aşama 8 — Ürün Deneyimi
+
+## 15.1 Search Playground
+
+Kullanıcı tek sorguda şunları görebilmeli:
+
+- effective project/scope/filter.
+- normalized/planned query.
+- dense top-k.
+- lexical top-k.
+- identifier top-k.
+- RRF sonucu ve katkılar.
+- rerank before/after.
+- final context items ve token bütçesi.
+- no-answer gerekçesi.
+- kullanılan citation label’ları.
+- trace id.
+
+Production kullanıcılarına teknik detay RBAC/debug flag ile açılır.
+
+## 15.2 Ingestion inspector
+
+- Source/artifact/version listesi.
+- Parser seçimi ve fallback.
+- Normalized preview.
+- Chunk listesi.
+- Heading/table/page/bbox/symbol metadata.
+- Embedding profile.
+- Search vector/identifier summary.
+- Job stage/events.
+- Failed stage ve retry.
+- Re-index diff: changed/copied/deleted.
+
+## 15.3 Citation UX
+
+- Citation tıklanınca document/version/source-file/locator açılır.
+- Quote highlight.
+- Old answer için immutable quote snapshot görüntülenir.
+- Kaynak değiştiyse “cevap sırasında kullanılan sürüm” açıkça gösterilir.
+- OCR bbox ve code line range desteklenir.
+
+## 15.4 Feedback ve eval loop
+
+- Helpful/not helpful.
+- Wrong source.
+- Missing source.
+- Unsupported claim.
+- Should abstain.
+- Correct answer text.
+- Feedback doğrudan model eğitimi sayılmaz; triage kuyruğuna girer.
+- Onaylanan feedback golden dataset’e kontrollü PR ile eklenir.
+
+## 15.5 Connector genişlemesi
+
+S3/MinIO, Git, filesystem dışındaki connector’lar ancak:
+
+- canonical SourceAdapter sözleşmesine,
+- credential vault’a,
+- incremental cursor/sync state’e,
+- deletion semantics’e,
+- rate limit/backoff’a,
+- provenance ve versioning’e
+uyuyorsa eklenebilir.
+
+**Commit:**  
+`feat(product): search playground ingestion inspector citation ve feedback akışları`
+
+---
+
+# 16. Aşama 9 — Araçtan Bağımsız Skill Sistemi
+
+## 16.1 Kanonik dizin
+
+Repository kökünde:
+
+```text
+skills/
+  catalog.yaml
+  schemas/
+    skill-manifest.schema.json
+  repository-audit/
+    SKILL.md
+    manifest.yaml
+    tests/
+  rag-ingestion-audit/
+  rag-retrieval-debug/
+  rag-eval-runner/
+  citation-verifier/
+  version-isolation-check/
+  history-ownership-check/
+```
+
+Model/CLI özel `.claude`, `.opencode`, `.codex` vb. dizinler kanonik kaynak olmayacaktır.
+
+CLI entegrasyonu gerekiyorsa:
+
+```text
+tools/skill-adapters/
+```
+
+altındaki generator/installer, kanonik manifest’ten çalışma zamanında adapter üretir; generated dosyalar repository otoritesi değildir.
+
+## 16.2 Skill manifest sözleşmesi
+
+Her skill:
+
+```text
+id
+version
+purpose
+triggers
+inputs
+outputs
+required_tools
+network_policy
+read_paths
+write_paths
+mutation_policy
+approval_required
+evidence_contract
+rollback
+tests
+license
+source_provenance
+checksum
+owner
+```
+
+alanlarını taşır.
+
+## 16.3 Güvenlik ilkeleri
+
+- Read-only default.
+- Repository mutation için açık kullanıcı onayı.
+- Force push, delete, secret, deploy gibi riskli işlemler ayrı capability.
+- External skill doğrudan install edilmez:
+  - source allowlist,
+  - commit/tag pin,
+  - checksum,
+  - license,
+  - script review,
+  - network review,
+  - sandbox test
+  zorunlu.
+- Install count/star tek başına güven göstergesi değildir.
+- Skill kendisini otomatik “aktif” sayamaz; yalnız öneri ve evidence üretir.
+- Skill output’u canonical DB/runtime gerçeğinin yerine geçmez.
+- Skill değişikliği de unit/contract test ve changelog gerektirir.
+
+## 16.4 İlk skill’ler
+
+### `history-ownership-check`
+- Commit trailer, author/committer, forbidden path ve contributor risk raporu.
+- Default read-only.
+- Rewrite yalnız ayrı script ve explicit approval ile.
+
+### `rag-retrieval-debug`
+- Query trace alır.
+- Stage adaylarını karşılaştırır.
+- Scope/version/profile leakage kontrol eder.
+- SQL plan ve index kullanımını raporlar.
+- Otomatik config değiştirmez.
+
+### `rag-eval-runner`
+- Gerçek fixture başlatır.
+- Fake path’i release modunda reddeder.
+- Baseline diff üretir.
+- Golden leakage guard çalıştırır.
+
+### `citation-verifier`
+- Answer claims, citation labels, quote snapshot ve locator bütünlüğünü doğrular.
+- Unsupported claim raporu üretir.
+
+### `rag-ingestion-audit`
+- Source → artifact → normalized → chunks → embeddings → indexes → activation zincirini kontrol eder.
+- Orphan ve stuck job raporu üretir.
+
+### `version-isolation-check`
+- Cross-project, stale-version, failed-version, profile leakage testleri.
+
+### `repository-audit`
+- CI, migration, dependency, docs/code drift ve active task durumunu raporlar.
+
+**Commit:**  
+`feat(skills): model ve CLI bağımsız doğrulanabilir RAG skill kataloğunu kur`
+
+---
+
+# 17. Aşama 10 — Deneysel Retrieval Genişlemeleri
+
+Bu aşama yalnız Aşama 6 eval raporunda açık kalan kategori problemi varsa başlar.
+
+## 17.1 Late interaction / ColBERT deneyi
+
+- Ayrı index.
+- Ayrı feature flag.
+- Existing hybrid ile A/B/offline comparison.
+- Storage, indexing time, query latency ve recall ölçümü.
+- Model/provider bağımsız port.
+- Kazanç yoksa kaldırılır; core şema kirletilmez.
+
+## 17.2 Graph retrieval deneyi
+
+Uygun soru türleri:
+
+- Çok belgeli varlık ilişkileri.
+- Global tema/özet.
+- Uzun zincirli bağlantı.
+- Kod çağrı/bağımlılık ilişkileri.
+
+Zorunlu koşullar:
+
+- Entity/relation provenance chunk’a geri bağlı.
+- Graph version document version ile uyumlu.
+- Incremental update ve deletion.
+- Extraction prompt/model versioned.
+- Maliyet ve stale graph ölçümü.
+- Graph sonucu da citation validator’dan geçer.
+- GraphRAG/LightRAG dış servisleri kanonik otorite olmaz.
+
+## 17.3 Deney kabul kapısı
+
+- Hedef kategori metriği anlamlı artar.
+- Diğer kategorilerde güvenlik/kalite regresyonu yok.
+- Operasyon maliyeti onaylı.
+- Rollback tek flag ile.
+- Veri migration’ı geri alınabilir.
+- Ürün UI debug görünümü eklenmiş.
+
+**Commit:**  
+`experiment(retrieval): eval ile gerekçelendirilmiş late-interaction veya graph deneyi`
+
+---
+
+# 18. Aşama 11 — Release, Temizlik ve Nihai Aktivasyon
+
+## 18.1 Repository temizliği
+
+- Root placeholder dizinler incelenir; kanonik olmayan boş iskeletler kaldırılır.
+- `.claude/` kalmaz.
+- Tool-local settings tracked olmaz.
+- Corporate endpoint/certificate/deployment özel ayarlar public core config’ten ayrılır.
+- README yalnız çalışan özellikleri yazar.
+- Eski sentetik eval raporları doğru etikete taşınır.
+- Generated artifact ve secret’lar `.gitignore`da.
+- Dead code ve gerçek gate olmayan feature flag’ler kaldırılır veya bağlanır.
+- Duplicate config alanları temizlenir.
+- Dependency lock, SBOM ve license inventory commit edilir.
+
+## 18.2 Release gate
+
+- CI tüm workflow’lar yeşil.
+- Migration upgrade/downgrade/upgrade.
+- Backup/restore.
+- Real fixture eval.
+- Live benchmark son onay.
+- Cross-project/version/profile leakage 0.
+- Invalid citation 0.
+- Prompt injection security suite yeşil.
+- Object storage GC dry-run temiz.
+- No stuck job.
+- Search playground ve source preview smoke.
+- Fresh clone deploy.
+- Rollback drill.
+- Git ownership check yalnız Mehmet author/committer politikasını doğruluyor.
+
+## 18.3 Nihai dokümanlar
+
+```text
+README.md
+docs/architecture/
+docs/adr/
+docs/runbooks/
+docs/evaluation/
+docs/security/
+docs/skills/
+CHANGELOG.md
+CONTRIBUTING.md
+AKTIF_GOREV.md
+done/completed-tasks.md
+```
+
+Bu görev yalnız tüm Global Definition of Done maddeleri işaretlendiğinde arşivlenir.
+
+**Commit:**  
+`release(context-vault): doğrulanmış RAG platformu ve ürün kalite kapılarını aktive et`
+
+---
+
+# 19. Dosya Bazlı Zorunlu Değişiklik Haritası
+
+| Dosya/Alan | Zorunlu değişiklik |
+|---|---|
+| `src/application/retrieval_service.py` | TypeError fallback kaldır; mandatory scope; active version/profile; score-preserving hit; gerçek dedupe/context. |
+| `src/application/answer_service.py` | Prompt’u `context.items`tan kur; structured answer; citation validation; user message/history persistence. |
+| `src/api/v1/chat.py` | project zorunlu; conversation ownership; resolver scope; model/query limitleri. |
+| `src/infrastructure/retrieval/base.py` | Typed filter ve fail-closed; yeni RetrievalHit. |
+| `dense.py` | Profile-aware `chunk_embeddings`; HNSW settings; legacy double scan kaldır. |
+| `lexical.py` | Query planner; GIN; active version; açıklanabilir stage score. |
+| `identifier.py` | Exact/prefix/trigram; gerçek index; active version. |
+| `rrf.py` | In-list duplicate fix; provenance; deterministic weighted extension. |
+| `context_builder.py` | selected IDs; parent/neighbor batch; model tokenizer; exact budget. |
+| `no_answer.py` | Eval-calibrated policy; query type/profile version. |
+| `workers/ingestion_tasks.py` | Legacy parser/chunker yerine kanonik IngestionService. |
+| `api/v1/documents.py` | Sync/async adapter; form instruction kaldır; scope/auth; doğru status code. |
+| `application/reindex_service.py` | Full metadata/index/profile copy; lock; failure state; correct counters. |
+| `models.py` | Composite constraints; retrieval run/outbox/citation snapshot/feedback. |
+| `alembic/versions/` | Index, FK, NOT NULL, unique active profile, new audit/outbox tabloları. |
+| `config.py` | Duplicate kaldır; gerçek flag; environment overlay; typed limits. |
+| `tests/evals/run_eval.py` | Gerçek runner; fake release’de forbidden; generation metrics gerçekten hesaplanır. |
+| `tests/evals/` | Fixture, labels, baseline, leakage, category reports. |
+| `.github/workflows/` | CI, eval, security, ownership. |
+| `.claude/` | Provenance denetimi sonrası araçtan bağımsız migration ve tamamen kaldırma. |
+| `skills/` | Kanonik manifest/skill/test yapısı. |
+| README/runbooks | Yalnız doğrulanmış davranış, kesin komut ve rollback. |
+
+---
+
+# 20. Test Matrisi
+
+## 20.1 Unit
+
+- Filter schema unknown-field fail.
+- Scope mandatory predicate.
+- Retriever duplicate normalization.
+- RRF duplicate/tie.
+- Score preservation.
+- Query planner classification.
+- Lexical query variants.
+- Identifier extraction/match.
+- Context budget/parent/neighbor.
+- Citation label validator.
+- Answer policy calibration loader.
+- Outbox state transition.
+- Skill manifest/schema.
+- Commit ownership parser.
+
+## 20.2 Database/integration
+
+- Blank migration upgrade.
+- Existing fixture upgrade.
+- Downgrade/upgrade.
+- Composite FK violations.
+- One active embedding profile.
+- HNSW/GIN/trigram index usage.
+- Project/version/profile isolation.
+- Transactional activation.
+- Concurrent re-index.
+- Worker redelivery/idempotency.
+- MinIO failure, DB failure, broker failure compensation.
+- Citation snapshot after source update/delete.
+- Real eval fixture ingestion.
+
+## 20.3 API/E2E
+
+- Auth/project required.
+- Conversation ownership.
+- Document upload → version → job → active.
+- DOCX/PDF/OCR/code source preview.
+- Search playground stages.
+- Exact identifier.
+- Cross-lingual.
+- Multi-document.
+- No-answer.
+- Prompt injection.
+- Citation open to correct version/locator.
+- Re-index and stale-version absence.
+- Delete/retention/GC.
+
+## 20.4 Load/resilience
+
+- Concurrent query and ingestion.
+- 100k/1m chunk profile benchmark.
+- HNSW ef_search sweep.
+- Reranker timeout/circuit breaker.
+- Celery retry storm.
+- Redis/MinIO/Postgres restart.
+- Large archive limits.
+- OCR timeout.
+- Graceful degradation signal.
+
+---
+
+# 21. Güvenlik ve Gizlilik Kuralları
+
+- Production’da authentication zorunlu.
+- Project/tenant scope DB predicate olarak zorunlu.
+- Mümkünse PostgreSQL RLS defense-in-depth olarak değerlendirilir.
+- Secret, private key, `.env`, credential dosyası hiçbir embedding/chat gateway’e gitmez.
+- Redaction, orijinal artifact’ın güvenli saklanması ve retrieval görünürlüğü ayrı politikalardır.
+- Repository ingestion kod çalıştırmaz; dependency install/build/test yapmaz.
+- Symlink/archive traversal engellenir.
+- External URL clone için allow/deny policy, timeout ve size limit.
+- Prompt evidence untrusted data.
+- Debug endpoint production’da kapalı ve auth’lu.
+- Raw query/content loglama minimize ve redacted.
+- Feedback PII policy.
+- Artifact/citation retention.
+- Dependency/skill supply-chain pin/checksum/license.
+- Default MinIO credential production’da startup hard-fail.
+- Public repository’de corporate endpoint ve environment-specific CA yalnız deployment overlay üzerinden yönetilir.
+
+---
+
+# 22. Commit ve Branch Stratejisi
+
+Aşama 0 rewrite dışında her değişiklik PR ile yapılır.
+
+Önerilen branch’ler:
+
+```text
+chore/history-ownership-policy
+chore/real-baseline-ci
+fix/project-version-profile-scope
+fix/retrieval-pipeline
+fix/context-grounding-citations
+refactor/canonical-ingestion
+test/real-rag-evaluation
+feat/observability
+feat/product-inspector
+feat/tool-neutral-skills
+experiment/advanced-retrieval
+release/context-vault-v3
+```
+
+Kurallar:
+
+- Bir PR tek aşama veya tek kabul kapısı.
+- Migration ve uygulama kodu aynı PR’da, rollback ile.
+- Generated snapshot hariç büyük format-only değişiklik işlevsel değişiklikle karıştırılmaz.
+- Commit author/committer Mehmet.
+- AI co-author trailer yok.
+- Her PR:
+  - amaç,
+  - risk,
+  - migration,
+  - test,
+  - eval diff,
+  - rollback,
+  - screenshots/traces
+  bölümlerini içerir.
+
+---
+
+# 23. Rollback ve Veri Koruma
+
+- Mevcut kullanıcı verisi silinmez.
+- Her schema migration önce backup ve restore doğrulaması.
+- Yeni retrieval feature flag eski güvenli baseline’a dönebilir.
+- Version activation atomic; eski active version rollback için saklanır.
+- Embedding profile fiziksel silinmez; önce pasif/retention.
+- Object artifact migration rollback’te otomatik silinmez.
+- Outbox ve GC idempotent.
+- History rewrite bundle yedeği ayrı tutulur.
+- Force push sonrası eski ref’ler GitHub’da erişilebilir bırakılmamalı; fakat bundle kontrollü offline yedektir.
+- Skill migration’da orijinal içerik lisans/provenance kararı verilmeden kaybedilmez.
+- Deneysel graph/late-interaction core retrieval şemasını geri döndürülemez biçimde değiştirmez.
+
+---
+
+# 24. Global Definition of Done
+
+## Sahiplik
+
+- [ ] İstenmeyen co-author trailer tüm hedef ref geçmişinden çıkarıldı.
+- [ ] Contributor görünümünde yalnız gerçek katkı sahipleri var.
+- [ ] Tree/commit sayısı koruma kanıtları arşivlendi.
+- [ ] Commit ownership CI/hook aktif.
+- [ ] `.claude/` repository’den kaldırıldı.
+- [ ] Kanonik skill’ler tool-neutral.
+
+## Güvenlik ve veri doğruluğu
+
+- [ ] Project scope zorunlu ve fail-closed.
+- [ ] Conversation sahipliği doğrulanıyor.
+- [ ] Yalnız active ready version aranıyor.
+- [ ] Yalnız active compatible embedding profile aranıyor.
+- [ ] Cross-project/version/profile leakage 0.
+- [ ] Unknown filter sessizce düşmüyor.
+- [ ] Prompt injection suite geçiyor.
+
+## Retrieval
+
+- [ ] Typed hit tüm stage skorlarını koruyor.
+- [ ] Dense profile-aware ve indeksli.
+- [ ] Lexical GIN/query planner gerçek.
+- [ ] Identifier exact/prefix/trigram gerçek.
+- [ ] RRF duplicate bug yok.
+- [ ] Content dedupe etkili.
+- [ ] Reranker fallback ve score persistence doğru.
+- [ ] HNSW ayarı uygulanıyor ve benchmarklı.
+
+## Context ve cevap
+
+- [ ] LLM yalnız ContextBuilder çıktısını kullanıyor.
+- [ ] Parent/neighbor version-safe.
+- [ ] Model tokenizer budget aşılmıyor.
+- [ ] Structured answer/citation validator aktif.
+- [ ] Invalid citation 0.
+- [ ] Immutable quote snapshot var.
+- [ ] No-answer gerçek eval ile kalibre.
+- [ ] User/assistant history scope’lu persist.
+
+## Ingestion
+
+- [ ] Tüm kaynaklar tek IngestionService kullanıyor.
+- [ ] ParserRouter/ChunkerRegistry gerçek worker yolunda.
+- [ ] Metadata kayıpsız.
+- [ ] Sync/async aynı contract.
+- [ ] Transactional outbox.
+- [ ] Re-index full/incremental eşdeğer.
+- [ ] Version activation atomic.
+- [ ] Storage GC/retention/runbook testli.
+
+## Evaluation ve operasyon
+
+- [ ] Fake eval yalnız contract smoke.
+- [ ] Minimum 120 gerçek fixture sorgusu.
+- [ ] Retrieval ve generation metrikleri ayrı.
+- [ ] Baseline comparison ve quality gates versioned.
+- [ ] CI workflow’ları gerçekten çalışıyor.
+- [ ] Retrieval/ingestion run ledger.
+- [ ] Trace/metrics/dashboard/alert.
+- [ ] Backup/restore ve rollback drill.
+- [ ] Fresh clone deployment geçiyor.
+- [ ] README ve runbook kodla uyumlu.
+
+## Ürün
+
+- [ ] Search playground.
+- [ ] Ingestion/chunk inspector.
+- [ ] Doğru sürüme açılan citation UX.
+- [ ] Feedback triage.
+- [ ] Tool-neutral skill kataloğu ve testleri.
+- [ ] Deneysel retrieval yalnız eval gerekçesiyle.
+
+---
+
+# 25. İlerleme Kaydı
+
+Bu bölüm her commit/PR sonrası güncellenir; geçmiş satırlar silinmez.
+
+```text
+Son güncelleme: 2026-08-31
+Sahip: Mehmet KARACAN
+İncelenen remote HEAD: 38c6ac5697431475351e577b2794399b349fb210
+Aktif aşama: Aşama 0 — Git Sahiplik Temizliği
+Durum: ENGELLİ
+Engel: Mevcut GitHub App kurulumu repository write/Git Data yetkisi vermedi; create/update işlemleri HTTP 403 "Resource not accessible by integration" ile reddedildi.
+Repository mutasyonu: YAPILMADI
+Hazırlanan çıktı:
+- Yeni AKTIF_GOREV.md
+- Güvenli history cleanup script’i
+Bir sonraki kesin adım:
+1. GitHub bağlantısına repository contents/ref write yetkisi ver veya cleanup script’ini Mehmet’in yetkili yerel terminalinde çalıştır.
+2. Aşama 0 doğrulama manifest’ini commit et.
+3. Yalnız bundan sonra Aşama 1’e geç.
+```
+
+## Aşama durumları
+
+- [ ] Aşama 0 — Git sahipliği ve tool-neutral cleanup
+- [ ] Aşama 1 — Gerçek baseline ve CI
+- [ ] Aşama 2 — Project/version/profile izolasyonu
+- [ ] Aşama 3 — Retrieval pipeline ve indeks
+- [ ] Aşama 4 — Context/grounding/citation
+- [ ] Aşama 5 — Kanonik ingestion/re-index
+- [ ] Aşama 6 — Gerçek evaluation
+- [ ] Aşama 7 — Observability/operasyon
+- [ ] Aşama 8 — Ürün deneyimi
+- [ ] Aşama 9 — Tool-neutral skill sistemi
+- [ ] Aşama 10 — Ölçümlü deneysel retrieval
+- [ ] Aşama 11 — Release ve nihai aktivasyon
+
+---
+
+# 26. İlk Uygulama Komut Sırası
+
+Aşama 0 için repository’den bağımsız iki eşdeğer araç hazırlanmıştır:
+
+```text
+remove_claude_coauthor_history.ps1   # Windows PowerShell
+remove_claude_coauthor_history.sh    # Git Bash / WSL / Linux / macOS
+```
+
+Mehmet’in çalışma ortamına uygun olan script kullanılacaktır.
+
+Script çalıştırılmadan önce:
+
+- GitHub hesabının `main`e force-with-lease push yetkisi doğrulanır.
+- Açık PR/branch durumu kontrol edilir.
+- `EXPECTED_HEAD` bu dosyadaki başlangıç SHA ile eşleşir.
+- `CONFIRM_FORCE_PUSH=YES` açık olarak verilmeden remote ref değiştirilmez.
+- Script çıktısı ve manifest `artifacts/audit/history-cleanup/` altında saklanır.
+- Contributor ekranı doğrulanır.
+- Yeni SHA bu dosyaya yazılır.
+
+---
+
+# 27. Referanslar
+
+Teknik örüntü kaynağı olarak incelenen başlıca projeler:
+
+- Haystack — `https://github.com/deepset-ai/haystack`
+- RAGFlow — `https://github.com/infiniflow/ragflow`
+- Microsoft GraphRAG — `https://github.com/microsoft/graphrag`
+- LightRAG — `https://github.com/HKUDS/LightRAG`
+- pgvector — `https://github.com/pgvector/pgvector`
+- Ragas paper — `https://arxiv.org/abs/2309.15217`
+- RAGChecker paper — `https://arxiv.org/abs/2408.08067`
+- BEIR paper — `https://arxiv.org/abs/2104.08663`
+- ColBERTv2 paper — `https://arxiv.org/abs/2112.01488`
+- RGB benchmark — `https://arxiv.org/abs/2307.01463`
+
+Bu referanslar kanonik dependency veya otorite değildir. Her fikir Context Vault’un kendi gerçek eval seti, veri güvenliği ve operasyon sınırlarıyla doğrulanmadan production’a alınmayacaktır.
