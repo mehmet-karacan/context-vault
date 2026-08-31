@@ -32,3 +32,11 @@ npm-debug.log*
 
 # KRCN local data (never publish)
 .krcn/
+# Tool-local ayarlar ve arabirimler (kanonik kaynak degildir)
+.claude/
+.codex/
+.opencode/
+.continue/
+.cursor/
+.env.local
+.git-ownership-allowlist

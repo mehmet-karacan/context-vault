@@ -1,0 +1,46 @@
+#!/usr/bin/env sh
+# commit-msg hook - Context Vault commit sahiplik politikasi
+#
+# Kural (varsayilan):
+#   Her turdeki "Co-Authored-By" / "Co-authored by" trailer'i reddedilir.
+#   Izinli istisnalar yalniz Mehmet KARACAN'in acik yazili onayi ile
+#   .git-ownership-allowlist dosyasina eklenebilir; satir, izinli tam
+#   trailer satiriyla birebir eslesmelidir.
+#
+# Kurulum (opsiyonel yerel):
+#   git config core.hooksPath .githooks
+#
+# CI, bu mantigin aynisini scripts/check_commit_ownership.py uzerinden
+# uygular; hook yerel erken uyari katmanidir.
+
+msg_file="$1"
+
+if [ ! -f "$msg_file" ]; then
+  echo "commit-msg: mesaj dosyasi bulunamadi: $msg_file" >&2
+  exit 1
+fi
+
+deny_trailer='^[[:space:]]*[Cc][Oo]-[Aa][Uu][Tt][Hh][Oo][Rr][Ee][Dd]-[Bb][Yy][[:space:]]*:'
+deny_trailer_alt='^[[:space:]]*[Cc][Oo]-[Aa][Uu][Tt][Hh][Oo][Rr][Ee][Dd][[:space:]]+[Bb][Yy][[:space:]]*:'
+
+allowlist=".git-ownership-allowlist"
+
+if grep -Eiq "$deny_trailer|$deny_trailer_alt" "$msg_file"; then
+  while IFS= read -r line; do
+    stripped=$(printf '%s' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    if [ -z "$stripped" ] || printf '%s' "$stripped" | grep -q '^#'; then
+      continue
+    fi
+    if grep -Fxq "$stripped" "$msg_file"; then
+      echo "commit-msg: OK (allowlist istisnasi): $stripped"
+      exit 0
+    fi
+  done < "$allowlist"
+
+  echo "commit-msg: REDDEDILDI - commit mesajinda ortak-yazar trailer'i var." >&2
+  echo "Politika: her turdeki Co-Authored-By default reddedilir." >&2
+  echo "Istisna icin Mehmet KARACAN'in acik onayi ve .git-ownership-allowlist gereklidir." >&2
+  exit 1
+fi
+
+exit 0

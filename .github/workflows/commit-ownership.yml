@@ -1,0 +1,25 @@
+name: commit-ownership
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-ownership:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Commit sahiplik ve vocab denetimi
+        run: |
+          python scripts/check_commit_ownership.py --all \
+            --repo "$GITHUB_WORKSPACE" \
+            --allowed-author "mehmet-karacan karacan.mehmet@hotmail.com" \
+            --allowed-author "Mehmet KARACAN karacan.mehmet@hotmail.com"
