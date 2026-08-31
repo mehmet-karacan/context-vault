@@ -1,0 +1,67 @@
+name: ci-backend
+
+on:
+  push:
+    paths:
+      - "document-rag-platform/services/backend/**"
+      - ".github/workflows/ci-backend.yml"
+  pull_request:
+    paths:
+      - "document-rag-platform/services/backend/**"
+      - ".github/workflows/ci-backend.yml"
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: raguser
+          POSTGRES_PASSWORD: rag_password
+          POSTGRES_DB: rag_platform
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U raguser"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://raguser:rag_password@localhost:5432/rag_platform
+    defaults:
+      run:
+        working-directory: document-rag-platform/services/backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependency install (lock)
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -r requirements-dev.txt
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: MyPy type check
+        run: mypy src
+
+      - name: Unit tests
+        run: pytest -m "not integration" --disable-warnings
+
+      - name: Integration tests
+        run: pytest -m integration --disable-warnings
+
+      - name: Migration upgrade/downgrade/upgrade
+        run: |
+          alembic upgrade head
+          alembic downgrade base
+          alembic upgrade head
+
+      - name: Coverage report
+        run: pytest --cov=src --cov-report=term-missing -m "not integration" --disable-warnings

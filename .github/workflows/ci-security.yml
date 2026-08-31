@@ -1,0 +1,42 @@
+name: ci-security
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit ownership check
+        run: |
+          python scripts/check_commit_ownership.py --all \
+            --repo "$GITHUB_WORKSPACE" \
+            --allowed-author "mehmet-karacan karacan.mehmet@hotmail.com" \
+            --allowed-author "Mehmet KARACAN karacan.mehmet@hotmail.com"
+
+      - name: Backend dependency vulnerability scan
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install -r document-rag-platform/services/backend/requirements.txt
+          pip-audit
+
+      - name: SBOM
+        run: |
+          python -m pip install cyclonedx-bom
+          cyclonedx-py -i --out-file sbom.cdx.json
+          ls -la sbom.cdx.json
+
+      - name: Frontend dependency audit
+        working-directory: document-rag-platform/apps/web
+        run: npm audit --audit-level=high --omit=dev

@@ -1,0 +1,38 @@
+name: ci-frontend
+
+on:
+  push:
+    paths:
+      - "document-rag-platform/apps/web/**"
+      - ".github/workflows/ci-frontend.yml"
+  pull_request:
+    paths:
+      - "document-rag-platform/apps/web/**"
+      - ".github/workflows/ci-frontend.yml"
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: document-rag-platform/apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: document-rag-platform/apps/web/package-lock.json
+
+      - name: Locked install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: TypeScript typecheck
+        run: npx tsc --noEmit
+
+      - name: Production build
+        run: npm run build

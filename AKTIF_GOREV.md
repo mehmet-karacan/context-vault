@@ -396,11 +396,11 @@ Contributor geçmişi temizlendikten sonra, ürün aşamalarından önce:
 
 ## 8.1 Eski görevi arşivle ve yeni görevi etkinleştir
 
-- [ ] Eski `AKTIF_GOREV.md` arşivlenir.
-- [ ] Bu dosya root’a yazılır.
-- [ ] Yeni rewrite sonrası `main` SHA bu dosyaya işlenir.
-- [ ] `done/completed-tasks.md` içerisine tarih, eski görev ve son gerçek commit kaydı eklenir.
-- [ ] README’de kanonik durum sayfası bu aktif göreve bağlanır.
+- [x] Eski `AKTIF_GOREV.md` arşivlendi.
+- [x] Yeni görev dokümanı root’a yazıldı.
+- [x] Rewrite-sonrası `main` SHA dosyaya işlendi.
+- [x] `done/completed-tasks.md` dosyasina Asama 0 kaydi eklendi.
+- [x] README kanonik durum sayfası aktife bağlı.
 
 ## 8.2 Runtime gerçeklik denetimi
 
@@ -463,8 +463,8 @@ Branch protection Aşama 0 rewrite sonrasında etkinleştirilir. `main`e doğrud
 - [ ] Unit/integration/eval ayrımı açık.
 - [ ] Fake eval release gate’e giremiyor.
 - [ ] CI gerçekten çalışıyor; `.gitkeep` workflow yok.
-- [ ] Runtime audit ile doküman iddiaları arasındaki fark raporlanmış.
-- [ ] Bu aşama hiçbir retrieval davranışını değiştirmiyor.
+- [x] Runtime audit farkı raporlandı (artifacts/audit).
+- [x] Bu aşamada retrieval davranışı değiştirilmedi.
 
 **Commit:**  
 `chore(baseline): gerçek runtime envanteri ve CI kalite kapılarını kur`

@@ -3,3 +3,5 @@
 -r requirements.txt
 pytest==7.4.4
 httpx==0.26.0
+ruff==0.4.4
+mypy==1.9.0

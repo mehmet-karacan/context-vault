@@ -1,0 +1,65 @@
+name: ci-rag-eval
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "document-rag-platform/services/backend/**"
+      - "document-rag-platform/tests/evals/**"
+      - ".github/workflows/ci-rag-eval.yml"
+  pull_request:
+    paths:
+      - "document-rag-platform/services/backend/**"
+      - "document-rag-platform/tests/evals/**"
+      - ".github/workflows/ci-rag-eval.yml"
+
+jobs:
+  rag-eval:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: raguser
+          POSTGRES_PASSWORD: rag_password
+          POSTGRES_DB: rag_platform
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U raguser"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://raguser:rag_password@localhost:5432/rag_platform
+    defaults:
+      run:
+        working-directory: document-rag-platform/services/backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependency install
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -r requirements-dev.txt
+
+      - name: Migration upgrade
+        run: alembic upgrade head
+
+      - name: Deterministic fixture ingestion (offline/real pipeline)
+        run: pytest tests/evals -m "evals" --disable-warnings
+
+      - name: Leakage and citation gates
+        run: |
+          pytest -m "leakage" tests/evals --disable-warnings
+          pytest -m "citation" tests/evals --disable-warnings
+
+      - name: Baseline comparison
+        run: pytest -m "baseline" tests/evals --disable-warnings
+
+      - name: Fake release gate
+        run: |
+          echo "Release evali, gercek indeks ve servis yolunu kullanmalidir; fake path burada reddedilir."
+          test -z "$(grep -rl FakeRetriever tests/evals || true)" || exit 1
