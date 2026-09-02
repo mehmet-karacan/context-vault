@@ -28,7 +28,9 @@ def test_startup_event_checks_schema_admission(monkeypatch):
 
 
 def test_all_expected_routers_are_mounted():
-    paths = {route.path for route in app.routes}
+    # OpenAPI is the public route contract. FastAPI may add internal router
+    # sentinel objects to ``app.routes`` that intentionally have no ``path``.
+    paths = set(app.openapi()["paths"])
     expected = {
         "/",
         "/health",

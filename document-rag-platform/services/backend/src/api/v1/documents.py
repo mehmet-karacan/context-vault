@@ -56,7 +56,7 @@ def extract_text_from_docx(file_path: str) -> str:
 
 
 def extract_text_from_pdf(file_path: str) -> str:
-    from PyPDF2 import PdfReader
+    from pypdf import PdfReader
 
     reader = PdfReader(file_path)
     return "\n".join(

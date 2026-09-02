@@ -8,7 +8,7 @@ then asserts:
 - per-page locator accuracy (``page_start``/``page_end``);
 - content units carry their originating page number;
 - sufficient text pages vs blank pages round-trip into coverage metadata;
-- the limited PyPDF2 fallback profile and capability marker are recorded;
+- the limited pypdf fallback profile and capability marker are recorded;
 - Docling is imported lazily and degrades gracefully when unavailable;
 - ``NormalizedSource`` ``to_dict()``/``from_dict()`` round-trip losslessly.
 """
@@ -72,7 +72,7 @@ def test_source_shape_is_document(tmp_path):
     assert source.title == "x.pdf"
     assert source.language is None
     assert source.metadata["parser"] == "pdf"
-    assert source.metadata["parser_profile"] == "pypdf2-fallback"
+    assert source.metadata["parser_profile"] == "pypdf-fallback"
     assert source.metadata["origin"] == "x.pdf"
 
 
@@ -169,7 +169,7 @@ def test_force_fallback_option_disables_docling_path(digital_pdf):
     source = PdfParser().parse(
         digital_pdf, "digital.pdf", options={"force_fallback": True}
     )
-    assert source.metadata["parser_profile"] == "pypdf2-fallback"
+    assert source.metadata["parser_profile"] == "pypdf-fallback"
 
 
 # --- Docling lazy import / graceful degradation ---------------------------
@@ -188,7 +188,7 @@ def test_docling_adapter_is_lazy_and_raises_unavailable(digital_pdf):
 
 def test_pdf_parser_falls_back_gracefully_when_docling_unavailable(digital_pdf):
     source = PdfParser().parse(digital_pdf, "digital.pdf")
-    assert source.metadata["parser_profile"] == "pypdf2-fallback"
+    assert source.metadata["parser_profile"] == "pypdf-fallback"
 
 
 # --- JSON round trip -------------------------------------------------------

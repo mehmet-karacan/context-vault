@@ -17,6 +17,10 @@ dist/
 build/
 .next/
 out/
+reports/
+test-results/
+.coverage
+coverage.xml
 
 # IDE
 .idea/

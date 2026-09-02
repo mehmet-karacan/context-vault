@@ -1,0 +1,9 @@
+{
+  "minimum_paths": 4,
+  "strict_paths": [
+    "document-rag-platform/services/backend/src/domain",
+    "document-rag-platform/services/backend/src/migration_settings.py",
+    "document-rag-platform/services/backend/src/persistence/__init__.py",
+    "document-rag-platform/services/backend/src/persistence/base.py"
+  ]
+}

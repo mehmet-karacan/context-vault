@@ -31,7 +31,7 @@ class DocumentParser(Protocol):
         self,
         file_path: str,
         filename: str,
-        options: Optional[dict] = None,
+        options: Optional[dict[str, Any]] = None,
     ) -> NormalizedSource:
         """Returns a ``NormalizedSource`` for the given file.
 
@@ -49,7 +49,7 @@ class OcrProvider(Protocol):
         self,
         image_or_page: Any,
         languages: List[str],
-        options: Optional[dict] = None,
+        options: Optional[dict[str, Any]] = None,
     ) -> Any:
         """Returns an OcrResult (full_text, blocks, confidence, ...)."""
         ...
@@ -88,7 +88,7 @@ class VectorRetriever(Protocol):
         self,
         query_embedding: List[float],
         top_k: int,
-        filters: Optional[dict] = None,
+        filters: Optional[dict[str, Any]] = None,
     ) -> List[Any]: ...
 
 
@@ -100,7 +100,7 @@ class LexicalRetriever(Protocol):
         self,
         query_text: str,
         top_k: int,
-        filters: Optional[dict] = None,
+        filters: Optional[dict[str, Any]] = None,
     ) -> List[Any]: ...
 
 

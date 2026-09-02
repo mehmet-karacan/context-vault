@@ -1,17 +1,10 @@
-FROM python:3.12-slim
+FROM python:3.12-alpine@sha256:b64631e04e4920160c50fbe8d8df828f7f35f06f425cb44aa09bca53e708a35a
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    libmagic1 \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-# Trust the corporate root CA so the AI gateway's TLS-intercepted
-# certificate chain (aihub-api.turktelekom.com.tr) verifies correctly.
-COPY ttroot-g3.crt /usr/local/share/ca-certificates/ttroot-g3.crt
-RUN update-ca-certificates
+# Install the one runtime library required by python-magic and apply the
+# current Alpine security repository updates in the same layer.
+RUN apk upgrade --no-cache && apk add --no-cache libmagic
 
 # Install the exact locked runtime dependency graph.
 COPY pyproject.toml uv.lock ./
@@ -19,10 +12,6 @@ RUN pip install --no-cache-dir uv==0.12.5 \
     && uv sync --frozen --no-dev --no-install-project
 
 ENV PATH="/app/.venv/bin:$PATH"
-
-# httpx/requests use certifi's bundled CA file, not the OS trust store —
-# append the corporate root there too so outbound TLS to the gateway verifies.
-RUN cat /usr/local/share/ca-certificates/ttroot-g3.crt >> "$(python -c 'import certifi; print(certifi.where())')"
 
 # Copy application
 COPY . .

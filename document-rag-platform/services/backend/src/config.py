@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str
 
     # --- LLM gateway (LiteLLM-compatible) ------------------------------
-    LITELLM_BASE_URL: str = "https://aihub-api.turktelekom.com.tr/v1"
+    LITELLM_BASE_URL: str = "https://llm-gateway.example.invalid/v1"
     # Required. There is no default credential; failing fast at startup
     # is clearer than a downstream 401 from the gateway mid-request.
     LITELLM_API_KEY: str
