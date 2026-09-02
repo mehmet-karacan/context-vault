@@ -13,6 +13,7 @@ import tempfile
 import uuid
 from datetime import datetime
 from typing import List, Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
@@ -28,7 +29,9 @@ from ...infrastructure.storage import object_keys
 from ...infrastructure.storage.minio_storage import MinioObjectStorage
 from ...llm import PASSAGE_INSTRUCTION, embed_texts
 from ...models import Chunk, Document, DocumentVersion, IngestionJob, Project
+from src.domain.identity import PrincipalContext
 from src.infrastructure.rate_limiter import rate_limiter
+from src.infrastructure.security.auth import get_principal_context, require_project_access
 
 router = APIRouter(tags=["documents"])
 
@@ -273,15 +276,14 @@ def _upload_document_async(
 @router.post("/documents/upload")
 def upload_document(
     file: UploadFile = File(...),
-    project_id: str = Form(...),
+    project_id: UUID = Form(...),
     chunk_size: int = Form(500),
     instruction: str = Form(PASSAGE_INSTRUCTION),
     _: None = Depends(rate_limiter),
     db: Session = Depends(get_db),
+    principal: PrincipalContext = Depends(get_principal_context),
 ):
-    project = db.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = require_project_access(db, principal, project_id)
 
     if settings.FEATURE_ASYNC_INGESTION:
         return _upload_document_async(file, project, db)
@@ -351,15 +353,11 @@ def upload_document(
             "message": f"{file.filename} {len(chunks)} parçaya bölünüp vektörlendi.",
         }
 
-    except Exception as e:
+    except Exception as exc:
         document.status = "error"
-        document.error_message = str(e)
+        document.error_message = "document ingestion failed"
         db.commit()
-        return {
-            "success": False,
-            "document": serialize_document(document),
-            "error": str(e),
-        }
+        raise HTTPException(status_code=422, detail="Document ingestion failed") from exc
 
     finally:
         if tmp_path and os.path.exists(tmp_path):
@@ -367,10 +365,13 @@ def upload_document(
 
 
 @router.get("/documents")
-def list_documents(project_id: Optional[str] = None, db: Session = Depends(get_db)):
-    query = db.query(Document)
-    if project_id:
-        query = query.filter(Document.project_id == project_id)
+def list_documents(
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    principal: PrincipalContext = Depends(get_principal_context),
+):
+    require_project_access(db, principal, project_id)
+    query = db.query(Document).filter(Document.project_id == project_id)
     documents = query.order_by(Document.uploaded_at.desc()).all()
     return [
         serialize_document(doc, job=_latest_job_for_document(db, doc.id))
@@ -378,19 +379,38 @@ def list_documents(project_id: Optional[str] = None, db: Session = Depends(get_d
     ]
 
 
-@router.get("/documents/{doc_id}")
-def get_document(doc_id: str, db: Session = Depends(get_db)):
-    document = db.get(Document, doc_id)
+def _scoped_document(db: Session, project_id: UUID, doc_id: UUID) -> Document:
+    document = (
+        db.query(Document)
+        .filter(Document.id == doc_id, Document.project_id == project_id)
+        .first()
+    )
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+    return document
+
+
+@router.get("/documents/{doc_id}")
+def get_document(
+    doc_id: UUID,
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    principal: PrincipalContext = Depends(get_principal_context),
+):
+    require_project_access(db, principal, project_id)
+    document = _scoped_document(db, project_id, doc_id)
     return serialize_document(document, job=_latest_job_for_document(db, document.id))
 
 
 @router.get("/documents/{doc_id}/status")
-def get_document_status(doc_id: str, db: Session = Depends(get_db)):
-    document = db.get(Document, doc_id)
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+def get_document_status(
+    doc_id: UUID,
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    principal: PrincipalContext = Depends(get_principal_context),
+):
+    require_project_access(db, principal, project_id)
+    document = _scoped_document(db, project_id, doc_id)
     progress = {"uploaded": 20, "processing": 60, "indexed": 100, "error": 0}
     return {
         "id": str(document.id),
@@ -400,11 +420,15 @@ def get_document_status(doc_id: str, db: Session = Depends(get_db)):
     }
 
 
-@router.post("/documents/{doc_id}/delete")
-def delete_document(doc_id: str, db: Session = Depends(get_db)):
-    document = db.get(Document, doc_id)
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+@router.delete("/documents/{doc_id}")
+def delete_document(
+    doc_id: UUID,
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    principal: PrincipalContext = Depends(get_principal_context),
+):
+    require_project_access(db, principal, project_id)
+    document = _scoped_document(db, project_id, doc_id)
     db.delete(document)
     db.commit()
     return {"success": True, "message": f"Document {doc_id} deleted"}

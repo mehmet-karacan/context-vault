@@ -7,9 +7,12 @@ mutates job state — jobs are only ever advanced by the worker.
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from uuid import UUID
 
 from ...db import get_db
-from ...models import IngestionEvent, IngestionJob
+from ...models import Document, DocumentVersion, IngestionEvent, IngestionJob
+from src.domain.identity import PrincipalContext
+from src.infrastructure.security.auth import get_principal_context, require_project_access
 
 router = APIRouter(prefix="/ingestion-jobs", tags=["ingestion-jobs"])
 
@@ -42,22 +45,43 @@ def _serialize_event(event: IngestionEvent) -> dict:
     }
 
 
-@router.get("/{job_id}")
-def get_ingestion_job(job_id: str, db: Session = Depends(get_db)):
-    job = db.get(IngestionJob, job_id)
+def _scoped_job(db: Session, project_id: UUID, job_id: UUID) -> IngestionJob:
+    job = (
+        db.query(IngestionJob)
+        .join(DocumentVersion, IngestionJob.version_id == DocumentVersion.id)
+        .join(Document, DocumentVersion.document_id == Document.id)
+        .filter(IngestionJob.id == job_id, Document.project_id == project_id)
+        .first()
+    )
     if not job:
         raise HTTPException(status_code=404, detail="Ingestion job not found")
+    return job
+
+
+@router.get("/{job_id}")
+def get_ingestion_job(
+    job_id: UUID,
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    principal: PrincipalContext = Depends(get_principal_context),
+):
+    require_project_access(db, principal, project_id)
+    job = _scoped_job(db, project_id, job_id)
     return _serialize_job(job)
 
 
 @router.get("/{job_id}/events")
-def list_ingestion_job_events(job_id: str, db: Session = Depends(get_db)):
-    job = db.get(IngestionJob, job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Ingestion job not found")
+def list_ingestion_job_events(
+    job_id: UUID,
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    principal: PrincipalContext = Depends(get_principal_context),
+):
+    require_project_access(db, principal, project_id)
+    job = _scoped_job(db, project_id, job_id)
     events = (
         db.query(IngestionEvent)
-        .filter(IngestionEvent.job_id == job_id)
+        .filter(IngestionEvent.job_id == job.id)
         .order_by(IngestionEvent.created_at.asc())
         .all()
     )

@@ -52,7 +52,14 @@ services:
     container_name: rag-backend
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      APP_ENV: ${APP_ENV:-local}
+      BIND_HOST: ${BIND_HOST:-0.0.0.0}
+      AUTH_MODE: ${AUTH_MODE:-api_key}
+      API_KEY_PEPPER: ${API_KEY_PEPPER}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000}
       REDIS_URL: redis://redis:6379
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_BACKEND: ${RATE_LIMIT_BACKEND:-redis}
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
@@ -64,6 +71,8 @@ services:
       CHAT_MODEL: ${CHAT_MODEL}
       CHAT_MODELS: ${CHAT_MODELS}
       FEATURE_ASYNC_INGESTION: ${FEATURE_ASYNC_INGESTION:-true}
+      FEATURE_REPOSITORY_INGESTION: ${FEATURE_REPOSITORY_INGESTION:-false}
+      REPOSITORY_ALLOWED_HOSTS: ${REPOSITORY_ALLOWED_HOSTS:-}
     ports:
       - "8000:8000"
     depends_on:

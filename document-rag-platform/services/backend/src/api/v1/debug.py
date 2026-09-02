@@ -14,90 +14,37 @@ skorlarını gösterebilir".
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+import hashlib
+from typing import List, Optional
+from uuid import UUID
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from ...db import get_db
 from ...llm import QUERY_INSTRUCTION, embed_text
-from ...models import Chunk, Document
+from src.api.v1.chat import _build_resolvers
 from src.application.retrieval_service import RetrievalService
+from src.config import settings
+from src.domain.identity import PrincipalContext
+from src.domain.retrieval_scope import RetrievalScope
 from src.infrastructure.rate_limiter import rate_limiter
+from src.infrastructure.observability import log_structured
 from src.infrastructure.retrieval.dense import DenseVectorRetriever
 from src.infrastructure.retrieval.identifier import IdentifierRetriever
 from src.infrastructure.retrieval.lexical import LexicalRetriever
+from src.infrastructure.security.auth import require_admin, require_project_access
 
 router = APIRouter(tags=["debug"])
 
 
 class RetrievalDebugRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     query: str
-    project_id: Optional[str] = None
-    document_ids: Optional[List[str]] = None
-    scope: str = "all"
-    debug: bool = True
-
-
-def _chunk_to_dict(chunk: Chunk, doc: Optional[Document]) -> Dict[str, Any]:
-    """Map an ORM Chunk (+ its Document) into the chunk shape ContextBuilder
-    reads (chunk_id / source_id / chunk_type / content / sequence_no /
-    heading_path / locator / content_hash / metadata)."""
-    locator: Dict[str, Any] = {}
-    for key in ("page_start", "page_end", "line_start", "line_end"):
-        value = getattr(chunk, key, None)
-        if value is not None:
-            locator[key] = value
-    metadata = dict(getattr(chunk, "metadata_json", None) or {})
-    if doc is not None:
-        metadata["document_name"] = doc.name
-        metadata["source_type"] = doc.source_type
-    return {
-        "chunk_id": str(chunk.id),
-        "source_id": str(chunk.document_id),
-        "chunk_type": chunk.chunk_type or "document",
-        "content": chunk.content or "",
-        "heading_path": list(chunk.heading_path or []),
-        "locator": locator,
-        "content_hash": chunk.content_hash or "",
-        "sequence_no": chunk.sequence_no or 0,
-        "metadata": metadata,
-    }
-
-
-def _build_resolvers(db: Session):
-    """Build DB-backed chunk / neighbour resolvers for a session."""
-
-    # Pre-fetch documents so we can attach names cheaply.
-    def chunk_resolver(chunk_id: str) -> Optional[Dict[str, Any]]:
-        row = (
-            db.query(Chunk, Document)
-            .join(Document, Chunk.document_id == Document.id)
-            .filter(Chunk.id == chunk_id)
-            .first()
-        )
-        if row is None:
-            return None
-        chunk, doc = row
-        return _chunk_to_dict(chunk, doc)
-
-    def neighbor_resolver(source_id: str, sequence_no: int) -> Optional[Dict[str, Any]]:
-        row = (
-            db.query(Chunk, Document)
-            .join(Document, Chunk.document_id == Document.id)
-            .filter(
-                Chunk.document_id == source_id,
-                Chunk.sequence_no == sequence_no,
-            )
-            .first()
-        )
-        if row is None:
-            return None
-        chunk, doc = row
-        return _chunk_to_dict(chunk, doc)
-
-    return chunk_resolver, neighbor_resolver
+    project_id: UUID
+    document_ids: Optional[List[UUID]] = None
 
 
 @router.post("/debug/retrieval")
@@ -105,17 +52,31 @@ def debug_retrieval(
     req: RetrievalDebugRequest,
     _: None = Depends(rate_limiter),
     db: Session = Depends(get_db),
+    principal: PrincipalContext = Depends(require_admin),
 ):
-    """Run the coordinated Aşama 5 retrieval and return the full debug payload."""
-    filters: Dict[str, Any] = {}
-    if req.project_id:
-        filters["project_id"] = req.project_id
-    if req.document_ids:
-        filters["document_ids"] = req.document_ids
-    if req.scope:
-        filters["scope"] = req.scope
+    """Run retrieval diagnostics without exposing raw context content."""
+    if not settings.retrieval_debug_enabled:
+        raise HTTPException(status_code=404, detail="Not found")
+    require_project_access(db, principal, req.project_id)
+    log_structured(
+        "retrieval_debug_access",
+        project_id=str(req.project_id),
+        query_id=hashlib.sha256(req.query.encode("utf-8")).hexdigest()[:16],
+        extra_fields={
+            "event": "retrieval_debug_access",
+            "principal_id": str(principal.principal_id),
+        },
+    )
+    scope = RetrievalScope(
+        principal_id=principal.principal_id,
+        workspace_id=principal.workspace_id,
+        project_id=req.project_id,
+        allowed_document_ids=(
+            tuple(req.document_ids) if req.document_ids is not None else None
+        ),
+    )
 
-    chunk_resolver, neighbor_resolver = _build_resolvers(db)
+    chunk_resolver, neighbor_resolver = _build_resolvers(db, scope)
 
     service = RetrievalService(
         dense_retriever=DenseVectorRetriever(session=db),
@@ -126,5 +87,5 @@ def debug_retrieval(
         neighbor_resolver=neighbor_resolver,
     )
 
-    result = service.retrieve(req.query, filters, debug=req.debug)
-    return result.to_dict(debug=req.debug)
+    result = service.retrieve(req.query, scope, debug=True)
+    return result.to_dict(debug=True)

@@ -26,7 +26,33 @@ def test_database_is_at_expected_v3_contract() -> None:
                 SELECT COUNT(*)
                 FROM information_schema.tables
                 WHERE table_schema = 'public'
-                  AND table_name IN ('projects', 'documents', 'document_versions', 'chunks')
+                  AND table_name IN (
+                    'projects', 'documents', 'document_versions', 'chunks',
+                    'principals', 'workspaces', 'workspace_memberships', 'api_keys'
+                  )
                 """
             )
-            assert cursor.fetchone() == (4,)
+            assert cursor.fetchone() == (8,)
+
+            cursor.execute(
+                """
+                SELECT is_nullable
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'projects'
+                  AND column_name = 'workspace_id'
+                """
+            )
+            assert cursor.fetchone() == ("NO",)
+
+            cursor.execute(
+                """
+                SELECT data_type
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'api_keys'
+                  AND column_name IN ('created_at', 'expires_at', 'revoked_at', 'last_used_at')
+                GROUP BY data_type
+                """
+            )
+            assert cursor.fetchall() == [("timestamp with time zone",)]

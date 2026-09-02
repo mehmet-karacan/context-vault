@@ -122,7 +122,9 @@ def test_sql_uses_simple_config_and_filters():
 def test_search_returns_candidate_shape_via_fake_session():
     session = FakeSession(rows=[_Row("chunk-a", 0.88), _Row("chunk-b", 0.6)])
     retriever = LexicalRetriever(session=session)
-    results = retriever.search("billing", top_k=5)
+    results = retriever.search(
+        "billing", top_k=5, filters={"project_id": "project"}
+    )
     assert [c.chunk_id for c in results] == ["chunk-a", "chunk-b"]
     assert {c.source for c in results} == {"lexical"}
     assert results[0].rank == 1

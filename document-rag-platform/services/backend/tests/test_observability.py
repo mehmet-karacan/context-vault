@@ -10,7 +10,7 @@ import io
 import json
 import logging
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Route
@@ -150,15 +150,32 @@ def _cors_origins(app) -> list:
     return []
 
 
+def _secured_settings(app_env: str, **overrides):
+    values = {
+        "APP_ENV": app_env,
+        "AUTH_MODE": "api_key",
+        "API_KEY_PEPPER": "p" * 32,
+        "DATABASE_URL": "postgresql://app:nondefault@db:5432/context_vault",
+        "MINIO_ACCESS_KEY": "context-vault-app",
+        "MINIO_SECRET_KEY": "non-default-storage-secret",
+        "RATE_LIMIT_ENABLED": app_env in {"production", "staging"},
+        "RATE_LIMIT_BACKEND": (
+            "redis" if app_env in {"production", "staging"} else "memory"
+        ),
+    }
+    values.update(overrides)
+    return Settings(**values)
+
+
 def test_cors_never_wildcard_in_production():
-    prod_app = create_app(Settings(APP_ENV="production"))
+    prod_app = create_app(_secured_settings("production"))
     origins = _cors_origins(prod_app)
     assert "*" not in origins
     assert origins == []
 
 
 def test_cors_defaults_to_dev_origins_in_development():
-    dev_app = create_app(Settings(APP_ENV="development"))
+    dev_app = create_app(_secured_settings("development"))
     origins = _cors_origins(dev_app)
     assert "http://localhost:3000" in origins
     assert "*" not in origins
@@ -166,8 +183,8 @@ def test_cors_defaults_to_dev_origins_in_development():
 
 def test_cors_respects_explicit_allowlist():
     app = create_app(
-        Settings(
-            APP_ENV="production",
+        _secured_settings(
+            "production",
             CORS_ALLOW_ORIGINS="https://a.example.com,https://b.example.com",
         )
     )
@@ -182,7 +199,7 @@ def _boom():
 
 def test_generic_error_hides_stack_trace_when_not_debug(monkeypatch):
     monkeypatch.setattr("src.main.init_db", lambda: None)
-    app = create_app(Settings(APP_ENV="development", API_DEBUG=False))
+    app = create_app(_secured_settings("development", API_DEBUG=False))
     app.add_api_route("/boom", _boom, methods=["GET"])
     with TestClient(app, raise_server_exceptions=False) as client:
         response = client.get("/boom")
@@ -194,7 +211,7 @@ def test_generic_error_hides_stack_trace_when_not_debug(monkeypatch):
 
 def test_debug_error_includes_stack_details_when_api_debug_on(monkeypatch):
     monkeypatch.setattr("src.main.init_db", lambda: None)
-    app = create_app(Settings(APP_ENV="development", API_DEBUG=True))
+    app = create_app(_secured_settings("development", API_DEBUG=True))
     app.add_api_route("/boom", _boom, methods=["GET"])
     with TestClient(app, raise_server_exceptions=False) as client:
         response = client.get("/boom")
@@ -235,6 +252,54 @@ def test_rate_limiter_is_noop_when_disabled():
         assert client.get("/limited").status_code == 200
         assert client.get("/limited").status_code == 200
         assert client.get("/limited").status_code == 200
+
+
+def test_rate_limiter_fails_closed_when_store_is_unavailable():
+    class BrokenStore:
+        async def allow(self, key, limit, window_seconds):
+            raise ConnectionError("redis unavailable")
+
+    limiter = RateLimiter(
+        enabled=True, max_requests=1, window_seconds=60, store=BrokenStore()
+    )
+    app = FastAPI()
+
+    @app.get("/limited")
+    async def limited(_: None = Depends(limiter)):
+        return {"ok": True}
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.get("/limited")
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Rate limit service unavailable"}
+
+
+def test_rate_limit_key_contains_principal_route_and_cost_class():
+    captured = []
+
+    class CapturingStore:
+        async def allow(self, key, limit, window_seconds):
+            captured.append(key)
+            return True
+
+    async def identify(request: Request):
+        request.state.principal = type("P", (), {"principal_id": "principal-7"})()
+
+    limiter = RateLimiter(
+        enabled=True, max_requests=1, window_seconds=60, store=CapturingStore()
+    )
+    app = FastAPI()
+
+    @app.post("/api/v1/chat/query")
+    async def limited(
+        _: None = Depends(identify),
+        __: None = Depends(limiter),
+    ):
+        return {"ok": True}
+
+    with TestClient(app) as client:
+        assert client.post("/api/v1/chat/query").status_code == 200
+    assert captured == ["rl:principal-7:POST:/api/v1/chat/query:generation"]
 
 
 def test_sliding_window_store_respects_injectable_clock():

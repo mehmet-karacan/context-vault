@@ -81,7 +81,24 @@ DOCUMENT_FILTER_FIELDS: Dict[str, str] = {
 # Aliases accepted on the input filters dict: {"document_ids" -> document_id IN}.
 ALIASES: Dict[str, Dict[str, Any]] = {
     "document_ids": {"field": "document_id", "op": "in_"},
+    "source_types": {"field": "source_type", "op": "in_", "table": "document"},
 }
+
+ALLOWED_FILTER_KEYS = {
+    *CHUNK_FILTER_FIELDS,
+    *DOCUMENT_FILTER_FIELDS,
+    *ALIASES,
+    "scope",
+    "active_versions_only",
+    "embedding_profile_id",
+}
+
+
+def require_scoped_filters(filters: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Reject repository calls that do not carry a concrete project scope."""
+    if not filters or not filters.get("project_id"):
+        raise ValueError("retrieval repository requires project_id scope")
+    return filters
 
 # scope -> set of source_type values (AKTIF_GOREV.md §5.6 / §6).
 SCOPE_SOURCE_TYPES: Dict[str, List[str]] = {
@@ -97,24 +114,26 @@ def normalize_filters(
 ) -> List[FilterTerm]:
     """Flatten a caller-supplied filters dict into a deterministic FilterTerm list.
 
-    Recognized keys: the CHUNK_FILTER_FIELDS / DOCUMENT_FILTER_FIELDS set plus
-    the ``ALIASES`` and a ``scope`` shortcut (``all | documents | images |
-    code``). Unknown keys are ignored so future filters never break existing
-    retrievers. Empty ``document_ids`` collapses to no filter (an empty ``IN``
-    would be meaningless). An explicit ``source_type`` wins over ``scope``.
+    Unknown keys fail closed. Empty ``document_ids`` and ``source_types`` emit
+    a constant-false predicate rather than collapsing into an unscoped query.
     """
     terms: List[FilterTerm] = []
     if not filters:
         return terms
+
+    unknown = sorted(set(filters) - ALLOWED_FILTER_KEYS)
+    if unknown:
+        raise ValueError(f"unknown retrieval filter(s): {', '.join(unknown)}")
 
     explicit_source_type = None
     for key in ("source_type", ALIASES.get("document_ids", {}).get("field")):
         pass  # handled below via canonical iteration
 
     def _push(table: str, field: str, op: str, value: Any) -> None:
-        # Skip no-op / empty values so we never emit a vacuous predicate.
+        # Empty membership is an explicit deny-all scope, never a no-op.
         if op in ("eq", "in_"):
             if isinstance(value, (list, tuple, set)) and not value:
+                terms.append(FilterTerm(table=table, field=field, op="false", value=[]))
                 return
             if value is None:
                 return
@@ -125,7 +144,7 @@ def normalize_filters(
             continue
         if key in ALIASES:
             alias = ALIASES[key]
-            _push("chunk", alias["field"], alias["op"], value)
+            _push(alias.get("table", "chunk"), alias["field"], alias["op"], value)
             continue
         if key in CHUNK_FILTER_FIELDS:
             _push("chunk", key, CHUNK_FILTER_FIELDS[key], value)
@@ -135,7 +154,18 @@ def normalize_filters(
                 explicit_source_type = value
             _push("document", key, DOCUMENT_FILTER_FIELDS[key], value)
             continue
-        # Unknown keys intentionally ignored.
+        if key == "active_versions_only":
+            if value is True:
+                terms.append(
+                    FilterTerm(
+                        table="chunk", field="version_id", op="active_version", value=True
+                    )
+                )
+            continue
+        if key == "embedding_profile_id":
+            # Dense profile enforcement is applied in its repository adapter;
+            # non-dense retrievers still carry the same authorized scope.
+            continue
 
     scope = filters.get(scope_key)
     if (
@@ -188,6 +218,10 @@ def render_where(
         elif term.op == "is_":
             clauses.append(f"{column} IS :{pname}")
             params[pname] = term.value
+        elif term.op == "false":
+            clauses.append("FALSE")
+        elif term.op == "active_version":
+            clauses.append(f"{chunk_alias}.version_id = {document_alias}.active_version_id")
         else:
             raise ValueError(f"unsupported filter op: {term.op!r}")
     return (" AND ".join(clauses), params)

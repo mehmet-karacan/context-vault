@@ -270,9 +270,13 @@ export default function Home() {
     }
   }, []);
 
-  const fetchDocuments = useCallback(async (projectId?: string) => {
+  const fetchDocuments = useCallback(async (projectId: string) => {
+    if (!projectId) {
+      setDocuments([]);
+      return;
+    }
     try {
-      const url = projectId ? `/documents?project_id=${projectId}` : "/documents";
+      const url = `/documents?project_id=${projectId}`;
       const response = await fetch(apiUrl(url));
       const data: ApiDocument[] = await response.json();
       setDocuments(
@@ -301,8 +305,8 @@ export default function Home() {
   useEffect(() => {
     // Network completion, not the effect body, performs the state update.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void fetchDocuments(documentsFilterProjectId);
-  }, [documentsFilterProjectId, fetchDocuments]);
+    void fetchDocuments(documentsFilterProjectId || selectedProjectId);
+  }, [documentsFilterProjectId, selectedProjectId, fetchDocuments]);
 
   const createProject = async () => {
     const name = newProjectName.trim();
@@ -331,8 +335,10 @@ export default function Home() {
       const tick = async () => {
         try {
           const [jobRes, evRes] = await Promise.all([
-            fetch(apiUrl(`/ingestion-jobs/${jobId}`)),
-            fetch(apiUrl(`/ingestion-jobs/${jobId}/events`)),
+            fetch(apiUrl(`/ingestion-jobs/${jobId}?project_id=${selectedProjectId}`)),
+            fetch(
+              apiUrl(`/ingestion-jobs/${jobId}/events?project_id=${selectedProjectId}`),
+            ),
           ]);
           const job: IngestionJob | null = jobRes.ok ? await jobRes.json() : null;
           const events: IngestionJobEvent[] = evRes.ok ? await evRes.json() : [];
@@ -398,7 +404,7 @@ export default function Home() {
             setUploadJobs((prev) => [...prev, job]);
             await pollJob(data.job_id);
           }
-          await fetchDocuments(documentsFilterProjectId);
+          await fetchDocuments(documentsFilterProjectId || selectedProjectId);
           await fetchProjects();
         }
       } catch (error) {
@@ -429,9 +435,13 @@ export default function Home() {
 
   const deleteDocument = async (id: string) => {
     try {
-      const response = await fetch(apiUrl(`/documents/${id}/delete`), { method: "POST" });
+      if (!selectedProjectId) return;
+      const response = await fetch(
+        apiUrl(`/documents/${id}?project_id=${selectedProjectId}`),
+        { method: "DELETE" },
+      );
       if (response.ok) {
-        await fetchDocuments(documentsFilterProjectId);
+        await fetchDocuments(documentsFilterProjectId || selectedProjectId);
         await fetchProjects();
       }
     } catch (error) {

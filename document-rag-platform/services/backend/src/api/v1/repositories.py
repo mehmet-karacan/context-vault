@@ -26,18 +26,25 @@ import re
 import uuid
 from datetime import datetime
 from typing import List, Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from ...application.reindex_service import ReindexService
 from ...config import settings
 from ...db import get_db
 from ...infrastructure.repositories.archive_source import ArchiveSourceScanner
-from ...infrastructure.repositories.git_source import GitRepositorySource
+from ...infrastructure.repositories.git_source import (
+    GitRepositorySource,
+    RepositoryUrlRejected,
+)
 from ...infrastructure.repositories.scan_result import ScanResult
 from ...models import Document, DocumentArtifact, DocumentVersion, Project, SourceFile
+from src.domain.identity import PrincipalContext
+from src.infrastructure.rate_limiter import rate_limiter
+from src.infrastructure.security.auth import get_principal_context, require_project_access
 
 router = APIRouter(tags=["repositories"])
 
@@ -252,20 +259,24 @@ def _reindex(
 
 
 class RepoIngestRequest(BaseModel):
-    project_id: str
+    model_config = ConfigDict(extra="forbid")
+
+    project_id: UUID
     repository_url: str
     ref: Optional[str] = None
     credential_ref: Optional[str] = None
-    include_patterns: List[str] = []
-    exclude_patterns: List[str] = []
+    include_patterns: List[str] = Field(default_factory=list)
+    exclude_patterns: List[str] = Field(default_factory=list)
 
 
 class DirectoryScanRequest(BaseModel):
-    project_id: str
+    model_config = ConfigDict(extra="forbid")
+
+    project_id: UUID
     allowed_root_alias: str
     relative_path: str
-    include_patterns: List[str] = []
-    exclude_patterns: List[str] = []
+    include_patterns: List[str] = Field(default_factory=list)
+    exclude_patterns: List[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -308,20 +319,26 @@ def _serialize_version(v: DocumentVersion) -> dict:
 
 
 @router.post("/repositories/ingest")
-def ingest_repository(payload: RepoIngestRequest, db: Session = Depends(get_db)):
+def ingest_repository(
+    payload: RepoIngestRequest,
+    _: None = Depends(rate_limiter),
+    db: Session = Depends(get_db),
+    principal: PrincipalContext = Depends(get_principal_context),
+):
     _feature_gate()
-    project = db.get(Project, payload.project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = require_project_access(db, principal, payload.project_id)
 
     source = _build_repository_source()
-    scan = source.scan(
-        payload.repository_url,
-        ref=payload.ref,
-        credential_ref=payload.credential_ref,
-        include_patterns=payload.include_patterns,
-        exclude_patterns=payload.exclude_patterns,
-    )
+    try:
+        scan = source.scan(
+            payload.repository_url,
+            ref=payload.ref,
+            credential_ref=payload.credential_ref,
+            include_patterns=payload.include_patterns,
+            exclude_patterns=payload.exclude_patterns,
+        )
+    except RepositoryUrlRejected as exc:
+        raise HTTPException(status_code=400, detail="Repository URL rejected") from exc
     repo_name = (
         os.path.basename(payload.repository_url.rstrip("/")).removesuffix(".git")
         or "repository"
@@ -348,13 +365,13 @@ def ingest_repository(payload: RepoIngestRequest, db: Session = Depends(get_db))
 @router.post("/archives/upload")
 def upload_archive(
     file: UploadFile = File(...),
-    project_id: str = File(...),
+    project_id: UUID = File(...),
+    _: None = Depends(rate_limiter),
     db: Session = Depends(get_db),
+    principal: PrincipalContext = Depends(get_principal_context),
 ):
     _feature_gate()
-    project = db.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = require_project_access(db, principal, project_id)
 
     data = file.file.read()
     checksum = hashlib.sha256(data).hexdigest()
@@ -381,11 +398,14 @@ def upload_archive(
 
 
 @router.post("/directories/scan")
-def scan_directory(payload: DirectoryScanRequest, db: Session = Depends(get_db)):
+def scan_directory(
+    payload: DirectoryScanRequest,
+    _: None = Depends(rate_limiter),
+    db: Session = Depends(get_db),
+    principal: PrincipalContext = Depends(get_principal_context),
+):
     _feature_gate()
-    project = db.get(Project, payload.project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = require_project_access(db, principal, payload.project_id)
 
     target = resolve_allowed_scan_path(
         payload.allowed_root_alias, payload.relative_path
@@ -414,12 +434,30 @@ def scan_directory(payload: DirectoryScanRequest, db: Session = Depends(get_db))
     return {"source_type": "directory", "document_id": str(document.id), **result}
 
 
-@router.post("/documents/{document_id}/refresh")
-def refresh_document(document_id: str, db: Session = Depends(get_db)):
-    _feature_gate()
-    document = db.get(Document, document_id)
-    if not document:
+def _scoped_document(
+    db: Session, principal: PrincipalContext, project_id: UUID, document_id: UUID
+) -> Document:
+    require_project_access(db, principal, project_id)
+    document = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.project_id == project_id)
+        .first()
+    )
+    if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
+    return document
+
+
+@router.post("/documents/{document_id}/refresh")
+def refresh_document(
+    document_id: UUID,
+    project_id: UUID,
+    _: None = Depends(rate_limiter),
+    db: Session = Depends(get_db),
+    principal: PrincipalContext = Depends(get_principal_context),
+):
+    _feature_gate()
+    document = _scoped_document(db, principal, project_id, document_id)
     if document.active_version_id is None:
         raise HTTPException(
             status_code=409, detail="Document has no active version to refresh"
@@ -475,21 +513,21 @@ def refresh_document(document_id: str, db: Session = Depends(get_db)):
             exclude_patterns=cfg.get("exclude_patterns"),
         )
 
-    project = db.get(Project, document.project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = require_project_access(db, principal, project_id)
     result = _reindex(db, project, document, scan, scan_config=dict(cfg))
     return {"document_id": str(document.id), "source_type": source_type, **result}
 
 
 @router.get("/documents/{document_id}/files")
 def list_document_files(
-    document_id: str, version_id: Optional[str] = None, db: Session = Depends(get_db)
+    document_id: UUID,
+    project_id: UUID,
+    version_id: Optional[UUID] = None,
+    db: Session = Depends(get_db),
+    principal: PrincipalContext = Depends(get_principal_context),
 ):
     _feature_gate()
-    document = db.get(Document, document_id)
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+    document = _scoped_document(db, principal, project_id, document_id)
     target_version = version_id or document.active_version_id
     if target_version is None:
         return {"document_id": str(document.id), "version_id": None, "files": []}
@@ -507,11 +545,14 @@ def list_document_files(
 
 
 @router.get("/documents/{document_id}/versions")
-def list_document_versions(document_id: str, db: Session = Depends(get_db)):
+def list_document_versions(
+    document_id: UUID,
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    principal: PrincipalContext = Depends(get_principal_context),
+):
     _feature_gate()
-    document = db.get(Document, document_id)
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+    document = _scoped_document(db, principal, project_id, document_id)
     versions = (
         db.query(DocumentVersion)
         .filter(DocumentVersion.document_id == document_id)

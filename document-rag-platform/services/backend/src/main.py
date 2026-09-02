@@ -12,11 +12,13 @@ live in ``api/v1/*``.
 import logging
 import traceback
 from typing import Optional
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from .api.v1.health import probe_router
 from .api.v1.router import api_router
 from .config import Settings, settings
 from .db import init_db
@@ -26,6 +28,40 @@ from .infrastructure.observability import (
 )
 
 configure_logging()
+
+LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
+DEFAULT_STORAGE_CREDENTIALS = {("minioadmin", "minioadmin")}
+DEFAULT_DATABASE_CREDENTIALS = {
+    ("postgres", "postgres"),
+    ("raguser", "ragpass"),
+    ("test", "test"),
+}
+
+
+def validate_runtime_security(cfg: Settings) -> None:
+    """Reject insecure authentication and credential combinations at boot."""
+
+    environment = cfg.APP_ENV.strip().lower()
+    if cfg.AUTH_MODE == "disabled" and (
+        environment != "local" or cfg.BIND_HOST.strip().lower() not in LOOPBACK_HOSTS
+    ):
+        raise ValueError(
+            "AUTH_MODE=disabled is allowed only for APP_ENV=local on a loopback bind"
+        )
+    if cfg.AUTH_MODE == "api_key" and (
+        not cfg.API_KEY_PEPPER or len(cfg.API_KEY_PEPPER) < 32
+    ):
+        raise ValueError("AUTH_MODE=api_key requires API_KEY_PEPPER of at least 32 chars")
+    if environment in {"production", "staging"}:
+        if not cfg.RATE_LIMIT_ENABLED or cfg.RATE_LIMIT_BACKEND != "redis":
+            raise ValueError(
+                "production/staging requires enabled Redis-backed rate limiting"
+            )
+        if (cfg.MINIO_ACCESS_KEY, cfg.MINIO_SECRET_KEY) in DEFAULT_STORAGE_CREDENTIALS:
+            raise ValueError("default MinIO credentials are forbidden outside local")
+        parsed = urlsplit(cfg.DATABASE_URL)
+        if (parsed.username, parsed.password) in DEFAULT_DATABASE_CREDENTIALS:
+            raise ValueError("default database credentials are forbidden outside local")
 
 
 def _cors_origins(cfg: Settings):
@@ -40,8 +76,10 @@ def create_app(cfg: Optional[Settings] = None) -> FastAPI:
     mutating the shared singleton.
     """
     app_cfg = cfg or settings
+    validate_runtime_security(app_cfg)
 
     application = FastAPI(title="Document RAG API")
+    application.state.settings = app_cfg
 
     # Aşama 9.5: never "*" in production. allow_origins comes from resolved
     # config (see Settings.cors_origins).
@@ -79,6 +117,7 @@ def create_app(cfg: Optional[Settings] = None) -> FastAPI:
         init_db()
 
     application.include_router(api_router)
+    application.include_router(probe_router)
     return application
 
 
@@ -88,4 +127,4 @@ app = create_app()
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=settings.BIND_HOST, port=8000)

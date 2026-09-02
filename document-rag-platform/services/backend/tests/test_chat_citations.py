@@ -19,7 +19,13 @@ query surface, and chunks resolve from an in-memory dict.
 
 import uuid
 
-from src.application.answer_service import ensure_conversation, generate_answer
+import pytest
+
+from src.application.answer_service import (
+    ConversationScopeError,
+    ensure_conversation,
+    generate_answer,
+)
 from src.application.retrieval_service import RetrievalResult
 from src.infrastructure.retrieval.base import RetrievalCandidate
 from src.infrastructure.retrieval.no_answer import INTENT_DOCUMENT, Answerability
@@ -172,7 +178,8 @@ def test_chat_runtime_creates_conversation_and_persists_message_and_citations():
     )
 
     # --- the exact runtime sequence chat.py performs -------------------------
-    conv_id = ensure_conversation(db, project_id="proj-1", conversation_id=None)
+    project_id = str(uuid.uuid4())
+    conv_id = ensure_conversation(db, project_id=project_id, conversation_id=None)
     resp = generate_answer(
         query="PAYMENT_FLAG nasıl?",
         retrieval_result=make_result("PAYMENT_FLAG nasıl?", [candidate]),
@@ -209,24 +216,30 @@ def test_chat_runtime_creates_conversation_and_persists_message_and_citations():
     assert resp["citations"][0]["label"] == "S1"
 
 
-def test_chat_runtime_reuses_existing_conversation_when_present():
-    """When a Conversation already exists for the project it is reused, not
-    re-created (ensure_conversation returns the existing id)."""
+def test_chat_runtime_creates_fresh_conversation_when_id_absent():
+    """Ambient existing conversations are never selected implicitly."""
     existing = type("Conv", (), {"id": uuid.uuid4()})()
     db = FakeSessionWithConv(existing)
 
-    conv_id = ensure_conversation(db, project_id="proj-1", conversation_id=None)
+    conv_id = ensure_conversation(
+        db, project_id=str(uuid.uuid4()), conversation_id=None
+    )
 
-    assert conv_id == str(existing.id)
+    assert conv_id != str(existing.id)
     convs = [o for o in db.added if o.__class__.__name__ == "Conversation"]
-    assert convs == [], "no new Conversation should be created when one exists"
+    assert len(convs) == 1
 
 
 def test_chat_runtime_honors_explicit_conversation_id():
-    """A client-supplied conversation_id is returned unchanged (resume path)."""
+    """A client-supplied conversation is used only after scoped lookup."""
     cid = str(uuid.uuid4())
+    existing = type("Conv", (), {"id": uuid.UUID(cid)})()
     assert (
-        ensure_conversation(FakeSession(), project_id="proj-1", conversation_id=cid)
+        ensure_conversation(
+            FakeSessionWithConv(existing),
+            project_id=str(uuid.uuid4()),
+            conversation_id=cid,
+        )
         == cid
     )
 
@@ -258,10 +271,20 @@ def test_feature_new_citations_false_skips_persistence_but_keeps_citations():
     assert resp["citations"][0]["label"] == "S1"
 
 
-def test_ensure_conversation_returns_none_without_db_or_project():
-    # DB-free path must not crash and must signal "no persistence".
-    assert ensure_conversation(None, project_id="proj-1") is None
-    assert ensure_conversation(FakeSession(), project_id=None) is None
+def test_ensure_conversation_fails_closed_without_db_or_valid_project():
+    with pytest.raises(ConversationScopeError):
+        ensure_conversation(None, project_id=str(uuid.uuid4()))
+    with pytest.raises(ConversationScopeError):
+        ensure_conversation(FakeSession(), project_id="not-a-uuid")
+
+
+def test_explicit_conversation_must_exist_in_project():
+    with pytest.raises(ConversationScopeError):
+        ensure_conversation(
+            FakeSession(),
+            project_id=str(uuid.uuid4()),
+            conversation_id=str(uuid.uuid4()),
+        )
 
 
 # --------------------------------------------------------------------------- #

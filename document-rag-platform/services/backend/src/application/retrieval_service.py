@@ -44,6 +44,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
 from src.config import Settings, settings as default_settings
+from src.domain.retrieval_scope import RetrievalScope
 from src.infrastructure.retrieval.base import RetrievalCandidate
 from src.infrastructure.retrieval.context_builder import (
     ContextBuilder,
@@ -112,7 +113,7 @@ class RetrievalResult:
     """The coordinated end-to-end result of a single retrieval query."""
 
     query: str
-    filters: Dict[str, Any] = field(default_factory=dict)
+    scope: RetrievalScope | None = None
     #: Final ranked candidates after fusion + optional rerank.
     ranked_candidates: List[RetrievalCandidate] = field(default_factory=list)
     #: Context built from the ranked candidates (inside the budget).
@@ -134,7 +135,7 @@ class RetrievalResult:
     def to_dict(self, *, debug: bool = False) -> Dict[str, Any]:
         return {
             "query": self.query,
-            "filters": dict(self.filters),
+            "scope": self.scope.model_dump(mode="json") if self.scope else None,
             "intent": self.answerability.intent if self.answerability else None,
             "answerable": self.answerability.answerable if self.answerability else None,
             "answerability": self.answerability.to_dict()
@@ -152,7 +153,7 @@ class RetrievalResult:
         """Full retrieval-debug payload: every stage's rank/score/source."""
         return {
             "query": self.query,
-            "filters": dict(self.filters),
+            "scope": self.scope.model_dump(mode="json") if self.scope else None,
             "config": dict(self.config_snapshot),
             "reranker": dict(self.reranker),
             "answerability": self.answerability.to_dict()
@@ -162,8 +163,32 @@ class RetrievalResult:
                 stage: [serialize_candidate(c) for c in candidates]
                 for stage, candidates in self.stage_candidates.items()
             },
-            "context": self.context.to_dict() if self.context else None,
+            "context": _redacted_debug_context(self.context),
         }
+
+
+def _redacted_debug_context(context: Optional[ContextBuildResult]) -> Dict[str, Any] | None:
+    if context is None:
+        return None
+    return {
+        "items": [
+            {
+                "chunk_id": item.chunk_id,
+                "source_id": item.source_id,
+                "chunk_type": item.chunk_type,
+                "content_hash": item.content_hash,
+                "token_count": item.token_count,
+                "rank": item.rank,
+                "relation": item.relation,
+                "locator": dict(item.locator),
+            }
+            for item in context.items
+        ],
+        "total_tokens": context.total_tokens,
+        "max_tokens": context.max_tokens,
+        "max_chunks": context.max_chunks,
+        "truncated": context.truncated,
+    }
 
 
 def serialize_candidate(candidate: RetrievalCandidate) -> Dict[str, Any]:
@@ -263,16 +288,17 @@ class RetrievalService:
     def retrieve(
         self,
         query: str,
-        filters: Optional[Dict[str, Any]] = None,
+        scope: RetrievalScope,
         *,
         debug: bool = False,
     ) -> RetrievalResult:
         """Run the coordinated pipeline for ``query`` with ``filters``.
 
-        ``filters`` follows the shared shape (project_id / document_ids /
-        scope / source_type / version_id / ...) from ``retrieval.base``.
+        ``scope`` is mandatory and validated before any retriever runs.
         """
-        filters = dict(filters or {})
+        if not isinstance(scope, RetrievalScope):
+            raise TypeError("scope must be a validated RetrievalScope")
+        filters = scope.retrieval_filters()
 
         # Each real retriever normalizes its own filters (``filter_spec`` ->
         # ``normalize_filters`` inside ``build_spec``), so we hand off the raw
@@ -316,7 +342,7 @@ class RetrievalService:
 
         result = RetrievalResult(
             query=query,
-            filters=filters,
+            scope=scope,
             ranked_candidates=reranked,
             context=context,
             answerability=answerability,
@@ -362,29 +388,19 @@ class RetrievalService:
         self, query: str, filters: Optional[Dict[str, Any]]
     ) -> List[RetrievalCandidate]:
         k = self.dense_retriever.resolve_k(None)
-        try:
-            return list(self.dense_retriever.search(self._embed(query), k, filters))
-        except TypeError:
-            # Defensive: some thin fakes accept filters positionally differently.
-            return list(self.dense_retriever.search(self._embed(query), k))
+        return list(self.dense_retriever.search(self._embed(query), k, filters))
 
     def _run_lexical(
         self, query: str, filters: Optional[Dict[str, Any]]
     ) -> List[RetrievalCandidate]:
         k = self.lexical_retriever.resolve_k(None)
-        try:
-            return list(self.lexical_retriever.search(query, k, filters))
-        except TypeError:
-            return list(self.lexical_retriever.search(query, k))
+        return list(self.lexical_retriever.search(query, k, filters))
 
     def _run_identifier(
         self, query: str, filters: Optional[Dict[str, Any]]
     ) -> List[RetrievalCandidate]:
         k = self.identifier_retriever.resolve_k(None)
-        try:
-            return list(self.identifier_retriever.search(query, k, filters))
-        except TypeError:
-            return list(self.identifier_retriever.search(query, k))
+        return list(self.identifier_retriever.search(query, k, filters))
 
     # --- helpers ----------------------------------------------------------
 

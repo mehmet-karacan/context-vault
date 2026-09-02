@@ -8,6 +8,8 @@ session — no live PostgreSQL required.
 
 from __future__ import annotations
 
+import pytest
+
 from src.infrastructure.retrieval import DenseVectorRetriever, dense_sql_from_spec
 from src.infrastructure.retrieval.base import normalize_filters
 from src.infrastructure.retrieval.dense import (
@@ -104,14 +106,14 @@ def test_filters_applied_as_terms_in_spec():
 
 
 def test_normalize_filters_ignores_unknown_keys():
-    terms = normalize_filters({"project_id": "p", "bogus_key": 1})
-    fields = [t.field for t in terms]
-    assert fields == ["project_id"]
+    with pytest.raises(ValueError, match="bogus_key"):
+        normalize_filters({"project_id": "p", "bogus_key": 1})
 
 
-def test_empty_document_ids_produces_no_filter():
+def test_empty_document_ids_produces_deny_all_filter():
     terms = normalize_filters({"document_ids": []})
-    assert terms == []
+    assert len(terms) == 1
+    assert terms[0].op == "false"
 
 
 def test_explicit_source_type_overrides_scope():
@@ -165,7 +167,9 @@ def test_chunks_embedding_only_chunk_is_not_masked_by_unrelated_primary_row():
         chunks_rows=[_Row("legacy-nearest-1", 0.95)],
     )
     retriever = DenseVectorRetriever(session=session)
-    results = retriever.search([0.1, 0.2], top_k=5)
+    results = retriever.search(
+        [0.1, 0.2], top_k=5, filters={"project_id": "project"}
+    )
 
     ids = [c.chunk_id for c in results]
     assert "legacy-nearest-1" in ids, "legacy-only chunk must not be masked"
@@ -185,7 +189,9 @@ def test_chunk_in_both_sources_merged_once_keeps_higher_score():
         chunks_rows=[_Row("dup-1", 0.92)],
     )
     retriever = DenseVectorRetriever(session=session)
-    results = retriever.search([0.1, 0.2], top_k=5)
+    results = retriever.search(
+        [0.1, 0.2], top_k=5, filters={"project_id": "project"}
+    )
 
     assert [c.chunk_id for c in results] == ["dup-1"]
     assert results[0].score == 0.92

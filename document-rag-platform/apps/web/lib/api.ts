@@ -4,5 +4,10 @@
 // their browser's "localhost" would otherwise mean their own computer.
 export function apiUrl(path: string): string {
   const host = typeof window !== "undefined" ? window.location.hostname : "localhost";
-  return `http://${host}:8000${path}`;
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  const apiPath =
+    normalized.startsWith("/health/") || normalized.startsWith("/api/v1/")
+      ? normalized
+      : `/api/v1${normalized}`;
+  return `http://${host}:8000${apiPath}`;
 }

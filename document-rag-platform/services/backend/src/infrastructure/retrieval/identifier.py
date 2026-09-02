@@ -27,6 +27,7 @@ from src.infrastructure.retrieval.base import (
     RetrievalCandidate,
     filter_spec,
     render_where,
+    require_scoped_filters,
     to_candidates,
 )
 
@@ -129,6 +130,7 @@ class IdentifierRetriever:
         identifiers: Optional[List[str]] = None,
         session: Any = None,
     ) -> List[RetrievalCandidate]:
+        filters = require_scoped_filters(filters)
         ids = list(identifiers) if identifiers else extract_identifiers(query_text)
         if not ids:
             return []

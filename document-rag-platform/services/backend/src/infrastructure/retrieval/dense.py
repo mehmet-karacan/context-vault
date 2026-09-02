@@ -25,6 +25,7 @@ from src.infrastructure.retrieval.base import (
     RetrievalCandidate,
     filter_spec,
     render_where,
+    require_scoped_filters,
     to_candidates,
 )
 
@@ -106,6 +107,7 @@ class DenseVectorRetriever:
         filters: Optional[dict] = None,
         session: Any = None,
     ) -> List[RetrievalCandidate]:
+        filters = require_scoped_filters(filters)
         spec = self.build_spec(query_embedding, top_k, filters)
         primary = self._search_spec(spec, session, source_tag=spec["embedding_table"])
 

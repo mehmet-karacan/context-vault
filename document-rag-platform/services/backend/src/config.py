@@ -10,7 +10,7 @@ previous ad-hoc ``os.getenv`` calls scattered across ``db.py`` / ``llm.py``
 — this module only centralizes and types them.
 """
 
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -33,7 +33,10 @@ class Settings(BaseSettings):
     # and FEATURE_RETRIEVAL_DEBUG are only honored outside production so a
     # production deployment can never accidentally expose stack traces or the
     # retrieval-debug surface (AKTIF_GOREV.md §9.5 / §11).
-    APP_ENV: str = "development"
+    APP_ENV: str = "local"
+    BIND_HOST: str = "127.0.0.1"
+    AUTH_MODE: Literal["disabled", "api_key", "oidc"] = "disabled"
+    API_KEY_PEPPER: Optional[str] = None
     API_DEBUG: bool = False
     FEATURE_RETRIEVAL_DEBUG: bool = True
     # Comma-separated allow-list of CORS origins. Defaults to DEV_CORS_ORIGINS
@@ -41,12 +44,11 @@ class Settings(BaseSettings):
     # "*" (AKTIF_GOREV.md §9.5: "CORS'u üretim için `*` bırakmama").
     CORS_ALLOW_ORIGINS: Optional[str] = None
 
-    # --- Rate limiting (Aşama 9.5) --------------------------------------
-    # Lightweight in-memory sliding-window rate limiter keyed by client IP,
-    # applied to the expensive chat/upload/retrieval endpoints. Relaxed by
-    # default (disabled) so existing deployments are unaffected; enable via
-    # env in production (§11 style).
+    # --- Rate limiting ---------------------------------------------------
+    # Staging/production runtime validation requires the Redis backend and an
+    # enabled policy. Memory mode is intentionally local-only.
     RATE_LIMIT_ENABLED: bool = False
+    RATE_LIMIT_BACKEND: Literal["memory", "redis"] = "memory"
     RATE_LIMIT_MAX_REQUESTS: int = 60
     RATE_LIMIT_WINDOW_SECONDS: int = 60
     RATE_LIMIT_KEY_PREFIX: str = "rl"
@@ -235,7 +237,9 @@ class Settings(BaseSettings):
     # refuse to run when this is off. Default True per §11 example and Global
     # DoD (§17: "Repository URL, archive ve izinli klasör tarama çalışıyor");
     # set to False only to roll the feature back.
-    FEATURE_REPOSITORY_INGESTION: bool = True
+    FEATURE_REPOSITORY_INGESTION: bool = False
+    # Exact host allow-list for remote Git ingestion. Empty denies every URL.
+    REPOSITORY_ALLOWED_HOSTS: str = ""
     # Archive "zip bomb" / traversal protective limits (AKTIF_GOREV.md §7.2:
     # "Archive path traversal ve zip bomb koruması uygula", "Maksimum dosya
     # sayısı, tek dosya boyutu, toplam byte ve tarama süresi limiti koy").

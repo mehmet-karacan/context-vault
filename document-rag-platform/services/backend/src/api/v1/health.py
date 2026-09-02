@@ -15,6 +15,7 @@ extended in Aşama 9.4 with the health-vs-readiness split:
 """
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -26,6 +27,7 @@ from ...infrastructure.observability import (
 from ...models import Document
 
 router = APIRouter(tags=["health"])
+probe_router = APIRouter(tags=["health"])
 
 
 def get_readiness_checker() -> ReadinessChecker:
@@ -54,23 +56,28 @@ def health(db: Session = Depends(get_db)):
     }
 
 
-@router.get("/health/live")
+@probe_router.get("/health/live")
 def liveness():
     """Liveness probe — the process is up and serving. No dependencies."""
     return {"status": "ok"}
 
 
-@router.get("/health/readiness")
+@probe_router.get("/health/readiness")
 def readiness(checker: ReadinessChecker = Depends(get_readiness_checker)):
     """Readiness probe — reports per-dependency health (db/redis/minio/gateway).
 
     Returns 200 with ``status: degraded`` (not an error) when any single
     dependency is down (AKTIF_GOREV.md §9.4).
     """
-    return checker.run()
+    result = checker.run()
+    ready = result["status"] == "ok"
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content={"status": "ready" if ready else "not_ready"},
+    )
 
 
-@router.get("/ready")
+@probe_router.get("/ready", include_in_schema=False)
 def ready(checker: ReadinessChecker = Depends(get_readiness_checker)):
     """Alias endpoint for the readiness probe."""
-    return checker.run()
+    return readiness(checker)

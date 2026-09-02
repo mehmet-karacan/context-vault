@@ -46,7 +46,7 @@ class _FakeDB:
 def test_root_endpoint_still_works(monkeypatch):
     monkeypatch.setattr("src.main.init_db", lambda: None)
     with TestClient(app) as client:
-        response = client.get("/")
+        response = client.get("/api/v1/")
 
     assert response.status_code == 200
     assert response.json() == {"message": "Document RAG API is running"}
@@ -61,7 +61,7 @@ def test_health_endpoint_returns_document_counts(monkeypatch):
     app.dependency_overrides[get_db] = fake_get_db
     try:
         with TestClient(app) as client:
-            response = client.get("/health")
+            response = client.get("/api/v1/health")
     finally:
         app.dependency_overrides.pop(get_db, None)
 
@@ -82,7 +82,7 @@ def test_health_endpoint_handles_zero_documents(monkeypatch):
     app.dependency_overrides[get_db] = fake_get_db
     try:
         with TestClient(app) as client:
-            response = client.get("/health")
+            response = client.get("/api/v1/health")
     finally:
         app.dependency_overrides.pop(get_db, None)
 
@@ -126,8 +126,7 @@ def test_readiness_reports_ok_when_all_dependencies_up(monkeypatch):
         app.dependency_overrides.pop(get_readiness_checker, None)
 
     assert response.status_code == 200
-    assert response.json()["status"] == "ok"
-    assert response.json()["dependencies"]["db"] == "ok"
+    assert response.json() == {"status": "ready"}
 
 
 def test_readiness_is_degraded_not_crash_when_dependency_down(monkeypatch):
@@ -146,10 +145,7 @@ def test_readiness_is_degraded_not_crash_when_dependency_down(monkeypatch):
         with TestClient(app) as client:
             for path in ("/ready", "/health/readiness"):
                 response = client.get(path)
-                assert response.status_code == 200
-                body = response.json()
-                assert body["status"] == "degraded"
-                assert body["dependencies"]["redis"] == "down"
-                assert body["dependencies"]["db"] == "ok"
+                assert response.status_code == 503
+                assert response.json() == {"status": "not_ready"}
     finally:
         app.dependency_overrides.pop(get_readiness_checker, None)

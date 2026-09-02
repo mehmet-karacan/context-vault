@@ -25,6 +25,7 @@ from src.infrastructure.retrieval.base import (
     RetrievalCandidate,
     filter_spec,
     render_where,
+    require_scoped_filters,
     to_candidates,
 )
 
@@ -225,6 +226,7 @@ class LexicalRetriever:
         filters: Optional[dict] = None,
         session: Any = None,
     ) -> List[RetrievalCandidate]:
+        filters = require_scoped_filters(filters)
         spec = self.build_spec(query_text, top_k, filters)
         sql, params = lexical_sql_from_spec(spec)
         session = session or self.session

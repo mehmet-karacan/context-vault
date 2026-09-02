@@ -11,15 +11,15 @@ The legacy lexical/vector keyword fallback helpers (``extract_keywords``,
 path. ``GET /chat/models`` is unchanged.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
-import uuid
-from datetime import datetime
+from uuid import UUID
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
+from ...config import settings
 from ...db import get_db
 from ...llm import (
     AVAILABLE_CHAT_MODELS,
@@ -28,9 +28,16 @@ from ...llm import (
     chat_client,
     embed_text,
 )
-from ...models import Chunk, Document, Project
-from src.application.answer_service import ensure_conversation, generate_answer
+from ...models import Chunk, Document
+from src.application.answer_service import (
+    ConversationScopeError,
+    ensure_conversation,
+    generate_answer,
+)
 from src.application.retrieval_service import RetrievalService
+from src.domain.identity import PrincipalContext
+from src.domain.retrieval_scope import RetrievalScope
+from src.infrastructure.security.auth import get_principal_context, require_project_access
 from src.infrastructure.rate_limiter import rate_limiter
 from src.infrastructure.retrieval.dense import DenseVectorRetriever
 from src.infrastructure.retrieval.identifier import IdentifierRetriever
@@ -40,10 +47,12 @@ router = APIRouter(tags=["chat"])
 
 
 class ChatQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     query: str
-    project_id: Optional[str] = None
-    document_ids: Optional[List[str]] = None
-    scope: str = "all"
+    project_id: UUID
+    document_ids: Optional[List[UUID]] = None
+    scope: Literal["all", "documents", "images", "code"] = "all"
     model: Optional[str] = None
     debug: bool = False
     conversation_id: Optional[str] = None
@@ -76,7 +85,7 @@ def _chunk_to_dict(chunk: Chunk, doc: Optional[Document]) -> Dict[str, Any]:
     }
 
 
-def _build_resolvers(db: Session):
+def _build_resolvers(db: Session, scope: RetrievalScope):
     """Build DB-backed chunk / neighbour resolvers for a session."""
 
     def chunk_resolver(chunk_id: str) -> Optional[Dict[str, Any]]:
@@ -84,6 +93,7 @@ def _build_resolvers(db: Session):
             db.query(Chunk, Document)
             .join(Document, Chunk.document_id == Document.id)
             .filter(Chunk.id == chunk_id)
+            .filter(Document.project_id == scope.project_id)
             .first()
         )
         if row is None:
@@ -98,6 +108,7 @@ def _build_resolvers(db: Session):
             .filter(
                 Chunk.document_id == source_id,
                 Chunk.sequence_no == sequence_no,
+                Document.project_id == scope.project_id,
             )
             .first()
         )
@@ -107,26 +118,6 @@ def _build_resolvers(db: Session):
         return _chunk_to_dict(chunk, doc)
 
     return chunk_resolver, neighbor_resolver
-
-
-def _resolve_project_id(db: Session, project_id: Optional[str]) -> Optional[str]:
-    """Return a concrete project_id for conversation persistence.
-
-    A ``Conversation`` row requires a non-null ``project_id`` (models.py). If the
-    request does not scope the query to a project, fall back to the first project
-    (creating a default one if the deployment has none yet) so citation
-    persistence still has a valid parent to attach to.
-    """
-    if project_id:
-        return project_id
-    project = db.query(Project).order_by(Project.created_at.asc()).first()
-    if project is None:
-        project = Project(
-            id=uuid.uuid4(), name="Varsayılan", created_at=datetime.utcnow()
-        )
-        db.add(project)
-        db.flush()
-    return str(project.id)
 
 
 @router.get("/chat/models")
@@ -139,16 +130,40 @@ def query_chat(
     chat_query: ChatQuery,
     _: None = Depends(rate_limiter),
     db: Session = Depends(get_db),
+    principal: PrincipalContext = Depends(get_principal_context),
 ):
-    filters: Dict[str, Any] = {}
-    if chat_query.project_id:
-        filters["project_id"] = chat_query.project_id
-    if chat_query.document_ids:
-        filters["document_ids"] = chat_query.document_ids
-    if chat_query.scope:
-        filters["scope"] = chat_query.scope
+    require_project_access(db, principal, chat_query.project_id)
+    # Validate a caller-supplied conversation before embedding or retrieval;
+    # an out-of-scope identifier must not trigger provider work or leak timing.
+    try:
+        conversation_id = ensure_conversation(
+            db,
+            project_id=str(chat_query.project_id),
+            conversation_id=chat_query.conversation_id,
+        )
+    except ConversationScopeError as exc:
+        raise HTTPException(status_code=404, detail="Conversation not found") from exc
 
-    chunk_resolver, neighbor_resolver = _build_resolvers(db)
+    source_types = {
+        "all": ("document", "image", "repository", "directory", "archive"),
+        "documents": ("document",),
+        "images": ("image",),
+        "code": ("repository", "directory", "archive"),
+    }[chat_query.scope]
+    retrieval_scope = RetrievalScope(
+        principal_id=principal.principal_id,
+        workspace_id=principal.workspace_id,
+        project_id=chat_query.project_id,
+        allowed_document_ids=(
+            tuple(chat_query.document_ids) if chat_query.document_ids is not None else None
+        ),
+        allowed_source_types=source_types,
+    )
+    debug = bool(
+        chat_query.debug and principal.is_admin and settings.retrieval_debug_enabled
+    )
+
+    chunk_resolver, neighbor_resolver = _build_resolvers(db, retrieval_scope)
 
     service = RetrievalService(
         dense_retriever=DenseVectorRetriever(session=db),
@@ -159,14 +174,7 @@ def query_chat(
         neighbor_resolver=neighbor_resolver,
     )
 
-    retrieval_result = service.retrieve(
-        chat_query.query, filters, debug=chat_query.debug
-    )
-
-    project_id = _resolve_project_id(db, chat_query.project_id)
-    conversation_id = ensure_conversation(
-        db, project_id=project_id, conversation_id=chat_query.conversation_id
-    )
+    retrieval_result = service.retrieve(chat_query.query, retrieval_scope, debug=debug)
 
     response = generate_answer(
         query=chat_query.query,
@@ -176,6 +184,6 @@ def query_chat(
         db=db,
         conversation_id=conversation_id,
         model=chat_query.model,
-        debug=chat_query.debug,
+        debug=debug,
     )
     return response

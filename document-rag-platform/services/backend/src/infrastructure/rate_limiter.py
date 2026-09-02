@@ -1,48 +1,43 @@
-"""Dependency-light in-memory rate limiter (Aşama 9.5).
+"""Fail-closed request rate limiting.
 
-Provides:
-
-- :class:`SlidingWindowStore` — thread-safe in-memory sliding-window counter
-  keyed by a string, with an injectable clock so window-expiry behaviour is
-  unit-testable without sleeping.
-- :class:`RateLimiter` — a FastAPI dependency (``__call__``) that enforces a
-  per-client-IP limit and raises ``HTTPException(429)`` once the window is
-  exhausted. Enabled / limits are config driven; a pluggable store/clock makes
-  it fully injectable/testable.
-
-No Redis is required — the default backing store is in-memory (AKTIF_GOREV.md
-§9.5 rate limiting; "Do NOT require redis; default in-memory is fine").
+Production uses an atomic Redis sliding window. The in-memory store exists
+only for local development and deterministic unit tests; runtime validation
+rejects it in staging/production.
 """
 
+from __future__ import annotations
+
+import inspect
+import secrets
 import threading
 import time
 from collections import defaultdict, deque
-from typing import Callable, Deque, Dict, Optional
+from collections.abc import Awaitable, Callable
+from typing import Deque, Protocol
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, status
 
-from ..config import settings
+from src.config import settings
+
+
+class RateLimitStore(Protocol):
+    def allow(
+        self, key: str, limit: int, window_seconds: float
+    ) -> bool | Awaitable[bool]: ...
 
 
 class SlidingWindowStore:
-    """In-memory sliding-window store.
+    """Process-local store intended only for local mode and tests."""
 
-    Tracks the timestamps of the last ``limit`` hits per key within
-    ``window_seconds``. ``allow`` returns True (recording the hit) if the key
-    has fewer than ``limit`` distinct timestamps strictly inside the window;
-    old timestamps are pruned lazily on each call.
-    """
-
-    def __init__(self, clock: Optional[Callable[[], float]] = None):
-        self._clock: Callable[[], float] = clock or time.time
-        self._buckets: Dict[str, Deque[float]] = defaultdict(deque)
+    def __init__(self, clock: Callable[[], float] | None = None):
+        self._clock = clock or time.time
+        self._buckets: dict[str, Deque[float]] = defaultdict(deque)
         self._lock = threading.Lock()
 
     def allow(self, key: str, limit: int, window_seconds: float) -> bool:
         now = self._clock()
         with self._lock:
             hits = self._buckets[key]
-            # Prune hits that have fallen out of the window.
             while hits and now - hits[0] >= window_seconds:
                 hits.popleft()
             if len(hits) >= limit:
@@ -55,18 +50,73 @@ class SlidingWindowStore:
             self._buckets.clear()
 
 
+class RedisSlidingWindowStore:
+    """Atomic Redis sorted-set sliding window with bounded key lifetime."""
+
+    _ALLOW_SCRIPT = """
+local key = KEYS[1]
+local now = tonumber(ARGV[1])
+local cutoff = tonumber(ARGV[2])
+local limit = tonumber(ARGV[3])
+local member = ARGV[4]
+local ttl = tonumber(ARGV[5])
+redis.call('ZREMRANGEBYSCORE', key, '-inf', cutoff)
+local count = redis.call('ZCARD', key)
+if count >= limit then
+  redis.call('EXPIRE', key, ttl)
+  return 0
+end
+redis.call('ZADD', key, now, member)
+redis.call('EXPIRE', key, ttl)
+return 1
+"""
+
+    def __init__(self, redis_url: str, *, clock: Callable[[], float] | None = None):
+        from redis.asyncio import from_url
+
+        self._client = from_url(
+            redis_url,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
+        self._clock = clock or time.time
+
+    async def allow(self, key: str, limit: int, window_seconds: float) -> bool:
+        now = self._clock()
+        member = f"{now:.9f}:{secrets.token_hex(8)}"
+        result = await self._client.eval(
+            self._ALLOW_SCRIPT,
+            1,
+            key,
+            now,
+            now - window_seconds,
+            limit,
+            member,
+            max(1, int(window_seconds) + 1),
+        )
+        return bool(result)
+
+
+def _cost_class(request: Request) -> str:
+    path = request.url.path
+    if path.endswith("/upload") or "/repositories" in path:
+        return "ingestion"
+    if "/chat/" in path:
+        return "generation"
+    if "/debug/" in path:
+        return "debug"
+    return "standard"
+
+
+def _route_template(request: Request) -> str:
+    route = request.scope.get("route")
+    path = getattr(route, "path", None)
+    return str(path or request.url.path)
+
+
 class RateLimiter:
-    """Config-driven, injectable FastAPI rate-limit dependency.
-
-    Usage as a dependency::
-
-        @router.post("/chat/query")
-        def query(_: None = Depends(rate_limiter), ...):
-            ...
-
-    When disabled (``RATE_LIMIT_ENABLED=false``) it is a transparent no-op, so
-    existing deployments are unaffected.
-    """
+    """FastAPI dependency keyed by principal, route template, and cost class."""
 
     def __init__(
         self,
@@ -75,40 +125,73 @@ class RateLimiter:
         max_requests: int = 60,
         window_seconds: float = 60,
         key_prefix: str = "rl",
-        store: Optional[SlidingWindowStore] = None,
-        clock: Optional[Callable[[], float]] = None,
-        key_fn: Optional[Callable[[Request], str]] = None,
+        store: RateLimitStore | None = None,
+        clock: Callable[[], float] | None = None,
+        key_fn: Callable[[Request], str] | None = None,
     ):
         self._enabled = enabled
         self._max_requests = max_requests
         self._window_seconds = window_seconds
         self._key_prefix = key_prefix
         self._store = store or SlidingWindowStore(clock=clock)
-        self._key_fn = key_fn or self._default_client_key
+        self._key_fn = key_fn or self._default_key
 
     @staticmethod
-    def _default_client_key(request: Request) -> str:
-        host = request.client.host if request.client is not None else "unknown"
-        return host
+    def _default_key(request: Request) -> str:
+        principal = getattr(request.state, "principal", None)
+        principal_id = getattr(principal, "principal_id", None)
+        if principal_id is None:
+            host = request.client.host if request.client is not None else "unknown"
+            principal_id = f"anonymous:{host}"
+        return ":".join(
+            (
+                str(principal_id),
+                request.method.upper(),
+                _route_template(request),
+                _cost_class(request),
+            )
+        )
 
     async def __call__(self, request: Request) -> None:
         if not self._enabled:
             return
-        client_key = self._key_fn(request)
-        key = f"{self._key_prefix}:{client_key}"
-        if not self._store.allow(key, self._max_requests, self._window_seconds):
-            raise HTTPException(status_code=429, detail="Too Many Requests")
+        key = f"{self._key_prefix}:{self._key_fn(request)}"
+        try:
+            allowed = self._store.allow(
+                key, self._max_requests, self._window_seconds
+            )
+            if inspect.isawaitable(allowed):
+                allowed = await allowed
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Rate limit service unavailable",
+            ) from exc
+        if not allowed:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too Many Requests",
+                headers={"Retry-After": str(int(self._window_seconds))},
+            )
 
     @property
     def enabled(self) -> bool:
         return self._enabled
 
 
-# Module-level singleton wired from config; endpoints import this and add it as
-# a dependency. Built lazily at import time — never performs network I/O.
-rate_limiter = RateLimiter(
-    enabled=settings.RATE_LIMIT_ENABLED,
-    max_requests=settings.RATE_LIMIT_MAX_REQUESTS,
-    window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
-    key_prefix=settings.RATE_LIMIT_KEY_PREFIX,
-)
+def build_rate_limiter() -> RateLimiter:
+    store: RateLimitStore
+    if settings.RATE_LIMIT_BACKEND == "redis":
+        store = RedisSlidingWindowStore(settings.REDIS_URL)
+    else:
+        store = SlidingWindowStore()
+    return RateLimiter(
+        enabled=settings.RATE_LIMIT_ENABLED,
+        max_requests=settings.RATE_LIMIT_MAX_REQUESTS,
+        window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
+        key_prefix=settings.RATE_LIMIT_KEY_PREFIX,
+        store=store,
+    )
+
+
+rate_limiter = build_rate_limiter()

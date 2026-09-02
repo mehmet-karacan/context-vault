@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 TOOL_VERSION = "1.0.0"
-EXPECTED_HEAD = "cv3_00000001"
+EXPECTED_HEAD = "cv3_00000002"
 VERSIONS_RELATIVE = Path("document-rag-platform/services/backend/alembic/versions_v3")
 BACKEND_RELATIVE = Path("document-rag-platform/services/backend")
 

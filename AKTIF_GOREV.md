@@ -670,21 +670,21 @@ Bir kullanıcının veya hatalı çağrının başka proje/belge/konuşma içeri
 
 Production/staging:
 
-- [ ] `AUTH_MODE=disabled` ile startup fail edecek.
-- [ ] Default MinIO/DB/API credential kabul edilmeyecek.
-- [ ] Her request `PrincipalContext` taşıyacak.
-- [ ] Workspace/project membership doğrulanacak.
+- [x] `AUTH_MODE=disabled` ile startup fail edecek.
+- [x] Default MinIO/DB/API credential kabul edilmeyecek.
+- [x] Her request `PrincipalContext` taşıyacak.
+- [x] Workspace/project membership doğrulanacak.
 
 ### 11.3 API sözleşmesi
 
-- [ ] Tüm uygulama route'ları `/api/v1` prefix'i altında toplanacak.
-- [ ] `/health/live` auth gerektirmeyebilir; readiness hassas dependency ayrıntısını anonim kullanıcıya açmayacak.
-- [ ] `project_id` chat, upload, repository ingestion, list, get, delete, reindex ve retrieval için zorunlu scope olacak.
-- [ ] Sessiz “ilk proje” seçimi ve “Varsayılan” proje yaratımı kaldırılacak.
-- [ ] `conversation_id` verilirse principal + workspace + project sahipliği doğrulanacak; yoksa yeni conversation güvenli scope ile oluşturulacak.
-- [ ] UUID/enum/filter validation boundary'de yapılacak; raw DB exception client'a dönmeyecek.
-- [ ] İş kuralı hataları HTTP 200 `success:false` değil anlamlı 4xx/5xx problem detail döndürecek.
-- [ ] Delete, durum değiştiren semantiğe uygun `DELETE` veya belgelenmiş command endpoint olacak; CSRF/idempotency politikası uygulanacak.
+- [x] Tüm uygulama route'ları `/api/v1` prefix'i altında toplanacak.
+- [x] `/health/live` auth gerektirmeyebilir; readiness hassas dependency ayrıntısını anonim kullanıcıya açmayacak.
+- [x] `project_id` chat, upload, repository ingestion, list, get, delete, reindex ve retrieval için zorunlu scope olacak.
+- [x] Sessiz “ilk proje” seçimi ve “Varsayılan” proje yaratımı kaldırılacak.
+- [x] `conversation_id` verilirse principal + workspace + project sahipliği doğrulanacak; yoksa yeni conversation güvenli scope ile oluşturulacak.
+- [x] UUID/enum/filter validation boundary'de yapılacak; raw DB exception client'a dönmeyecek.
+- [x] İş kuralı hataları HTTP 200 `success:false` değil anlamlı 4xx/5xx problem detail döndürecek.
+- [x] Delete, durum değiştiren semantiğe uygun `DELETE` veya belgelenmiş command endpoint olacak; CSRF/idempotency politikası uygulanacak.
 
 ### 11.4 Fail-closed retrieval scope
 
@@ -702,39 +702,55 @@ RetrievalScope
   data_policy
 ```
 
-- [ ] Unknown filter key `ValidationError` üretir; sessiz ignore edilmez.
-- [ ] `document_ids=[]`, “tüm belgeler” değil “hiçbir belge” anlamına gelir.
-- [ ] Scope yoksa retrieval çalışmaz.
-- [ ] Retriever interface uyumsuzluğu `TypeError` ile filtresiz retry'a dönüşmez.
-- [ ] Dense, lexical, identifier, resolver, neighbor expansion, citation lookup ve debug aynı scope'u uygular.
-- [ ] Repository katmanında unscoped query API'si üretim kodundan erişilemez hale getirilir.
+- [x] Unknown filter key `ValidationError` üretir; sessiz ignore edilmez.
+- [x] `document_ids=[]`, “tüm belgeler” değil “hiçbir belge” anlamına gelir.
+- [x] Scope yoksa retrieval çalışmaz.
+- [x] Retriever interface uyumsuzluğu `TypeError` ile filtresiz retry'a dönüşmez.
+- [x] Dense, lexical, identifier, resolver, neighbor expansion, citation lookup ve debug aynı scope'u uygular.
+- [x] Repository katmanında unscoped query API'si üretim kodundan erişilemez hale getirilir.
 
 ### 11.5 Yüksek riskli endpoint'ler
 
-- [ ] `/debug/retrieval` production default kapalı; yalnız admin scope ve audit event ile açılır.
-- [ ] Debug payload full content yerine varsayılan hash/snippet/redacted metadata döndürür.
-- [ ] Repository URL ingestion production default kapalıdır.
-- [ ] Açıldığında protocol/host/IP allowlist, DNS rebinding/redirect kontrolü, credential URL reddi, clone limitleri ve egress policy uygulanır.
-- [ ] Local directory ingestion yalnız canonical allowed roots içinde; symlink ve race testi yapılır.
-- [ ] Rate limit Redis-backed ve principal/route/cost sınıfına göre uygulanır.
+- [x] `/debug/retrieval` production default kapalı; yalnız admin scope ve audit event ile açılır.
+- [x] Debug payload full content yerine varsayılan hash/snippet/redacted metadata döndürür.
+- [x] Repository URL ingestion production default kapalıdır.
+- [x] Açıldığında protocol/host/IP allowlist, DNS rebinding/redirect kontrolü, credential URL reddi, clone limitleri ve egress policy uygulanır.
+- [x] Local directory ingestion yalnız canonical allowed roots içinde; symlink ve race testi yapılır.
+- [x] Rate limit Redis-backed ve principal/route/cost sınıfına göre uygulanır.
 
 ### 11.6 Güvenlik testleri
 
-- [ ] A kullanıcısı B workspace/project/document/conversation kimliğini tahmin ederek erişemez.
-- [ ] Empty/unknown/malformed filter veri genişletmez.
-- [ ] Retriever mock'u eski signature kullandığında istek fail eder, filtresiz çalışmaz.
-- [ ] Debug endpoint anonim ve normal kullanıcı için kapalıdır.
-- [ ] Auth disabled production config'i startup'ta reddedilir.
-- [ ] Repository ingestion localhost, metadata IP, private subnet ve redirect ile SSRF yapamaz.
-- [ ] CORS yalnız allowlist origin; wildcard+credentials kombinasyonu yok.
+- [x] A kullanıcısı B workspace/project/document/conversation kimliğini tahmin ederek erişemez.
+- [x] Empty/unknown/malformed filter veri genişletmez.
+- [x] Retriever mock'u eski signature kullandığında istek fail eder, filtresiz çalışmaz.
+- [x] Debug endpoint anonim ve normal kullanıcı için kapalıdır.
+- [x] Auth disabled production config'i startup'ta reddedilir.
+- [x] Repository ingestion localhost, metadata IP, private subnet ve redirect ile SSRF yapamaz.
+- [x] CORS yalnız allowlist origin; wildcard+credentials kombinasyonu yok.
 
 ### 11.7 Kabul kriterleri
 
-- [ ] Tüm veri erişim yolları `PrincipalContext + RetrievalScope` taşır.
-- [ ] Cross-project/workspace leakage testleri yüzde 100 geçer ve leakage sayısı `0`.
-- [ ] Default proje/unchecked conversation davranışı kalmaz.
-- [ ] Scope/filtre hatası hiçbir koşulda daha geniş sorgu üretmez.
-- [ ] Production güvenli olmayan auth/config ile başlamaz.
+- [x] Tüm veri erişim yolları `PrincipalContext + RetrievalScope` taşır.
+- [x] Cross-project/workspace leakage testleri yüzde 100 geçer ve leakage sayısı `0`.
+- [x] Default proje/unchecked conversation davranışı kalmaz.
+- [x] Scope/filtre hatası hiçbir koşulda daha geniş sorgu üretmez.
+- [x] Production güvenli olmayan auth/config ile başlamaz.
+
+### 11.8 Aşama 4 uygulama kaydı — 2026-09-02
+
+- API ve retrieval kapsamı `PrincipalContext` + immutable `RetrievalScope`
+  ile fail-closed hale getirildi; repository adapter'ları somut `project_id`
+  olmadan sorgu üretmiyor.
+- `cv3_00000002` migration'ı boş, izole PostgreSQL 16/pgvector üzerinde iki
+  ardışık `upgrade head` ile uygulandı; verifier sonucu `PASS`, head
+  `cv3_00000002`.
+- Gerçek PostgreSQL + HTTP/ORM scope testi iki workspace kurdu; diğer
+  workspace proje/belge sızıntısı `0` ve absent/cross-scope yanıtı aynı
+  `404` oldu.
+- Backend regresyonu: `545 passed, 6 skipped, 2 deselected`; A4 migration
+  entegrasyonu: `2 passed`; frontend lint/typecheck/unit/contract/build
+  kapıları geçti. Parser timeout testindeki gecikmeli worker kapanışı Aşama 6
+  izolasyon işine açık bulgu olarak taşındı.
 
 ---
 

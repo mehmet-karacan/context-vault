@@ -453,12 +453,16 @@ def _persist_citations(
     db.flush()
 
 
+class ConversationScopeError(ValueError):
+    """Raised when a supplied conversation is outside the requested project."""
+
+
 def ensure_conversation(
     db: Any,
     *,
-    project_id: Optional[str] = None,
+    project_id: str,
     conversation_id: Optional[str] = None,
-) -> Optional[str]:
+) -> str:
     """Resolve (or create) the ``Conversation`` a chat turn is persisted under.
 
     A�Yama 6 citation persistence requires a real ``conversation_id`` whose
@@ -467,20 +471,9 @@ def ensure_conversation(
     before ``generate_answer`` so runtime turns are actually persisted instead
     of being silently skipped.
 
-    - If ``conversation_id`` is given it is returned unchanged (client-scoped /
-      resumed conversation).
-    - Otherwise an existing conversation for ``project_id`` is reused (most
-      recently updated first); if none exists a new ``Conversation`` row is
-      created and flushed. ``project_id`` must be non-None to persist.
-    - With no ``db`` (DB-free path) or no resolvable ``project_id`` this
-      returns ``None``, in which case ``generate_answer`` keeps skipping
-      persistence (existing behaviour).
+    A supplied conversation must belong to the exact project. Without an id a
+    fresh conversation is created; no ambient/default conversation is reused.
     """
-    if conversation_id is not None:
-        return conversation_id
-    if db is None or project_id is None:
-        return None
-
     from src.models import Conversation  # local import: keeps module DB-light
 
     def _uuid(value: Any) -> Any:
@@ -491,16 +484,23 @@ def ensure_conversation(
         except (ValueError, TypeError):
             return None
 
-    existing = (
-        db.query(Conversation)
-        .filter(Conversation.project_id == _uuid(project_id))
-        .order_by(Conversation.updated_at.desc(), Conversation.created_at.desc())
-        .first()
-    )
-    if existing is not None:
+    parsed_project_id = _uuid(project_id)
+    if db is None or parsed_project_id is None:
+        raise ConversationScopeError("valid database and project_id required")
+    if conversation_id is not None:
+        existing = (
+            db.query(Conversation)
+            .filter(
+                Conversation.id == _uuid(conversation_id),
+                Conversation.project_id == parsed_project_id,
+            )
+            .first()
+        )
+        if existing is None:
+            raise ConversationScopeError("conversation not found in project")
         return str(existing.id)
 
-    conversation = Conversation(project_id=_uuid(project_id), title="Varsayılan Sohbet")
+    conversation = Conversation(project_id=parsed_project_id, title=None)
     if getattr(conversation, "id", None) is None:
         conversation.id = uuid.uuid4()
     db.add(conversation)

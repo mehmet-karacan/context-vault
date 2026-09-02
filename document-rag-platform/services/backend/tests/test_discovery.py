@@ -146,6 +146,31 @@ def test_symlink_not_followed(tmp_path):
     assert not any("linked" in p for p in paths)
 
 
+def test_file_swapped_to_symlink_after_walk_is_rejected(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    outside = tmp_path / "outside.txt"
+    candidate = repo / "candidate.txt"
+    repo.mkdir()
+    candidate.write_text("safe\n", encoding="utf-8")
+    outside.write_text("private\n", encoding="utf-8")
+    real_open = os.open
+    swapped = False
+
+    def racing_open(path, flags, *args, **kwargs):
+        nonlocal swapped
+        if os.fspath(path) == str(candidate) and not swapped:
+            swapped = True
+            candidate.unlink()
+            os.symlink(outside, candidate)
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(
+        "src.infrastructure.repositories.discovery.os.open", racing_open
+    )
+    result = discover_directory(str(repo), config=_config())
+    assert result.files == []
+
+
 def test_fake_walker_injection(tmp_path, monkeypatch):
     """Pure test: inject a filesystem walker, no real tree required."""
     fake_walker = iter(

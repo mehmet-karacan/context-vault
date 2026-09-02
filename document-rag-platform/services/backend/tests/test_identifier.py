@@ -7,7 +7,14 @@ result shape via a fake session.
 
 from __future__ import annotations
 
-from src.infrastructure.retrieval import IdentifierRetriever, identifier_sql_from_spec
+import pytest
+
+from src.infrastructure.retrieval import (
+    DenseVectorRetriever,
+    IdentifierRetriever,
+    LexicalRetriever,
+    identifier_sql_from_spec,
+)
 
 
 class _Row:
@@ -45,7 +52,11 @@ def test_spec_holds_extracted_or_explicit_identifiers():
 def test_search_derives_identifiers_from_query_text():
     session = FakeSession()
     retriever = IdentifierRetriever(session=session)
-    retriever.search("PAYMENT_FLAG nasıl set ediliyor?", top_k=10)
+    retriever.search(
+        "PAYMENT_FLAG nasıl set ediliyor?",
+        top_k=10,
+        filters={"project_id": "project"},
+    )
     assert "PAYMENT_FLAG" in session.executed_params["ids"]
 
 
@@ -53,7 +64,10 @@ def test_search_with_explicit_identifiers_skips_extraction():
     session = FakeSession(rows=[_Row("c-1", 1.0)])
     retriever = IdentifierRetriever(session=session)
     results = retriever.search(
-        "totally plain language", top_k=10, identifiers=["PAYMENT_FLAG"]
+        "totally plain language",
+        top_k=10,
+        filters={"project_id": "project"},
+        identifiers=["PAYMENT_FLAG"],
     )
     assert [c.chunk_id for c in results] == ["c-1"]
     assert results[0].source == "identifier"
@@ -63,8 +77,23 @@ def test_search_with_explicit_identifiers_skips_extraction():
 def test_search_with_no_identifiers_returns_empty():
     session = FakeSession(rows=[_Row("c-1", 1.0)])
     retriever = IdentifierRetriever(session=session)
-    results = retriever.search("bu bir düz cümle", top_k=10)
+    results = retriever.search(
+        "bu bir düz cümle", top_k=10, filters={"project_id": "project"}
+    )
     assert results == []
+
+
+@pytest.mark.parametrize(
+    "retriever,args",
+    [
+        (DenseVectorRetriever(session=FakeSession()), ([0.1], 5)),
+        (LexicalRetriever(session=FakeSession()), ("query", 5)),
+        (IdentifierRetriever(session=FakeSession()), ("PAYMENT_FLAG", 5)),
+    ],
+)
+def test_retrieval_repositories_reject_unscoped_search(retriever, args):
+    with pytest.raises(ValueError, match="requires project_id scope"):
+        retriever.search(*args)
 
 
 def test_sql_matches_array_symbol_and_file_path_with_filters():

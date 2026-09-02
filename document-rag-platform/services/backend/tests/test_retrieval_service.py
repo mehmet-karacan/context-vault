@@ -13,14 +13,23 @@ tight token budget verify the rerank and context paths. Covers:
 - the debug payload contains per-stage ranks / scores / labels.
 """
 
+import pytest
+
 from src.application.retrieval_service import (
     RetrievalResult,
     RetrievalService,
     dict_chunk_resolver,
 )
+from src.domain.retrieval_scope import RetrievalScope
 from src.infrastructure.retrieval.base import RetrievalCandidate
 from src.infrastructure.retrieval.context_builder import ContextBuilder
 from src.infrastructure.retrieval.no_answer import INTENT_DOCUMENT, INTENT_SMALLTALK
+
+SCOPE = RetrievalScope(
+    principal_id="11111111-1111-4111-8111-111111111111",
+    workspace_id="22222222-2222-4222-8222-222222222222",
+    project_id="33333333-3333-4333-8333-333333333333",
+)
 
 
 class FakeRetriever:
@@ -116,7 +125,7 @@ def test_rrf_fusion_order_is_correct():
     ]
 
     service = build_service(dense, lexical, identifier, _pool=pool)
-    result = service.retrieve("some query", debug=True)
+    result = service.retrieve("some query", SCOPE, debug=True)
 
     order = [c.chunk_id for c in result.ranked_candidates]
     # RRF(k=60): A = 1/61+1/62 highest; then D(=1/61) ties E(=1/61) -> D by id;
@@ -139,7 +148,7 @@ def test_dedupe_removes_identical_content_copies():
     ]
 
     service = build_service(dense, lexical, identifier, _pool=pool)
-    result = service.retrieve("dup", debug=True)
+    result = service.retrieve("dup", SCOPE, debug=True)
 
     ids = [c.chunk_id for c in result.ranked_candidates]
     assert "X1" in ids
@@ -154,7 +163,7 @@ def test_reranker_noop_keeps_fusion_order_when_disabled():
     reranker = RecordingReranker()
 
     service = build_service(dense, lexical, identifier, _pool=pool, reranker=reranker)
-    result = service.retrieve("q")
+    result = service.retrieve("q", SCOPE)
 
     # Noop behaviour: rerank invoked, but fused order preserved.
     # RRF(k=60): A(1/61) ties C(1/61) -> A first by id, then C, then B(1/62).
@@ -171,7 +180,7 @@ def test_reranker_reorder_is_honored_when_enabled():
     reranker = ReversingReranker()
 
     service = build_service(dense, lexical, identifier, _pool=pool, reranker=reranker)
-    result = service.retrieve("q")
+    result = service.retrieve("q", SCOPE)
 
     assert reranker.calls == 1
     # Reversing reranker flips fused order ["A","C","B"] -> ["B","C","A"].
@@ -197,7 +206,7 @@ def test_context_built_within_budget():
     service = build_service(
         dense, lexical, identifier, _pool=pool, context_builder=builder
     )
-    result = service.retrieve("q")
+    result = service.retrieve("q", SCOPE)
 
     assert result.context is not None
     assert result.context.total_tokens <= 250
@@ -211,7 +220,7 @@ def test_answerable_document_question_classified():
     pool = [chunk("A", "a document body")]
 
     service = build_service(dense, lexical, identifier, _pool=pool)
-    result = service.retrieve("PAYMENT_FLAG nedir?")
+    result = service.retrieve("PAYMENT_FLAG nedir?", SCOPE)
 
     assert result.answerability is not None
     assert result.answerability.intent == INTENT_DOCUMENT
@@ -220,7 +229,7 @@ def test_answerable_document_question_classified():
 
 def test_smalltalk_classified_as_intent_smalltalk():
     service = build_service([], [], [])
-    result = service.retrieve("selam")
+    result = service.retrieve("selam", SCOPE)
 
     assert result.answerability.intent == INTENT_SMALLTALK
     assert result.answerability.answerable is False
@@ -233,7 +242,7 @@ def test_debug_payload_contains_all_stages_with_ranks():
     pool = [chunk("A", "a"), chunk("B", "b"), chunk("C", "c")]
 
     service = build_service(dense, lexical, identifier, _pool=pool)
-    result: RetrievalResult = service.retrieve("q", debug=True)
+    result: RetrievalResult = service.retrieve("q", SCOPE, debug=True)
 
     payload = result.debug_payload()
     stages = payload["stages"]
@@ -259,7 +268,7 @@ def test_debug_payload_contains_all_stages_with_ranks():
 
 def test_result_to_dict_shape():
     service = build_service([], [], [])
-    result = service.retrieve("selam", debug=True)
+    result = service.retrieve("selam", SCOPE, debug=True)
     d = result.to_dict(debug=True)
     assert d["intent"] == INTENT_SMALLTALK
     assert d["answerable"] is False
@@ -314,20 +323,39 @@ def test_real_retriever_path_applies_non_empty_filters():
     # normalization and apply the filters.
     service, (dense_s, lexical_s, identifier_s) = _real_retriever_service()
 
-    # Non-empty: project_id only ---
-    result = service.retrieve(
-        "PAYMENT_FLAG nasıl set ediliyor?", filters={"project_id": "proj-1"}
-    )
-    assert result.filters == {"project_id": "proj-1"}
+    # Mandatory project scope ---
+    result = service.retrieve("PAYMENT_FLAG nasıl set ediliyor?", SCOPE)
+    assert result.scope == SCOPE
     for session in (dense_s, lexical_s, identifier_s):
         assert session.executed_sql is not None
         assert "d.project_id = :fp0" in session.executed_sql
-        assert session.executed_params["fp0"] == "proj-1"
+        assert session.executed_params["fp0"] == SCOPE.project_id
 
-    # Non-empty: document_ids + scope ---
-    service.retrieve(
-        "PAYMENT_FLAG", filters={"document_ids": ["docA", "docB"], "scope": "code"}
+    # Non-empty document and source type restrictions ---
+    code_scope = SCOPE.model_copy(
+        update={
+            "allowed_document_ids": (
+                "44444444-4444-4444-8444-444444444444",
+                "55555555-5555-4555-8555-555555555555",
+            ),
+            "allowed_source_types": ("repository", "directory", "archive"),
+        }
     )
+    service.retrieve("PAYMENT_FLAG", code_scope)
     dense_sql = dense_s.executed_sql or ""
     assert "d.source_type IN" in dense_sql
     assert "c.document_id IN" in dense_sql
+
+
+def test_scope_is_mandatory_and_old_retriever_signature_fails_closed():
+    service = build_service([], [], [])
+    with pytest.raises(TypeError, match="RetrievalScope"):
+        service.retrieve("query", None)  # type: ignore[arg-type]
+
+    class OldRetriever(FakeRetriever):
+        def search(self, query, top_k):
+            return []
+
+    service.dense_retriever = OldRetriever([])
+    with pytest.raises(TypeError):
+        service.retrieve("query", SCOPE)
