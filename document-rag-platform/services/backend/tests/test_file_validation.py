@@ -7,6 +7,8 @@ Magical signatures are built in-memory — no real PDF/PNG/DOCX needed.
 
 from __future__ import annotations
 
+import io
+import zipfile
 from types import SimpleNamespace
 
 from src.infrastructure.security.file_validation import (
@@ -23,7 +25,20 @@ CFG = SimpleNamespace(
 _PDF = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n%%EOF\n"
 _PNG = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR" + b"\x00" * 20
 _TXT = b"Gunluk rapor: surec tamamlandi.\n"
-_DOCX = b"PK\x03\x04\x14\x00\x00\x00\x08\x00" + b"\x00" * 16  # ZIP office container
+
+
+def _docx_bytes() -> bytes:
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        archive.writestr("[Content_Types].xml", "<Types/>")
+        archive.writestr("word/document.xml", "<w:document/>")
+    return output.getvalue()
+
+
+_DOCX = _docx_bytes()
+_GENERIC_ZIP = io.BytesIO()
+with zipfile.ZipFile(_GENERIC_ZIP, "w") as _archive:
+    _archive.writestr("payload.txt", "not a docx")
 
 
 def test_valid_pdf_passes():
@@ -50,6 +65,12 @@ def test_valid_office_docx_passes():
     res = validate_upload(_DOCX, "belge.docx", None, config=CFG)
     assert res.ok is True
     assert res.detected_magic == "office"
+
+
+def test_generic_zip_renamed_docx_is_rejected():
+    res = validate_upload(_GENERIC_ZIP.getvalue(), "belge.docx", None, config=CFG)
+    assert res.ok is False
+    assert res.detected_magic is None
 
 
 def test_oversize_file_rejected():

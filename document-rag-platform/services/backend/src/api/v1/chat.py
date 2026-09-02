@@ -37,7 +37,10 @@ from src.application.answer_service import (
 from src.application.retrieval_service import RetrievalService
 from src.domain.identity import PrincipalContext
 from src.domain.retrieval_scope import RetrievalScope
-from src.infrastructure.security.auth import get_principal_context, require_project_access
+from src.infrastructure.security.auth import (
+    get_principal_context,
+    require_project_access,
+)
 from src.infrastructure.rate_limiter import rate_limiter
 from src.infrastructure.retrieval.dense import DenseVectorRetriever
 from src.infrastructure.retrieval.identifier import IdentifierRetriever
@@ -155,7 +158,9 @@ def query_chat(
         workspace_id=principal.workspace_id,
         project_id=chat_query.project_id,
         allowed_document_ids=(
-            tuple(chat_query.document_ids) if chat_query.document_ids is not None else None
+            tuple(chat_query.document_ids)
+            if chat_query.document_ids is not None
+            else None
         ),
         allowed_source_types=source_types,
     )

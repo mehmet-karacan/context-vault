@@ -43,6 +43,7 @@ from .redaction import (
     redact_log_field,
     redact_secrets,
 )
+from .source_detection import SourcePolicyRejected, describe_upload
 
 __all__ = [
     "FileValidationError",
@@ -60,6 +61,8 @@ __all__ = [
     "is_sensitive_filename",
     "redact_log_field",
     "redact_secrets",
+    "SourcePolicyRejected",
+    "describe_upload",
     "PathBlockError",
     "ensure_allowed_scan_path",
     "is_path_blocked",

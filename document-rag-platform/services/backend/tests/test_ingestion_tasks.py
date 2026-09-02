@@ -239,7 +239,7 @@ def test_full_run_completes_and_activates_new_version():
 
     artifacts = db.objects.get(DocumentArtifact, [])
     artifact_types = {a.artifact_type for a in artifacts}
-    assert artifact_types == {"original", "normalized_md"}
+    assert artifact_types == {"original", "normalized_json", "normalized_md"}
 
     events = db.objects.get(IngestionEvent, [])
     stages_seen = {e.stage for e in events}
@@ -373,7 +373,8 @@ def test_unreadable_document_fails_job_without_activating_new_version():
         )
 
     assert job.status == "failed"
-    assert version.status == "pending"  # never activated
+    assert version.status == "failed"  # terminal candidate, never activated
+    assert version.error_code == "IngestionJobError"
     assert version.activated_at is None
     # Aşama 2 kabul kriteri: the previously active version must keep serving
     # reads until the new one is fully ready.
@@ -397,7 +398,8 @@ def test_embedding_count_mismatch_fails_job():
         )
 
     assert job.status == "failed"
-    assert version.status == "pending"
+    assert version.status == "failed"
+    assert version.error_code == "IngestionJobError"
     assert document.active_version_id is None
 
 

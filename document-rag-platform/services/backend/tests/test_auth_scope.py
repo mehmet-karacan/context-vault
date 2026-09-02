@@ -139,6 +139,25 @@ def test_auth_disabled_rejects_non_loopback_bind_even_local():
         create_app(Settings(APP_ENV="local", AUTH_MODE="disabled", BIND_HOST="0.0.0.0"))
 
 
+@pytest.mark.parametrize(
+    "key,match",
+    [
+        (None, "encryption key is required"),
+        ("not-base64", "not valid base64"),
+        ("c2hvcnQ=", "decode to 32 bytes"),
+    ],
+)
+def test_runtime_rejects_missing_or_invalid_storage_encryption_key(key, match):
+    with pytest.raises(ValueError, match=match):
+        create_app(
+            Settings(
+                APP_ENV="local",
+                AUTH_MODE="disabled",
+                OBJECT_STORAGE_ENCRYPTION_KEY=key,
+            )
+        )
+
+
 def test_production_rejects_default_storage_credentials():
     with pytest.raises(ValueError, match="default MinIO"):
         create_app(
@@ -148,6 +167,8 @@ def test_production_rejects_default_storage_credentials():
                 API_KEY_PEPPER=PEPPER,
                 RATE_LIMIT_ENABLED=True,
                 RATE_LIMIT_BACKEND="redis",
+                MINIO_ACCESS_KEY="minioadmin",
+                MINIO_SECRET_KEY="minioadmin",
             )
         )
 

@@ -1,65 +1,28 @@
-"""Ingestion Celery tasks (Aşama 2.3).
-
-Defines ``process_ingestion_job``, the worker-side task that turns a queued
-``IngestionJob`` into fully-indexed chunks for a ``DocumentVersion``.
-
-This module deliberately does NOT duplicate the parsing/chunking logic that
-already exists in the current synchronous upload endpoint — it imports and
-reuses ``extract_text`` / ``chunk_text`` from ``api.v1.documents``, and
-``embed_texts`` / ``PASSAGE_INSTRUCTION`` from ``src.llm``, exactly as that
-endpoint does today. Structural (DOCX table/heading-aware, PDF/Docling, OCR)
-parsing arrives in later stages (Aşama 3) and will replace ``extract_text``
-without changing this task's stage machine.
-
-Contract this task assumes (owned by whichever caller enqueues the job — the
-job-based upload endpoint, which is a *later* stage and is NOT wired up as
-of Aşama 2.3; the current synchronous ``/documents/upload`` endpoint is left
-untouched):
-
-1. A ``Document`` row exists.
-2. A ``DocumentVersion`` row exists for it (``version_no`` set, ``status``
-   typically "pending") with ``storage_key`` already pointing at the
-   *original* file object already written to MinIO (Aşama 2.2's
-   ``object_keys.original_key(...)``).
-3. An ``IngestionJob`` row exists referencing that version, with
-   ``status="queued"``.
-
-This task NEVER changes ``documents.active_version_id`` until the new
-version is fully indexed and ready (Aşama 2 kabul kriteri): the previously
-active version keeps serving reads for the entire run, and is only swapped
-in the final "activating" stage once every chunk/embedding has been written
-successfully.
-
-IMPORTANT (Aşama 2.3 scope / known limitation): the tables this task reads
-and writes (``ingestion_jobs``, ``document_versions``, ``source_files``,
-``document_artifacts``, plus the additive columns on ``documents``/``chunks``)
-are defined in ``models.py`` / the Alembic migrations from Aşama 2.1 but have
-NOT been applied to the real database yet (see MIGRATION_RUNBOOK.md at the
-repo root). Do not run this task against the real Postgres until that
-migration has been applied — it will fail with
-``UndefinedTable``/``UndefinedColumn`` errors, which is expected. Use
-``tests/test_ingestion_tasks.py`` (fully mocked DB session) to validate the
-stage-machine and idempotency logic in the meantime.
-"""
+"""Worker adapter for the canonical ingestion orchestrator."""
 
 from __future__ import annotations
 
 import hashlib
+import json
 import os
+import socket
 import tempfile
 import uuid
+from datetime import timedelta
 from typing import Callable, List, Optional
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from ..api.v1.documents import chunk_text, extract_text
+from ..application.ingestion_pipeline import chunk_source, parse_source
 from ..config import settings
 from ..db import SessionLocal
 from ..domain.clock import Clock, SYSTEM_CLOCK
 from ..domain.ingestion_state import JobStatus, transition_job
+from ..domain.normalized_content import ContentUnit, NormalizedSource, UnitType
 from ..domain.version_activation import activate_document_version
-from ..infrastructure.security import redact_secrets
 from ..infrastructure.embeddings.cache import profile_config_hash
+from ..infrastructure.security import redact_secrets
 from ..infrastructure.retrieval.indexing import (
     build_search_vector_stmt,
     chunk_identifiers,
@@ -69,14 +32,21 @@ from ..infrastructure.storage.minio_storage import MinioObjectStorage
 from ..llm import PASSAGE_INSTRUCTION, embed_texts
 from ..models import (
     EMBEDDING_DIMENSION,
+    AuditEvent,
     Chunk,
     ChunkEmbedding,
+    ContentPolicyDecisionRecord,
     Document,
     DocumentArtifact,
     DocumentVersion,
     EmbeddingProfile,
     IngestionEvent,
+    IngestionAttempt,
     IngestionJob,
+    IngestionReceipt,
+    InboxReceipt,
+    SourceFile,
+    StorageObject,
 )
 from .celery_app import celery_app
 
@@ -96,6 +66,25 @@ STAGES = (
 
 DEFAULT_CHUNK_SIZE = 500
 DEFAULT_CHUNK_OVERLAP = 50
+DEFAULT_LEASE_SECONDS = settings.INGESTION_LEASE_SECONDS
+
+
+def _legacy_text_as_source(text_value: str, version_id) -> NormalizedSource:
+    """Compatibility bridge for injected unit-test parsers, never an API path."""
+    return NormalizedSource(
+        source_id=str(uuid.uuid4()),
+        version_id=str(version_id),
+        source_type="plain_text",
+        units=[
+            ContentUnit(
+                unit_id="legacy-test:1",
+                unit_type=UnitType.PARAGRAPH,
+                text=text_value,
+                markdown=text_value,
+                order=1,
+            )
+        ],
+    )
 
 
 class IngestionJobError(RuntimeError):
@@ -110,6 +99,10 @@ class StageTransitionError(IngestionJobError):
     documented successor of its current stage. This indicates a code-level
     state bug rather than a transient environment hiccup, so it is treated as
     permanent (see ``_validate_stage_transition``)."""
+
+
+class JobCancelled(IngestionJobError):
+    """Raised only at a stage boundary after a durable cancel request."""
 
 
 class RetryableIngestionError(RuntimeError):
@@ -129,6 +122,8 @@ def _build_storage() -> MinioObjectStorage:
         access_key=settings.MINIO_ACCESS_KEY,
         secret_key=settings.MINIO_SECRET_KEY,
         bucket=settings.MINIO_BUCKET,
+        encryption_key=settings.OBJECT_STORAGE_ENCRYPTION_KEY,
+        allow_legacy_plaintext_reads=settings.OBJECT_STORAGE_ALLOW_LEGACY_PLAINTEXT_READS,
     )
 
 
@@ -140,6 +135,8 @@ def _emit_event(
     message: Optional[str] = None,
     clock: Clock = SYSTEM_CLOCK,
 ) -> None:
+    if getattr(job, "cancel_requested_at", None) is not None:
+        raise JobCancelled("ingestion cancelled at a safe stage boundary")
     db.add(
         IngestionEvent(
             id=uuid.uuid4(),
@@ -150,6 +147,95 @@ def _emit_event(
             created_at=clock.now(),
         )
     )
+
+
+def _emit_receipt(
+    db: Session,
+    job: IngestionJob,
+    attempt: Optional[IngestionAttempt],
+    *,
+    stage: str,
+    status: str,
+    error_code: Optional[str] = None,
+    evidence_hash: Optional[str] = None,
+    clock: Clock = SYSTEM_CLOCK,
+) -> None:
+    if attempt is None:
+        return
+    db.add(
+        IngestionReceipt(
+            id=uuid.uuid4(),
+            job_id=job.id,
+            attempt_id=attempt.id,
+            stage=stage,
+            status=status,
+            error_code=error_code,
+            evidence_hash=evidence_hash,
+            metadata_json={},
+            created_at=clock.now(),
+        )
+    )
+
+
+def _claim_job(
+    db: Session,
+    job: IngestionJob,
+    *,
+    worker_id: str,
+    celery_task_id: Optional[str],
+    clock: Clock,
+    lease_seconds: int,
+) -> tuple[IngestionJob, Optional[IngestionAttempt]]:
+    """Atomically claim before effects; expired leases are safely reclaimable."""
+    now = clock.now()
+    expires = now + timedelta(seconds=lease_seconds)
+    if not hasattr(db, "execute"):
+        transition_job(job, JobStatus.RUNNING)
+        job.attempt = (job.attempt or 0) + 1
+        job.lease_owner = worker_id
+        job.lease_expires_at = expires
+        job.heartbeat_at = now
+        return job, None
+
+    claimed = db.execute(
+        text(
+            """
+            UPDATE ingestion_jobs
+            SET status='running', attempt=attempt+1, lease_owner=:owner,
+                lease_expires_at=:expires, heartbeat_at=:now,
+                started_at=COALESCE(started_at,:now),
+                error_code=NULL, error_message=NULL
+            WHERE id=:job_id
+              AND status IN ('queued','retrying','running')
+              AND (status <> 'running' OR lease_expires_at IS NULL OR lease_expires_at < :now)
+            RETURNING attempt
+            """
+        ),
+        {"owner": worker_id, "expires": expires, "now": now, "job_id": job.id},
+    ).first()
+    if claimed is None:
+        db.rollback()
+        current = db.get(IngestionJob, job.id)
+        if current is not None and current.status == "completed":
+            return current, None
+        raise RetryableIngestionError(
+            "ingestion job is already leased by another worker"
+        )
+    attempt = IngestionAttempt(
+        id=uuid.uuid4(),
+        job_id=job.id,
+        attempt_no=int(claimed[0]),
+        worker_id=worker_id,
+        celery_task_id=celery_task_id,
+        status="running",
+        claimed_at=now,
+        lease_expires_at=expires,
+        heartbeat_at=now,
+    )
+    db.add(attempt)
+    db.commit()
+    db.expire_all()
+    return db.get(IngestionJob, job.id), attempt
 
 
 def _validate_stage_transition(current, new) -> None:
@@ -183,11 +269,22 @@ def _validate_stage_transition(current, new) -> None:
 
 
 def _advance_stage(
-    db: Session, job: IngestionJob, stage: str, clock: Clock = SYSTEM_CLOCK
+    db: Session,
+    job: IngestionJob,
+    stage: str,
+    clock: Clock = SYSTEM_CLOCK,
+    attempt: Optional[IngestionAttempt] = None,
 ) -> None:
     _validate_stage_transition(job.stage, stage)
     job.stage = stage
+    job.heartbeat_at = clock.now()
+    if job.lease_owner:
+        job.lease_expires_at = clock.now() + timedelta(seconds=DEFAULT_LEASE_SECONDS)
+    if attempt is not None:
+        attempt.heartbeat_at = job.heartbeat_at
+        attempt.lease_expires_at = job.lease_expires_at
     _emit_event(db, job, stage=stage, status="started", clock=clock)
+    _emit_receipt(db, job, attempt, stage=stage, status="started", clock=clock)
     db.commit()
 
 
@@ -250,16 +347,50 @@ def _clear_existing_chunks_for_version(db: Session, version_id) -> None:
     db.commit()
 
 
+def _register_referenced_object(
+    db: Session,
+    *,
+    key: str,
+    checksum: str,
+    size_bytes: int,
+    version_id,
+    artifact_id,
+    clock: Clock,
+) -> None:
+    """Idempotently bind an immutable artifact to the storage registry."""
+    existing = db.query(StorageObject).filter(StorageObject.storage_key == key).first()
+    if existing is not None:
+        return
+    db.add(
+        StorageObject(
+            id=uuid.uuid4(),
+            storage_key=key,
+            checksum=checksum,
+            size_bytes=size_bytes,
+            status="referenced",
+            version_id=version_id,
+            artifact_id=artifact_id,
+            created_at=clock.now(),
+            referenced_at=clock.now(),
+        )
+    )
+
+
 def run_ingestion_job(
     db: Session,
     job_id,
     storage,
-    extract_text_fn: Callable[[str, str], str] = extract_text,
-    chunk_text_fn: Callable[..., List[str]] = chunk_text,
+    extract_text_fn: Callable = parse_source,
+    chunk_text_fn: Callable = chunk_source,
     embed_texts_fn: Callable[..., List[List[float]]] = embed_texts,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
     clock: Clock = SYSTEM_CLOCK,
+    worker_id: Optional[str] = None,
+    celery_task_id: Optional[str] = None,
+    inbox_idempotency_key: Optional[str] = None,
+    embedding_is_remote: Optional[bool] = None,
+    checkpoint_hook: Optional[Callable[[str], None]] = None,
 ) -> dict:
     """Runs one ingestion job to completion (or failure) on ``db``.
 
@@ -280,6 +411,41 @@ def run_ingestion_job(
         return {"job_id": str(job_id), "status": "completed", "skipped": True}
     if job.status in {"failed", "cancelled"}:
         raise IngestionJobError(f"IngestionJob {job_id} is terminal ({job.status})")
+
+    worker_identity = worker_id or f"{socket.gethostname()}:{os.getpid()}"
+    job, attempt = _claim_job(
+        db,
+        job,
+        worker_id=worker_identity,
+        celery_task_id=celery_task_id,
+        clock=clock,
+        lease_seconds=DEFAULT_LEASE_SECONDS,
+    )
+    if job.status == "completed":
+        return {"job_id": str(job_id), "status": "completed", "skipped": True}
+    if inbox_idempotency_key and hasattr(db, "execute"):
+        existing_receipt = (
+            db.query(InboxReceipt)
+            .filter(
+                InboxReceipt.consumer == "ingestion-worker",
+                InboxReceipt.idempotency_key == inbox_idempotency_key,
+            )
+            .first()
+        )
+        if existing_receipt is not None and existing_receipt.status == "completed":
+            return {"job_id": str(job_id), "status": "completed", "skipped": True}
+        if existing_receipt is None:
+            db.add(
+                InboxReceipt(
+                    id=uuid.uuid4(),
+                    consumer="ingestion-worker",
+                    idempotency_key=inbox_idempotency_key,
+                    job_id=job.id,
+                    status="received",
+                    received_at=clock.now(),
+                )
+            )
+            db.commit()
 
     version = db.get(DocumentVersion, job.version_id)
     if version is None:
@@ -316,11 +482,7 @@ def run_ingestion_job(
         raise IngestionJobError(job.error_message)
 
     expected_active_version_id = document.active_version_id
-    transition_job(job, JobStatus.RUNNING)
-    job.attempt = (job.attempt or 0) + 1
-    job.started_at = clock.now()
-    job.error_code = None
-    job.error_message = None
+    job.started_at = job.started_at or clock.now()
     # Mirror job progress onto documents.status using the same vocabulary the
     # legacy synchronous upload path already writes ("uploaded" / "processing"
     # / "indexed" / "error") so existing frontend status labels keep working
@@ -331,15 +493,17 @@ def run_ingestion_job(
 
     try:
         # --- validating -----------------------------------------------
-        _advance_stage(db, job, "validating", clock)
+        _advance_stage(db, job, "validating", clock, attempt)
         if not version.storage_key:
             raise IngestionJobError(
                 "DocumentVersion.storage_key is empty; original was never stored"
             )
 
         # --- storing (fetch + register the original artifact) ----------
-        _advance_stage(db, job, "storing", clock)
-        original_bytes = storage.get(version.storage_key)
+        _advance_stage(db, job, "storing", clock, attempt)
+        staging_storage_key = version.storage_key
+        original_bytes = storage.get(staging_storage_key)
+        original_checksum = hashlib.sha256(original_bytes).hexdigest()
         original_artifact = (
             db.query(DocumentArtifact)
             .filter(
@@ -348,48 +512,173 @@ def run_ingestion_job(
             )
             .first()
         )
+        expected_checksum = (
+            original_artifact.checksum
+            if original_artifact is not None and original_artifact.checksum
+            else document.checksum
+        )
+        if expected_checksum and original_checksum != expected_checksum:
+            raise IngestionJobError("original artifact checksum mismatch")
         if original_artifact is None:
-            db.add(
-                DocumentArtifact(
-                    id=uuid.uuid4(),
-                    version_id=version.id,
-                    artifact_type="original",
-                    storage_key=version.storage_key,
-                    size_bytes=len(original_bytes),
-                    created_at=clock.now(),
-                )
+            original_artifact = DocumentArtifact(
+                id=uuid.uuid4(),
+                version_id=version.id,
+                artifact_type="original",
+                storage_key=staging_storage_key,
+                checksum=original_checksum,
+                size_bytes=len(original_bytes),
+                created_at=clock.now(),
             )
+            db.add(original_artifact)
+            db.flush()
+        if staging_storage_key.startswith("staging/"):
+            final_key = object_keys.immutable_original_key(
+                str(document.project_id),
+                str(document.id),
+                str(version.id),
+                str(original_artifact.id),
+                original_checksum,
+                document.name,
+            )
+            storage.put(final_key, original_bytes, content_type=document.mime_type)
+            if hashlib.sha256(storage.get(final_key)).hexdigest() != original_checksum:
+                raise IngestionJobError("final original artifact checksum mismatch")
+            original_artifact.storage_key = final_key
+            original_artifact.checksum = original_checksum
+            original_artifact.metadata_json = {"state": "immutable"}
+            version.storage_key = final_key
+            staging_record = (
+                db.query(StorageObject)
+                .filter(StorageObject.storage_key == staging_storage_key)
+                .first()
+            )
+            if staging_record is not None:
+                staging_record.status = "deleted"
+                staging_record.deleted_at = clock.now()
+            if (
+                db.query(StorageObject)
+                .filter(StorageObject.storage_key == final_key)
+                .first()
+                is None
+            ):
+                db.add(
+                    StorageObject(
+                        id=uuid.uuid4(),
+                        storage_key=final_key,
+                        checksum=original_checksum,
+                        size_bytes=len(original_bytes),
+                        status="referenced",
+                        version_id=version.id,
+                        artifact_id=original_artifact.id,
+                        created_at=clock.now(),
+                        referenced_at=clock.now(),
+                    )
+                )
             db.commit()
+            storage.delete(staging_storage_key)
+        else:
+            original_artifact.checksum = original_checksum
+            db.commit()
+        if checkpoint_hook is not None:
+            checkpoint_hook("after_storing")
 
         # --- parsing -----------------------------------------------------
-        _advance_stage(db, job, "parsing", clock)
+        _advance_stage(db, job, "parsing", clock, attempt)
         suffix = os.path.splitext(document.name or "")[1]
         tmp_path = None
         try:
             with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
                 tmp_file.write(original_bytes)
                 tmp_path = tmp_file.name
-            text = extract_text_fn(tmp_path, document.name)
+            parsed = (
+                extract_text_fn(tmp_path, document.name, document.mime_type)
+                if extract_text_fn is parse_source
+                else extract_text_fn(tmp_path, document.name)
+            )
         finally:
             if tmp_path and os.path.exists(tmp_path):
                 os.unlink(tmp_path)
 
-        if not text.strip():
+        normalized = (
+            parsed
+            if isinstance(parsed, NormalizedSource)
+            else _legacy_text_as_source(str(parsed), version.id)
+        )
+        normalized.version_id = str(version.id)
+        source_file_by_path: dict[str, SourceFile] = {}
+        source_manifest = normalized.metadata.get("source_files") or []
+        if isinstance(source_manifest, list):
+            for item in source_manifest:
+                if not isinstance(item, dict):
+                    continue
+                relative_path = item.get("relative_path")
+                if not isinstance(relative_path, str) or not relative_path:
+                    continue
+                source_file = (
+                    db.query(SourceFile)
+                    .filter(
+                        SourceFile.version_id == version.id,
+                        SourceFile.relative_path == relative_path,
+                    )
+                    .first()
+                )
+                if source_file is None:
+                    source_file = SourceFile(
+                        id=uuid.uuid4(),
+                        version_id=version.id,
+                        relative_path=relative_path,
+                        language=item.get("language"),
+                        mime_type=item.get("mime_type"),
+                        size_bytes=item.get("size_bytes"),
+                        content_hash=item.get("content_hash"),
+                        is_binary=False,
+                        is_generated=bool(item.get("is_generated")),
+                        is_ignored=False,
+                        metadata_json=item.get("metadata") or {},
+                    )
+                    db.add(source_file)
+                    db.flush([source_file])
+                source_file_by_path[relative_path] = source_file
+        rendered_text = "\n\n".join(
+            (unit.markdown or unit.text).strip()
+            for unit in normalized.units
+            if (unit.markdown or unit.text).strip()
+        )
+        if not rendered_text.strip():
             raise IngestionJobError("Belgenin okunabilir metin içeriği bulunamadı.")
 
-        # Persist the normalized artifact. Plain-text passthrough at this
-        # stage — structural DOCX/PDF -> Markdown conversion arrives with
-        # the Aşama 3 parser router without changing this task's shape.
+        policy = None
+        policy_id = getattr(version, "content_policy_decision_id", None)
+        if policy_id:
+            policy = db.get(ContentPolicyDecisionRecord, policy_id)
+        if policy is not None and not policy.permit_normalized_storage:
+            raise IngestionJobError("content policy forbids normalized storage")
+
+        normalized_json = json.dumps(
+            normalized.to_dict(), ensure_ascii=False, separators=(",", ":")
+        ).encode("utf-8")
+        normalized_json_storage_key = object_keys.normalized_json_key(
+            str(document.project_id), str(document.id), str(version.id)
+        )
         normalized_key = object_keys.normalized_markdown_key(
             str(document.project_id), str(document.id), str(version.id)
         )
-        storage.put(normalized_key, text.encode("utf-8"), content_type="text/markdown")
+        storage.put(
+            normalized_json_storage_key,
+            normalized_json,
+            content_type="application/json",
+        )
+        storage.put(
+            normalized_key,
+            rendered_text.encode("utf-8"),
+            content_type="text/markdown",
+        )
 
         normalized_artifact = (
             db.query(DocumentArtifact)
             .filter(
                 DocumentArtifact.version_id == version.id,
-                DocumentArtifact.artifact_type == "normalized_md",
+                DocumentArtifact.artifact_type == "normalized_json",
             )
             .first()
         )
@@ -397,50 +686,167 @@ def run_ingestion_job(
             normalized_artifact = DocumentArtifact(
                 id=uuid.uuid4(),
                 version_id=version.id,
-                artifact_type="normalized_md",
-                storage_key=normalized_key,
-                size_bytes=len(text.encode("utf-8")),
+                artifact_type="normalized_json",
+                storage_key=normalized_json_storage_key,
+                checksum=hashlib.sha256(normalized_json).hexdigest(),
+                size_bytes=len(normalized_json),
                 created_at=clock.now(),
             )
             db.add(normalized_artifact)
             db.flush()
+        _register_referenced_object(
+            db,
+            key=normalized_json_storage_key,
+            checksum=hashlib.sha256(normalized_json).hexdigest(),
+            size_bytes=len(normalized_json),
+            version_id=version.id,
+            artifact_id=normalized_artifact.id,
+            clock=clock,
+        )
+        normalized_markdown = (
+            db.query(DocumentArtifact)
+            .filter(
+                DocumentArtifact.version_id == version.id,
+                DocumentArtifact.artifact_type == "normalized_md",
+            )
+            .first()
+        )
+        if normalized_markdown is None:
+            markdown_bytes = rendered_text.encode("utf-8")
+            normalized_markdown = DocumentArtifact(
+                id=uuid.uuid4(),
+                version_id=version.id,
+                artifact_type="normalized_md",
+                storage_key=normalized_key,
+                checksum=hashlib.sha256(markdown_bytes).hexdigest(),
+                size_bytes=len(markdown_bytes),
+                created_at=clock.now(),
+            )
+            db.add(normalized_markdown)
+            db.flush()
+        markdown_bytes = rendered_text.encode("utf-8")
+        _register_referenced_object(
+            db,
+            key=normalized_key,
+            checksum=hashlib.sha256(markdown_bytes).hexdigest(),
+            size_bytes=len(markdown_bytes),
+            version_id=version.id,
+            artifact_id=normalized_markdown.id,
+            clock=clock,
+        )
         version.normalized_artifact_id = normalized_artifact.id
         db.commit()
+        if checkpoint_hook is not None:
+            checkpoint_hook("after_parsing")
 
         # --- chunking ------------------------------------------------------
-        _advance_stage(db, job, "chunking", clock)
-        chunks = chunk_text_fn(text, chunk_size=chunk_size, overlap=chunk_overlap)
-        if not chunks:
+        _advance_stage(db, job, "chunking", clock, attempt)
+        chunk_candidates = chunk_text_fn(
+            normalized, chunk_size=chunk_size, overlap=chunk_overlap
+        )
+        if not chunk_candidates:
             raise IngestionJobError("Chunking produced zero chunks")
-        # Aşama 9.5 secret policy: redact credential values before they reach the
-        # embedding gateway or are persisted as chunk content (AKTIF §15: no
-        # .env/private-key/credential content to the embedding gateway). The
-        # normalized_md artifact above keeps the original text for traceability.
-        chunks = [redact_secrets(c) for c in chunks]
+        chunk_contents = [
+            redact_secrets(
+                candidate.content if hasattr(candidate, "content") else str(candidate)
+            )
+            for candidate in chunk_candidates
+        ]
+        embedding_texts = [
+            redact_secrets(
+                candidate.embedding_text
+                if hasattr(candidate, "embedding_text")
+                else str(candidate)
+            )
+            for candidate in chunk_candidates
+        ]
 
         # --- embedding -----------------------------------------------------
-        _advance_stage(db, job, "embedding", clock)
-        embeddings = embed_texts_fn(chunks, instruction=PASSAGE_INSTRUCTION)
-        if len(embeddings) != len(chunks):
+        _advance_stage(db, job, "embedding", clock, attempt)
+        remote = (
+            embed_texts_fn is embed_texts
+            if embedding_is_remote is None
+            else embedding_is_remote
+        )
+        if policy is not None and remote and not policy.permit_remote_embedding:
+            raise IngestionJobError("content policy forbids remote embedding")
+        if remote:
+            if job.actor_principal_id is None or job.workspace_id is None:
+                raise IngestionJobError(
+                    "remote embedding requires an attributable ingestion actor"
+                )
+            db.add(
+                AuditEvent(
+                    id=uuid.uuid4(),
+                    actor_principal_id=job.actor_principal_id,
+                    workspace_id=job.workspace_id,
+                    project_id=document.project_id,
+                    event_type="ingestion.remote_embedding_authorized",
+                    metadata_json={
+                        "document_id": str(document.id),
+                        "version_id": str(version.id),
+                        "content_policy_decision_id": str(policy.id)
+                        if policy is not None
+                        else None,
+                        "classification": policy.classification
+                        if policy is not None
+                        else document.data_classification,
+                        "policy_version": policy.policy_version
+                        if policy is not None
+                        else None,
+                        "provider": "openai-compatible",
+                        "model": settings.EMBEDDING_MODEL,
+                    },
+                    created_at=clock.now(),
+                )
+            )
+            db.commit()
+        embeddings = embed_texts_fn(embedding_texts, instruction=PASSAGE_INSTRUCTION)
+        if len(embeddings) != len(chunk_candidates):
             raise IngestionJobError("Embedding count does not match chunk count")
+        if any(len(embedding) != EMBEDDING_DIMENSION for embedding in embeddings):
+            raise IngestionJobError(
+                f"Embedding dimension must be {EMBEDDING_DIMENSION}"
+            )
+        if checkpoint_hook is not None:
+            checkpoint_hook("after_embedding")
 
         # --- indexing (idempotent: wipe + rewrite this version's chunks) --
-        _advance_stage(db, job, "indexing", clock)
+        _advance_stage(db, job, "indexing", clock, attempt)
         _clear_existing_chunks_for_version(db, version.id)
-        profile = _get_or_create_active_embedding_profile(db, clock)
+        profile_id = getattr(version, "embedding_profile_id", None)
+        profile = db.get(EmbeddingProfile, profile_id) if profile_id else None
+        if profile is None:
+            profile = _get_or_create_active_embedding_profile(db, clock)
 
-        for index, (content, embedding) in enumerate(zip(chunks, embeddings)):
+        for index, (candidate, content, embedding) in enumerate(
+            zip(chunk_candidates, chunk_contents, embeddings)
+        ):
+            locator = getattr(candidate, "locator", {}) or {}
+            source_file = source_file_by_path.get(locator.get("file_path"))
             chunk = Chunk(
                 id=uuid.uuid4(),
                 document_id=document.id,
                 version_id=version.id,
+                source_file_id=source_file.id if source_file is not None else None,
                 chunk_index=index,
                 sequence_no=index,
-                chunk_type="text",
+                chunk_type=getattr(candidate, "chunk_type", "text"),
                 content=content,
                 embedding=embedding,
                 identifiers=chunk_identifiers(content),
-                content_hash=hashlib.sha256(content.encode("utf-8")).hexdigest(),
+                content_hash=getattr(candidate, "content_hash", None)
+                or hashlib.sha256(content.encode("utf-8")).hexdigest(),
+                heading_path=getattr(candidate, "heading_path", None),
+                page_start=locator.get("page_start"),
+                page_end=locator.get("page_end"),
+                line_start=locator.get("line_start"),
+                line_end=locator.get("line_end"),
+                bbox=locator.get("bbox"),
+                symbol_name=locator.get("symbol_name"),
+                symbol_type=locator.get("symbol_type"),
+                token_count=getattr(candidate, "token_count", None),
+                metadata_json=getattr(candidate, "metadata", None),
                 created_at=clock.now(),
             )
             db.add(chunk)
@@ -462,9 +868,29 @@ def run_ingestion_job(
                 build_search_vector_stmt(document.id), {"document_id": document.id}
             )
         db.commit()
+        if checkpoint_hook is not None:
+            checkpoint_hook("after_indexing")
+
+        if hasattr(db, "execute"):
+            smoke = db.execute(
+                text(
+                    """
+                    SELECT c.id
+                    FROM chunks c
+                    JOIN chunk_embeddings ce ON ce.chunk_id = c.id
+                    WHERE c.version_id = :version_id
+                      AND ce.embedding_profile_id = :profile_id
+                      AND c.search_vector IS NOT NULL
+                    LIMIT 1
+                    """
+                ),
+                {"version_id": version.id, "profile_id": profile.id},
+            ).first()
+            if smoke is None:
+                raise IngestionJobError("candidate smoke retrieval failed")
 
         # --- activating ------------------------------------------------
-        _advance_stage(db, job, "activating", clock)
+        _advance_stage(db, job, "activating", clock, attempt)
         version.status = "ready"
         db.flush()
         if hasattr(db, "execute"):
@@ -480,39 +906,126 @@ def run_ingestion_job(
             document.active_version_id = version.id
             document.status = "indexed"
             document.updated_at = clock.now()
+        if expected_active_version_id and expected_active_version_id != version.id:
+            previous = db.get(DocumentVersion, expected_active_version_id)
+            if previous is not None:
+                previous.status = "superseded"
+                retirement_at = clock.now() + timedelta(
+                    days=settings.STORAGE_RETENTION_DAYS
+                )
+                (
+                    db.query(StorageObject)
+                    .filter(
+                        StorageObject.version_id == previous.id,
+                        StorageObject.status == "referenced",
+                        StorageObject.retention_until.is_(None),
+                    )
+                    .update(
+                        {StorageObject.retention_until: retirement_at},
+                        synchronize_session=False,
+                    )
+                )
+        document.checksum = original_checksum
+        document.size = len(original_bytes)
+        document.mime_type = document.mime_type or "application/octet-stream"
         transition_job(job, JobStatus.COMPLETED)
         job.finished_at = clock.now()
+        job.lease_owner = None
+        job.lease_expires_at = None
         _emit_event(db, job, stage="activating", status="completed", clock=clock)
+        _emit_receipt(
+            db,
+            job,
+            attempt,
+            stage="activating",
+            status="completed",
+            evidence_hash=hashlib.sha256(
+                f"{version.id}:{len(chunk_candidates)}".encode("utf-8")
+            ).hexdigest(),
+            clock=clock,
+        )
+        if attempt is not None:
+            attempt.status = "completed"
+            attempt.finished_at = clock.now()
+        if inbox_idempotency_key and hasattr(db, "execute"):
+            inbox = (
+                db.query(InboxReceipt)
+                .filter(
+                    InboxReceipt.consumer == "ingestion-worker",
+                    InboxReceipt.idempotency_key == inbox_idempotency_key,
+                )
+                .first()
+            )
+            if inbox is not None:
+                inbox.status = "completed"
+                inbox.completed_at = clock.now()
+        if checkpoint_hook is not None:
+            checkpoint_hook("after_activation")
         db.commit()
 
         return {
             "job_id": str(job_id),
             "status": "completed",
             "version_id": str(version.id),
-            "chunks": len(chunks),
+            "chunks": len(chunk_candidates),
         }
 
     except Exception as exc:
         db.rollback()
         job = db.get(IngestionJob, job_id)  # re-fetch: rollback expired instances
         if job is not None:
+            if attempt is not None:
+                attempt = db.get(IngestionAttempt, attempt.id)
+            cancelled = isinstance(exc, JobCancelled)
             permanent = isinstance(exc, IngestionJobError)
-            transition_job(job, JobStatus.FAILED if permanent else JobStatus.RETRYING)
+            transition_job(
+                job,
+                JobStatus.CANCELLED
+                if cancelled
+                else JobStatus.FAILED
+                if permanent
+                else JobStatus.RETRYING,
+            )
             job.error_code = type(exc).__name__
             job.error_message = str(exc)
             job.finished_at = clock.now() if permanent else None
+            job.lease_owner = None
+            job.lease_expires_at = None
             _emit_event(
                 db,
                 job,
                 stage=job.stage or "validating",
-                status="failed" if permanent else "retrying",
+                status="cancelled"
+                if cancelled
+                else "failed"
+                if permanent
+                else "retrying",
                 message=str(exc),
                 clock=clock,
             )
+            _emit_receipt(
+                db,
+                job,
+                attempt,
+                stage=job.stage or "validating",
+                status="cancelled"
+                if cancelled
+                else "failed"
+                if permanent
+                else "retrying",
+                error_code=type(exc).__name__,
+                clock=clock,
+            )
+            if attempt is not None:
+                attempt.status = "cancelled" if cancelled else "failed"
+                attempt.error_code = type(exc).__name__
+                attempt.error_message = str(exc)
+                attempt.finished_at = clock.now()
             # Best-effort: also surface the failure on documents.status (same
             # re-fetch-after-rollback pattern as ``job`` above). Never lets a
             # failure to resolve version/document mask the real job failure.
             failed_document = None
+            failed_version = None
             try:
                 failed_version = db.get(DocumentVersion, job.version_id)
                 if failed_version is not None:
@@ -520,10 +1033,17 @@ def run_ingestion_job(
             except Exception:
                 failed_document = None
             if failed_document is not None:
-                failed_document.status = "error"
-                failed_document.error_code = type(exc).__name__
-                failed_document.error_message = str(exc)
+                if failed_document.active_version_id is None:
+                    failed_document.status = "error"
+                    failed_document.error_code = type(exc).__name__
+                    failed_document.error_message = str(exc)
+                else:
+                    failed_document.status = "indexed"
                 failed_document.updated_at = clock.now()
+            if permanent and failed_version is not None:
+                failed_version.status = "failed"
+                failed_version.error_code = type(exc).__name__
+                failed_version.error_message = str(exc)
             db.commit()
 
         # Permanent, code-level failures (validation, stage machine) propagate
@@ -543,7 +1063,9 @@ def run_ingestion_job(
     retry_backoff_max=int(settings.INGESTION_RETRY_BACKOFF_MAX_SECONDS),
     retry_jitter=True,
 )
-def process_ingestion_job(job_id: str) -> dict:
+def process_ingestion_job(
+    job_id: str, inbox_idempotency_key: Optional[str] = None
+) -> dict:
     """Celery task entrypoint: builds the real DB session and MinIO storage
     adapter, then runs the job to completion. Kept as a thin wrapper around
     ``run_ingestion_job`` (the actual state machine) so the logic is
@@ -551,7 +1073,59 @@ def process_ingestion_job(job_id: str) -> dict:
     """
     db = SessionLocal()
     try:
+        from ..application.ingestion_orchestrator import IngestionOrchestrator
+
         storage = _build_storage()
-        return run_ingestion_job(db=db, job_id=job_id, storage=storage)
+        task_id = getattr(getattr(process_ingestion_job, "request", None), "id", None)
+        return IngestionOrchestrator(db, storage).process_job(
+            job_id,
+            celery_task_id=task_id,
+            inbox_idempotency_key=inbox_idempotency_key,
+        )
+    finally:
+        db.close()
+
+
+@celery_app.task(name="ingestion.dispatch_outbox")
+def dispatch_ingestion_outbox(limit: int = 100) -> dict:
+    """Retry durable queue intents; publish errors remain in PostgreSQL."""
+    from ..application.ingestion_orchestrator import OutboxDispatcher
+
+    db = SessionLocal()
+    try:
+        dispatcher = OutboxDispatcher(
+            db,
+            lambda job_id, key: process_ingestion_job.delay(job_id, key),
+            SYSTEM_CLOCK,
+        )
+        return {"published": dispatcher.dispatch_pending(limit=limit)}
+    finally:
+        db.close()
+
+
+@celery_app.task(name="ingestion.reconcile_stale_leases")
+def reconcile_ingestion_leases() -> dict:
+    from ..application.ingestion_maintenance import reconcile_stale_leases
+
+    db = SessionLocal()
+    try:
+        return {"reconciled": reconcile_stale_leases(db)}
+    finally:
+        db.close()
+
+
+@celery_app.task(name="ingestion.sweep_orphan_staging")
+def sweep_ingestion_staging() -> dict:
+    from ..application.ingestion_maintenance import sweep_orphan_staging
+
+    db = SessionLocal()
+    try:
+        keys = sweep_orphan_staging(
+            db,
+            _build_storage(),
+            grace_seconds=settings.STAGING_ORPHAN_GRACE_SECONDS,
+            dry_run=False,
+        )
+        return {"deleted": len(keys)}
     finally:
         db.close()

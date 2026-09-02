@@ -5,9 +5,7 @@ from fastapi import APIRouter, Depends
 from . import chat, debug, documents, health, ingestion_jobs, projects, repositories
 from ...infrastructure.security.auth import get_principal_context
 
-api_router = APIRouter(
-    prefix="/api/v1", dependencies=[Depends(get_principal_context)]
-)
+api_router = APIRouter(prefix="/api/v1", dependencies=[Depends(get_principal_context)])
 
 api_router.include_router(health.router)
 api_router.include_router(projects.router)

@@ -100,6 +100,7 @@ def require_scoped_filters(filters: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         raise ValueError("retrieval repository requires project_id scope")
     return filters
 
+
 # scope -> set of source_type values (AKTIF_GOREV.md §5.6 / §6).
 SCOPE_SOURCE_TYPES: Dict[str, List[str]] = {
     "documents": ["document"],
@@ -158,7 +159,10 @@ def normalize_filters(
             if value is True:
                 terms.append(
                     FilterTerm(
-                        table="chunk", field="version_id", op="active_version", value=True
+                        table="chunk",
+                        field="version_id",
+                        op="active_version",
+                        value=True,
                     )
                 )
             continue
@@ -221,7 +225,9 @@ def render_where(
         elif term.op == "false":
             clauses.append("FALSE")
         elif term.op == "active_version":
-            clauses.append(f"{chunk_alias}.version_id = {document_alias}.active_version_id")
+            clauses.append(
+                f"{chunk_alias}.version_id = {document_alias}.active_version_id"
+            )
         else:
             raise ValueError(f"unsupported filter op: {term.op!r}")
     return (" AND ".join(clauses), params)

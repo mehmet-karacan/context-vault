@@ -114,6 +114,9 @@ class AuditEvent(Base):
     """Content-free security/audit receipt tied to an authenticated actor."""
 
     __tablename__ = "audit_events"
+    __table_args__ = (
+        Index("ix_audit_events_workspace_created", "workspace_id", "created_at"),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     actor_principal_id = Column(
@@ -164,6 +167,12 @@ class Document(Base):
         CheckConstraint(
             "status <> 'error' OR (error_code IS NOT NULL AND error_message IS NOT NULL)",
             name="ck_documents_error_details",
+        ),
+        Index(
+            "ix_documents_project_status_active",
+            "project_id",
+            "status",
+            postgresql_where=sa_text("deleted_at IS NULL"),
         ),
     )
 
@@ -218,6 +227,9 @@ class Document(Base):
 class Chunk(Base):
     __tablename__ = "chunks"
     __table_args__ = (
+        UniqueConstraint(
+            "version_id", "sequence_no", name="uq_chunks_version_sequence"
+        ),
         ForeignKeyConstraint(
             ["document_id", "version_id"],
             ["document_versions.document_id", "document_versions.id"],
@@ -230,6 +242,7 @@ class Chunk(Base):
             postgresql_using="hnsw",
             postgresql_ops={"embedding": "vector_cosine_ops"},
         ),
+        Index("ix_chunks_document_version", "document_id", "version_id"),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -254,7 +267,7 @@ class Chunk(Base):
         nullable=True,
         index=True,
     )
-    sequence_no = Column(Integer, nullable=True)
+    sequence_no = Column(Integer, nullable=False)
     chunk_type = Column(String, nullable=True)
     heading_path = Column(JSONB, nullable=True)
     page_start = Column(Integer, nullable=True)
@@ -320,13 +333,14 @@ class DocumentVersion(Base):
             name="ck_document_versions_status",
         ),
         CheckConstraint(
-            "activated_at IS NULL OR status IN ('completed','ready')",
+            "activated_at IS NULL OR status IN ('completed','ready','superseded')",
             name="ck_document_versions_activation",
         ),
         CheckConstraint(
             "status <> 'failed' OR (error_code IS NOT NULL AND error_message IS NOT NULL)",
             name="ck_document_versions_failed_error",
         ),
+        Index("ix_document_versions_document_status", "document_id", "status"),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -339,12 +353,29 @@ class DocumentVersion(Base):
     version_no = Column(Integer, nullable=False)
     source_revision = Column(String, nullable=True)
     status = Column(String, nullable=False, default="pending")
-    parser_profile = Column(String, nullable=True)
-    chunker_profile = Column(String, nullable=True)
+    parser_profile = Column(String, nullable=False, default="context-vault-parser-v1")
+    chunker_profile = Column(String, nullable=False, default="context-vault-chunker-v4")
+    embedding_profile_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("embedding_profiles.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    content_policy_decision_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("content_policy_decisions.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
     storage_key = Column(Text, nullable=True)
     normalized_artifact_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("document_artifacts.id", ondelete="SET NULL"),
+        ForeignKey(
+            "document_artifacts.id",
+            ondelete="SET NULL",
+            use_alter=True,
+            name="fk_document_versions_normalized_artifact_id_document_artifacts",
+        ),
         nullable=True,
     )
     created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
@@ -377,6 +408,11 @@ class SourceFile(Base):
     """A single file inside a repository/directory/archive version (Bölüm 8.3)."""
 
     __tablename__ = "source_files"
+    __table_args__ = (
+        UniqueConstraint(
+            "version_id", "relative_path", name="uq_source_files_version_path"
+        ),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     version_id = Column(
@@ -407,6 +443,12 @@ class DocumentArtifact(Base):
 
     __tablename__ = "document_artifacts"
     __table_args__ = (
+        UniqueConstraint(
+            "version_id",
+            "artifact_type",
+            "storage_key",
+            name="uq_document_artifacts_version_type_key",
+        ),
         CheckConstraint(
             "artifact_type IN "
             "('original','normalized_json','normalized_md','page_image','thumbnail','ocr_json','scan_config')",
@@ -460,13 +502,31 @@ class IngestionJob(Base):
             "status <> 'failed' OR (error_code IS NOT NULL AND error_message IS NOT NULL)",
             name="ck_ingestion_jobs_failed_error",
         ),
+        CheckConstraint(
+            "lease_expires_at IS NULL OR lease_owner IS NOT NULL",
+            name="ck_ingestion_jobs_lease_owner",
+        ),
+        Index("ix_ingestion_jobs_status_stage", "status", "stage"),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    idempotency_key = Column(String, nullable=False, unique=True)
     version_id = Column(
         UUID(as_uuid=True),
         ForeignKey("document_versions.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
+    )
+    actor_principal_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("principals.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    workspace_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="RESTRICT"),
+        nullable=True,
         index=True,
     )
     status = Column(String, nullable=False, default="queued")
@@ -477,6 +537,10 @@ class IngestionJob(Base):
     error_message = Column(Text, nullable=True)
     started_at = Column(DateTime(timezone=True), nullable=True)
     finished_at = Column(DateTime(timezone=True), nullable=True)
+    lease_owner = Column(String, nullable=True)
+    lease_expires_at = Column(DateTime(timezone=True), nullable=True)
+    heartbeat_at = Column(DateTime(timezone=True), nullable=True)
+    cancel_requested_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     version = relationship("DocumentVersion", back_populates="ingestion_jobs")
@@ -500,7 +564,7 @@ class IngestionEvent(Base):
         ),
         CheckConstraint(
             "status IS NULL OR status IN "
-            "('queued','running','retrying','completed','failed','cancelled')",
+            "('started','queued','running','retrying','completed','failed','cancelled')",
             name="ck_ingestion_events_status",
         ),
     )
@@ -519,6 +583,244 @@ class IngestionEvent(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     job = relationship("IngestionJob", back_populates="events")
+
+
+class ContentPolicyDecisionRecord(Base):
+    """Immutable, content-free policy decision made before processing."""
+
+    __tablename__ = "content_policy_decisions"
+    __table_args__ = (
+        CheckConstraint(
+            "classification IN ('public','internal','confidential','restricted')",
+            name="ck_content_policy_classification",
+        ),
+        CheckConstraint(
+            "NOT (contains_credentials OR contains_private_key) OR quarantine_reason IS NOT NULL",
+            name="ck_content_policy_high_risk_quarantine",
+        ),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    document_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    classification = Column(String, nullable=False)
+    contains_credentials = Column(Boolean, nullable=False, default=False)
+    contains_private_key = Column(Boolean, nullable=False, default=False)
+    contains_pii = Column(Boolean, nullable=False, default=False)
+    permit_original_storage = Column(Boolean, nullable=False)
+    permit_normalized_storage = Column(Boolean, nullable=False)
+    permit_local_embedding = Column(Boolean, nullable=False)
+    permit_remote_embedding = Column(Boolean, nullable=False)
+    permit_local_generation = Column(Boolean, nullable=False)
+    permit_remote_generation = Column(Boolean, nullable=False)
+    redaction_required = Column(Boolean, nullable=False)
+    quarantine_reason = Column(String, nullable=True)
+    policy_version = Column(String, nullable=False)
+    source_fingerprint = Column(String(64), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class OutboxEvent(Base):
+    """Durable queue intent committed with the document/version/job."""
+
+    __tablename__ = "outbox_events"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','dispatching','published','failed')",
+            name="ck_outbox_events_status",
+        ),
+        CheckConstraint(
+            "status <> 'failed' OR (error_code IS NOT NULL AND error_message IS NOT NULL)",
+            name="ck_outbox_events_failed_error",
+        ),
+        Index(
+            "ix_outbox_events_pending",
+            "available_at",
+            "created_at",
+            postgresql_where=sa_text("status IN ('pending','failed')"),
+        ),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    aggregate_type = Column(String, nullable=False)
+    aggregate_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    event_type = Column(String, nullable=False)
+    idempotency_key = Column(String, nullable=False, unique=True)
+    payload_json = Column(JSONB, nullable=False, default=dict)
+    status = Column(String, nullable=False, default="pending")
+    attempts = Column(Integer, nullable=False, default=0)
+    available_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    claimed_at = Column(DateTime(timezone=True), nullable=True)
+    published_at = Column(DateTime(timezone=True), nullable=True)
+    error_code = Column(String, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class InboxReceipt(Base):
+    """Consumer idempotency record for one delivered outbox message."""
+
+    __tablename__ = "inbox_receipts"
+    __table_args__ = (
+        UniqueConstraint("consumer", "idempotency_key", name="uq_inbox_consumer_key"),
+        CheckConstraint(
+            "status IN ('received','completed','failed')",
+            name="ck_inbox_receipts_status",
+        ),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    consumer = Column(String, nullable=False)
+    idempotency_key = Column(String, nullable=False)
+    job_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("ingestion_jobs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    status = Column(String, nullable=False, default="received")
+    received_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class IngestionAttempt(Base):
+    __tablename__ = "ingestion_attempts"
+    __table_args__ = (
+        UniqueConstraint("job_id", "attempt_no", name="uq_ingestion_attempt_job_no"),
+        CheckConstraint(
+            "status IN ('claimed','running','completed','failed','cancelled','stale')",
+            name="ck_ingestion_attempts_status",
+        ),
+        CheckConstraint(
+            "status <> 'failed' OR (error_code IS NOT NULL AND error_message IS NOT NULL)",
+            name="ck_ingestion_attempts_failed_error",
+        ),
+        Index("ix_ingestion_attempts_lease", "status", "lease_expires_at"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    job_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("ingestion_jobs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    attempt_no = Column(Integer, nullable=False)
+    worker_id = Column(String, nullable=False)
+    celery_task_id = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="claimed")
+    claimed_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    lease_expires_at = Column(DateTime(timezone=True), nullable=False)
+    heartbeat_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    error_code = Column(String, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+
+class IngestionReceipt(Base):
+    __tablename__ = "ingestion_receipts"
+    __table_args__ = (
+        UniqueConstraint(
+            "job_id", "attempt_id", "stage", "status", name="uq_ingestion_receipt_step"
+        ),
+        CheckConstraint(
+            "status IN ('started','completed','failed','retrying','cancelled')",
+            name="ck_ingestion_receipts_status",
+        ),
+        CheckConstraint(
+            "status <> 'failed' OR error_code IS NOT NULL",
+            name="ck_ingestion_receipts_failed_error",
+        ),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    job_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("ingestion_jobs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    attempt_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("ingestion_attempts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    stage = Column(String, nullable=False)
+    status = Column(String, nullable=False)
+    error_code = Column(String, nullable=True)
+    evidence_hash = Column(String(64), nullable=True)
+    metadata_json = Column(JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class StorageObject(Base):
+    """Registry entry used by staging/final orphan reconciliation and GC."""
+
+    __tablename__ = "storage_objects"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('staged','referenced','quarantined','deleted')",
+            name="ck_storage_objects_status",
+        ),
+        Index(
+            "ix_storage_objects_orphan_sweep",
+            "status",
+            "created_at",
+            postgresql_where=sa_text("status IN ('staged','quarantined')"),
+        ),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    storage_key = Column(Text, nullable=False, unique=True)
+    checksum = Column(String(64), nullable=False)
+    size_bytes = Column(BigInteger, nullable=False)
+    status = Column(String, nullable=False)
+    version_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("document_versions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    artifact_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("document_artifacts.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    retention_until = Column(DateTime(timezone=True), nullable=True)
+    legal_hold = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    referenced_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class StorageGcReceipt(Base):
+    __tablename__ = "storage_gc_receipts"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('planned','deleted','skipped','failed')",
+            name="ck_storage_gc_receipts_status",
+        ),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    storage_object_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("storage_objects.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    key_hash = Column(String(64), nullable=False)
+    action = Column(String, nullable=False)
+    status = Column(String, nullable=False)
+    reason = Column(String, nullable=False)
+    dry_run = Column(Boolean, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
 class EmbeddingProfile(Base):
@@ -595,6 +897,13 @@ class Conversation(Base):
     """A chat conversation scoped to a project (Bölüm 8.10)."""
 
     __tablename__ = "conversations"
+    __table_args__ = (
+        Index(
+            "ix_conversations_project_active",
+            "project_id",
+            postgresql_where=sa_text("deleted_at IS NULL"),
+        ),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     project_id = Column(

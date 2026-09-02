@@ -43,6 +43,20 @@ celery_app.conf.update(
     # legitimately take a while; don't let Celery silently drop results we
     # never asked to expire quickly.
     result_expires=None,
+    beat_schedule={
+        "dispatch-ingestion-outbox": {
+            "task": "ingestion.dispatch_outbox",
+            "schedule": 10.0,
+        },
+        "reconcile-stale-ingestion-leases": {
+            "task": "ingestion.reconcile_stale_leases",
+            "schedule": 60.0,
+        },
+        "sweep-orphan-ingestion-staging": {
+            "task": "ingestion.sweep_orphan_staging",
+            "schedule": 300.0,
+        },
+    },
 )
 
 # --- Worker-safe delivery & time limits (Aşama 2.5) --------------------------

@@ -318,6 +318,8 @@ def build_default_readiness_checks() -> Dict[str, Callable[[], bool]]:
             access_key=settings.MINIO_ACCESS_KEY,
             secret_key=settings.MINIO_SECRET_KEY,
             bucket=settings.MINIO_BUCKET,
+            encryption_key=settings.OBJECT_STORAGE_ENCRYPTION_KEY,
+            allow_legacy_plaintext_reads=settings.OBJECT_STORAGE_ALLOW_LEGACY_PLAINTEXT_READS,
         )
         # bucket_exists is a cheap HEAD-style call; skip creation during a
         # health probe (readiness must be read-only).

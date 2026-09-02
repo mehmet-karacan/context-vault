@@ -231,4 +231,5 @@ class ArchiveSourceScanner:
             root_dir=sandbox,
             files=files,
             warnings=list(self.warnings),
+            cleanup_root=sandbox if work is None else None,
         )

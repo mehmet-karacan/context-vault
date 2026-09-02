@@ -82,7 +82,9 @@ def validate_repository_url(
     for raw in addresses:
         address = ipaddress.ip_address(raw)
         if not address.is_global:
-            raise RepositoryUrlRejected("repository host resolved to a non-public address")
+            raise RepositoryUrlRejected(
+                "repository host resolved to a non-public address"
+            )
     return repository_url
 
 
@@ -141,7 +143,9 @@ class GitRepositorySource:
             for host in settings.REPOSITORY_ALLOWED_HOSTS.split(",")
             if host.strip()
         }
-        self.allowed_hosts = configured_hosts if allowed_hosts is None else allowed_hosts
+        self.allowed_hosts = (
+            configured_hosts if allowed_hosts is None else allowed_hosts
+        )
         self.resolver = resolver
         self._git_calls: List[List[str]] = []
 
@@ -215,4 +219,5 @@ class GitRepositorySource:
             branch_or_ref=ref,
             commit_sha=commit_sha,
             files=files,
+            cleanup_root=sandbox if work is None else None,
         )

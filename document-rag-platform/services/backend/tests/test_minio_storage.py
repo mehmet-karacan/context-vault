@@ -30,6 +30,8 @@ def _make_storage() -> MinioObjectStorage:
         access_key=settings.MINIO_ACCESS_KEY,
         secret_key=settings.MINIO_SECRET_KEY,
         bucket=settings.MINIO_BUCKET,
+        encryption_key=settings.OBJECT_STORAGE_ENCRYPTION_KEY,
+        allow_legacy_plaintext_reads=settings.OBJECT_STORAGE_ALLOW_LEGACY_PLAINTEXT_READS,
     )
 
 
@@ -76,9 +78,34 @@ def test_put_then_exists_then_get_then_delete_roundtrip(storage, test_key):
 
     fetched = storage.get(test_key)
     assert fetched == payload
+    assert storage.is_encrypted(test_key) is True
 
     storage.delete(test_key)
     assert storage.exists(test_key) is False
+
+
+def test_minio_raw_object_is_ciphertext_and_key_bound(storage, test_key):
+    payload = b"plaintext-must-not-appear-in-object-store"
+    storage.put(test_key, payload, content_type="text/plain")
+
+    response = storage._client.get_object(storage._bucket, test_key)
+    try:
+        raw = response.read()
+    finally:
+        response.close()
+        response.release_conn()
+
+    assert raw != payload
+    assert payload not in raw
+    with pytest.raises(ValueError, match="authentication failed"):
+        storage._decrypt(f"{test_key}-different-aad", raw)
+
+
+def test_encrypted_payload_tampering_is_rejected(storage):
+    encrypted = bytearray(storage._encrypt("object-key", b"authenticated payload"))
+    encrypted[-1] ^= 1
+    with pytest.raises(ValueError, match="authentication failed"):
+        storage._decrypt("object-key", bytes(encrypted))
 
 
 def test_delete_is_idempotent_for_a_missing_object(storage, test_key):

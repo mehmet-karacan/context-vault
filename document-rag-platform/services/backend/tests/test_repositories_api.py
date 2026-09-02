@@ -171,24 +171,23 @@ def test_directory_scan_accepts_allowed_relative_path(client, tmp_path, monkeypa
         source_type="directory", source_revision="m", root_dir=str(sub), files=[]
     )
 
-    class _FakeService:
-        def run(self, db, doc, scan):
-            return {
-                "version_id": None,
-                "version_no": 1,
-                "files_count": 0,
-                "files_processed": 0,
-                "files_copied": 0,
-                "chunks": 0,
-                "deleted_files": [],
-            }
-
     monkeypatch.setattr(repo_mod, "_discover_directory", lambda *a, **k: dummy_scan)
-    monkeypatch.setattr(repo_mod, "_build_reindex_service", lambda: _FakeService())
     monkeypatch.setattr(
         repo_mod,
-        "_get_or_create_source_document",
-        lambda db, proj, st, uri, name: fake_doc,
+        "_find_source_document",
+        lambda db, proj, st, uri: fake_doc,
+    )
+    monkeypatch.setattr(
+        repo_mod,
+        "_reindex",
+        lambda *args, **kwargs: {
+            "document_id": str(fake_doc.id),
+            "version_id": str(uuid.uuid4()),
+            "version_no": 1,
+            "job_id": str(uuid.uuid4()),
+            "status": "queued",
+            "files_count": 0,
+        },
     )
 
     resp = client.post(

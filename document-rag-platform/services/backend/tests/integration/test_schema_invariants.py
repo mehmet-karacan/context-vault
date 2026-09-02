@@ -34,10 +34,26 @@ def _expect_rejected(cursor, sql: str, params: tuple) -> None:
     pytest.fail("database accepted an invariant violation")
 
 
+def _insert_policy(cursor, policy_id, document_id, now) -> None:
+    cursor.execute(
+        """
+        INSERT INTO content_policy_decisions
+          (id,document_id,classification,contains_credentials,contains_private_key,
+           contains_pii,permit_original_storage,permit_normalized_storage,
+           permit_local_embedding,permit_remote_embedding,permit_local_generation,
+           permit_remote_generation,redaction_required,quarantine_reason,
+           policy_version,source_fingerprint,created_at)
+        VALUES (%s,%s,'internal',false,false,false,true,true,true,true,true,true,
+                false,NULL,'test-v1',%s,%s)
+        """,
+        (policy_id, document_id, "a" * 64, now),
+    )
+
+
 @pytest.mark.integration
 def test_database_rejects_cross_version_state_and_profile_violations() -> None:
-    project_id, doc_a, doc_b, version_a, version_b, job_id = (
-        uuid.uuid4() for _ in range(6)
+    project_id, doc_a, doc_b, version_a, version_b, job_id, policy_a, policy_b = (
+        uuid.uuid4() for _ in range(8)
     )
     now = datetime.now(timezone.utc)
     with psycopg2.connect(os.environ["DATABASE_URL"]) as connection:
@@ -56,21 +72,39 @@ def test_database_rejects_cross_version_state_and_profile_violations() -> None:
                     """,
                     (document_id, project_id, f"{document_id}.txt", now, now, now),
                 )
+            _insert_policy(cursor, policy_a, doc_a, now)
+            _insert_policy(cursor, policy_b, doc_b, now)
+            cursor.execute("SELECT id FROM embedding_profiles WHERE is_active LIMIT 1")
+            profile_id = cursor.fetchone()[0]
             cursor.execute(
                 """
                 INSERT INTO document_versions
-                  (id, document_id, version_no, status, created_at)
-                VALUES (%s,%s,1,'ready',%s), (%s,%s,1,'pending',%s)
+                  (id, document_id, version_no, status, parser_profile,
+                   chunker_profile,embedding_profile_id,content_policy_decision_id,
+                   created_at)
+                VALUES (%s,%s,1,'ready','test-parser','test-chunker',%s,%s,%s),
+                       (%s,%s,1,'pending','test-parser','test-chunker',%s,%s,%s)
                 """,
-                (version_a, doc_a, now, version_b, doc_b, now),
+                (
+                    version_a,
+                    doc_a,
+                    profile_id,
+                    policy_a,
+                    now,
+                    version_b,
+                    doc_b,
+                    profile_id,
+                    policy_b,
+                    now,
+                ),
             )
 
             _expect_rejected(
                 cursor,
                 """
                 INSERT INTO chunks
-                  (id, document_id, version_id, chunk_index, content, created_at)
-                VALUES (%s,%s,%s,0,'cross scope',%s)
+                  (id, document_id, version_id, chunk_index, sequence_no, content, created_at)
+                VALUES (%s,%s,%s,0,0,'cross scope',%s)
                 """,
                 (uuid.uuid4(), doc_a, version_b, now),
             )
@@ -93,18 +127,19 @@ def test_database_rejects_cross_version_state_and_profile_violations() -> None:
                 cursor,
                 """
                 INSERT INTO ingestion_jobs
-                  (id, version_id, status, progress, attempt, created_at)
-                VALUES (%s,%s,'queued',101,0,%s)
+                  (id, version_id, idempotency_key, status, progress, attempt, created_at)
+                VALUES (%s,%s,%s,'queued',101,0,%s)
                 """,
-                (job_id, version_a, now),
+                (job_id, version_a, f"test:{job_id}", now),
             )
             cursor.execute(
                 """
                 INSERT INTO ingestion_jobs
-                  (id, version_id, status, progress, attempt, created_at, finished_at)
-                VALUES (%s,%s,'completed',100,1,%s,%s)
+                  (id, version_id, idempotency_key, status, progress, attempt,
+                   created_at, finished_at)
+                VALUES (%s,%s,%s,'completed',100,1,%s,%s)
                 """,
-                (job_id, version_a, now, now),
+                (job_id, version_a, f"test:{job_id}", now, now),
             )
             _expect_rejected(
                 cursor,
@@ -120,8 +155,6 @@ def test_database_rejects_cross_version_state_and_profile_violations() -> None:
                 (uuid.uuid4(), job_id, now),
             )
 
-            cursor.execute("SELECT id FROM embedding_profiles WHERE is_active LIMIT 1")
-            profile_id = cursor.fetchone()[0]
             _expect_rejected(
                 cursor,
                 "UPDATE embedding_profiles SET model=model || '-mutated' WHERE id=%s",
@@ -143,7 +176,9 @@ def test_database_rejects_cross_version_state_and_profile_violations() -> None:
 @pytest.mark.integration
 def test_concurrent_compare_and_swap_allows_one_active_version() -> None:
     engine = create_engine(os.environ["DATABASE_URL"])
-    project_id, document_id, version_a, version_b = (uuid.uuid4() for _ in range(4))
+    project_id, document_id, version_a, version_b, policy_a, policy_b = (
+        uuid.uuid4() for _ in range(6)
+    )
     now = datetime(2026, 9, 2, 14, 0, tzinfo=timezone.utc)
     with engine.begin() as connection:
         connection.execute(
@@ -154,9 +189,25 @@ def test_concurrent_compare_and_swap_allows_one_active_version() -> None:
                 INSERT INTO documents
                   (id,project_id,name,size,status,uploaded_at,created_at,updated_at)
                 VALUES (:doc,:id,'concurrent.txt',1,'uploaded',:now,:now,:now);
+                INSERT INTO content_policy_decisions
+                  (id,document_id,classification,contains_credentials,contains_private_key,
+                   contains_pii,permit_original_storage,permit_normalized_storage,
+                   permit_local_embedding,permit_remote_embedding,permit_local_generation,
+                   permit_remote_generation,redaction_required,quarantine_reason,
+                   policy_version,source_fingerprint,created_at)
+                VALUES
+                  (:pa,:doc,'internal',false,false,false,true,true,true,true,true,true,
+                   false,NULL,'test-v1',:fingerprint,:now),
+                  (:pb,:doc,'internal',false,false,false,true,true,true,true,true,true,
+                   false,NULL,'test-v1',:fingerprint,:now);
                 INSERT INTO document_versions
-                  (id,document_id,version_no,status,created_at)
-                VALUES (:a,:doc,1,'ready',:now),(:b,:doc,2,'ready',:now)
+                  (id,document_id,version_no,status,parser_profile,chunker_profile,
+                   embedding_profile_id,content_policy_decision_id,created_at)
+                VALUES
+                  (:a,:doc,1,'ready','test-parser','test-chunker',
+                   (SELECT id FROM embedding_profiles WHERE is_active LIMIT 1),:pa,:now),
+                  (:b,:doc,2,'ready','test-parser','test-chunker',
+                   (SELECT id FROM embedding_profiles WHERE is_active LIMIT 1),:pb,:now)
                 """
             ),
             {
@@ -166,6 +217,9 @@ def test_concurrent_compare_and_swap_allows_one_active_version() -> None:
                 "doc": document_id,
                 "a": version_a,
                 "b": version_b,
+                "pa": policy_a,
+                "pb": policy_b,
+                "fingerprint": "b" * 64,
                 "now": now,
             },
         )

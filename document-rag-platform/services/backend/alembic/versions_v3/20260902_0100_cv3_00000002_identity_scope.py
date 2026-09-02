@@ -65,7 +65,8 @@ def upgrade() -> None:
             server_default=sa.text("CURRENT_TIMESTAMP"),
         ),
         sa.CheckConstraint(
-            "role IN ('admin', 'member', 'reader')", name="ck_workspace_memberships_role"
+            "role IN ('admin', 'member', 'reader')",
+            name="ck_workspace_memberships_role",
         ),
     )
     op.create_table(
@@ -111,13 +112,12 @@ def upgrade() -> None:
         sa.text(
             "INSERT INTO workspace_memberships (workspace_id, principal_id, role) "
             "VALUES (CAST(:workspace_id AS uuid), CAST(:principal_id AS uuid), 'admin')"
-        ).bindparams(
-            workspace_id=LEGACY_WORKSPACE_ID, principal_id=LEGACY_PRINCIPAL_ID
-        )
+        ).bindparams(workspace_id=LEGACY_WORKSPACE_ID, principal_id=LEGACY_PRINCIPAL_ID)
     )
 
     op.add_column(
-        "projects", sa.Column("workspace_id", postgresql.UUID(as_uuid=True), nullable=True)
+        "projects",
+        sa.Column("workspace_id", postgresql.UUID(as_uuid=True), nullable=True),
     )
     op.execute(
         sa.text("UPDATE projects SET workspace_id = CAST(:id AS uuid)").bindparams(

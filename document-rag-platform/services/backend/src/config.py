@@ -78,6 +78,12 @@ class Settings(BaseSettings):
     MINIO_ACCESS_KEY: str = "minioadmin"
     MINIO_SECRET_KEY: str = "minioadmin"
     MINIO_BUCKET: str = "context-vault"
+    # Base64-encoded 256-bit key used for application-layer AES-GCM. The key
+    # belongs in the deployment secret store, never in source control.
+    OBJECT_STORAGE_ENCRYPTION_KEY: Optional[str] = None
+    # Existing pre-encryption artifacts remain readable during the bounded
+    # migration window; every new write is encrypted regardless of this flag.
+    OBJECT_STORAGE_ALLOW_LEGACY_PLAINTEXT_READS: bool = False
 
     # --- Task queue (Redis / Celery) -----------------------------------
     # Used as both Celery broker and result backend. docker-compose.yml
@@ -103,6 +109,11 @@ class Settings(BaseSettings):
     # than being treated as a cheap request timeout.
     INGESTION_TASK_SOFT_TIME_LIMIT_SECONDS: int = 3600
     INGESTION_TASK_TIME_LIMIT_SECONDS: int = 3700
+    INGESTION_LEASE_SECONDS: int = 120
+    INGESTION_OUTBOX_RETRY_SECONDS: int = 30
+    INGESTION_OUTBOX_CLAIM_TIMEOUT_SECONDS: int = 120
+    STAGING_ORPHAN_GRACE_SECONDS: int = 3600
+    STORAGE_RETENTION_DAYS: int = 30
 
     # --- Reranking (Aşama 5.4) ----------------------------------------------
     # Feature-gated, remote-capable reranker. Off by default: when the feature
@@ -123,13 +134,6 @@ class Settings(BaseSettings):
     # result is flagged ``needs_review`` in normalized-content metadata so a
     # human can verify it (AKTIF_GOREV.md §8.4).
     OCR_MIN_CONFIDENCE: float = 0.5
-
-    # --- Features --------------------------------------------------------
-    # Aşama 2.4: upload endpoint returns immediately with a queued
-    # IngestionJob instead of blocking on parse+chunk+embed. Default True
-    # per AKTIF_GOREV.md §11; set to False to fall back to the old fully
-    # synchronous upload behavior (kept for transition/rollback safety).
-    FEATURE_ASYNC_INGESTION: bool = True
 
     # Aşama 6: evidence-packaged, citation-persisting chat answers
     # (AKTIF_GOREV.md §6 / §12.4 / §16). Gates the new labeled-evidence prompt

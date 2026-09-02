@@ -13,9 +13,9 @@ Every route is additive (new router, no existing route touched) and gated
 behind ``FEATURE_REPOSITORY_INGESTION`` (§11 / §16 rollback). Directory scans
 are forced through the allowed-roots / canonical-path security check and
 **reject absolute paths** (§7.2 / §12.3). The heavy lifting (clone / extract /
-incremental re-index) is delegated to the source scanners and the
-``ReindexService`` through module-level factory functions so tests can stub
-them without a real clone, archive, DB or object store.
+incremental re-index) is delegated to the source scanners and the canonical
+``IngestionOrchestrator`` through module-level factory functions so tests can
+stub them without a real clone, archive, DB or object store.
 """
 
 from __future__ import annotations
@@ -23,15 +23,19 @@ from __future__ import annotations
 import hashlib
 import os
 import re
-import uuid
-from typing import List, Optional
+import shutil
+from typing import List, Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from ...application.reindex_service import ReindexService
+from ...application.ingestion_bundle import BUNDLE_MIME, build_scan_bundle
+from ...application.ingestion_orchestrator import (
+    AcceptSourceCommand,
+    IngestionOrchestrator,
+)
 from ...config import settings
 from ...db import get_db
 from ...infrastructure.repositories.archive_source import ArchiveSourceScanner
@@ -42,7 +46,7 @@ from ...infrastructure.repositories.git_source import (
 from ...infrastructure.repositories.scan_result import ScanResult
 from ...models import Document, DocumentArtifact, DocumentVersion, Project, SourceFile
 from src.domain.identity import PrincipalContext
-from src.domain.clock import utc_now
+from src.domain.ingestion import SourceDescriptor
 from src.infrastructure.rate_limiter import rate_limiter
 from src.infrastructure.security.auth import (
     get_principal_context,
@@ -73,8 +77,18 @@ def _build_archive_scanner() -> ArchiveSourceScanner:
     return ArchiveSourceScanner()
 
 
-def _build_reindex_service() -> ReindexService:
-    return ReindexService()
+def _build_ingestion_orchestrator(db: Session) -> IngestionOrchestrator:
+    from ...infrastructure.storage.minio_storage import MinioObjectStorage
+
+    storage = MinioObjectStorage(
+        endpoint=settings.MINIO_ENDPOINT,
+        access_key=settings.MINIO_ACCESS_KEY,
+        secret_key=settings.MINIO_SECRET_KEY,
+        bucket=settings.MINIO_BUCKET,
+        encryption_key=settings.OBJECT_STORAGE_ENCRYPTION_KEY,
+        allow_legacy_plaintext_reads=settings.OBJECT_STORAGE_ALLOW_LEGACY_PLAINTEXT_READS,
+    )
+    return IngestionOrchestrator(db, storage)
 
 
 def _discover_directory(
@@ -174,50 +188,18 @@ def resolve_allowed_scan_path(alias: str, relative_path: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _get_or_create_source_document(
-    db: Session, project: Project, source_type: str, origin_uri: str, name: str
-) -> Document:
-    doc = (
+def _find_source_document(
+    db: Session, project: Project, source_type: str, origin_uri: str
+) -> Optional[Document]:
+    return (
         db.query(Document)
         .filter(
             Document.project_id == project.id,
             Document.source_type == source_type,
             Document.origin_uri == origin_uri,
+            Document.deleted_at.is_(None),
         )
         .first()
-    )
-    if doc is not None:
-        return doc
-    now = utc_now()
-    doc = Document(
-        id=uuid.uuid4(),
-        project_id=project.id,
-        name=name,
-        size=0,
-        status="processing",
-        uploaded_at=now,
-        source_type=source_type,
-        origin_uri=origin_uri,
-        created_at=now,
-        updated_at=now,
-    )
-    db.add(doc)
-    db.commit()
-    db.refresh(doc)
-    return doc
-
-
-def _store_scan_config(db: Session, version: DocumentVersion, metadata: dict) -> None:
-    db.add(
-        DocumentArtifact(
-            id=uuid.uuid4(),
-            version_id=version.id,
-            artifact_type="scan_config",
-            storage_key="inline:scan_config",
-            size_bytes=0,
-            metadata_json=metadata,
-            created_at=utc_now(),
-        )
     )
 
 
@@ -243,17 +225,59 @@ def _read_scan_config(db: Session, document: Document) -> dict:
 def _reindex(
     db: Session,
     project: Project,
-    document: Document,
+    document: Optional[Document],
     scan: ScanResult,
     scan_config: dict,
+    principal: PrincipalContext,
+    *,
+    filename: str,
+    origin: str,
+    classification: str,
 ) -> dict:
-    service = _build_reindex_service()
-    result = service.run(db, document, scan)
-    new_version = db.get(DocumentVersion, result["version_id"])
-    if new_version is not None:
-        _store_scan_config(db, new_version, scan_config)
-        db.commit()
-    return result
+    try:
+        bundle = build_scan_bundle(scan)
+    finally:
+        if scan.cleanup_root:
+            shutil.rmtree(scan.cleanup_root, ignore_errors=True)
+    checksum = hashlib.sha256(bundle).hexdigest()
+    descriptor = SourceDescriptor(
+        source_type=scan.source_type,
+        origin=origin,
+        revision=scan.source_revision,
+        content_length=len(bundle),
+        content_hash=checksum,
+        detected_mime=BUNDLE_MIME,
+        declared_mime=BUNDLE_MIME,
+        data_classification_hint=classification,
+    )
+    accepted = _build_ingestion_orchestrator(db).accept_source(
+        AcceptSourceCommand(
+            project=project,
+            filename=filename,
+            content=bundle,
+            descriptor=descriptor,
+            idempotency_key=(
+                f"scan:{project.id}:{scan.source_type}:{origin}:"
+                f"{scan.source_revision}:{checksum}"
+            ),
+            actor_principal_id=principal.principal_id,
+            workspace_id=principal.workspace_id,
+            existing_document=document,
+            scan_config=scan_config,
+        )
+    )
+    version = db.get(DocumentVersion, accepted.version_id)
+    return {
+        "document_id": str(accepted.document_id),
+        "version_id": str(accepted.version_id),
+        "version_no": version.version_no if version is not None else None,
+        "job_id": str(accepted.job_id),
+        "status": accepted.status,
+        "replayed": accepted.replayed,
+        "quarantine_reason": accepted.quarantine_reason,
+        "source_revision": scan.source_revision,
+        "files_count": len(scan.files),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -270,6 +294,9 @@ class RepoIngestRequest(BaseModel):
     credential_ref: Optional[str] = None
     include_patterns: List[str] = Field(default_factory=list)
     exclude_patterns: List[str] = Field(default_factory=list)
+    data_classification: Literal["public", "internal", "confidential", "restricted"] = (
+        "internal"
+    )
 
 
 class DirectoryScanRequest(BaseModel):
@@ -280,6 +307,9 @@ class DirectoryScanRequest(BaseModel):
     relative_path: str
     include_patterns: List[str] = Field(default_factory=list)
     exclude_patterns: List[str] = Field(default_factory=list)
+    data_classification: Literal["public", "internal", "confidential", "restricted"] = (
+        "internal"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -346,9 +376,7 @@ def ingest_repository(
         os.path.basename(payload.repository_url.rstrip("/")).removesuffix(".git")
         or "repository"
     )
-    document = _get_or_create_source_document(
-        db, project, "repository", payload.repository_url, repo_name
-    )
+    document = _find_source_document(db, project, "repository", payload.repository_url)
     result = _reindex(
         db,
         project,
@@ -361,14 +389,21 @@ def ingest_repository(
             "include_patterns": payload.include_patterns,
             "exclude_patterns": payload.exclude_patterns,
         },
+        principal=principal,
+        filename=repo_name,
+        origin=payload.repository_url,
+        classification=payload.data_classification,
     )
-    return {"source_type": "repository", "document_id": str(document.id), **result}
+    return {"source_type": "repository", **result}
 
 
 @router.post("/archives/upload")
 def upload_archive(
     file: UploadFile = File(...),
     project_id: UUID = File(...),
+    data_classification: Literal[
+        "public", "internal", "confidential", "restricted"
+    ] = File("internal"),
     _: None = Depends(rate_limiter),
     db: Session = Depends(get_db),
     principal: PrincipalContext = Depends(get_principal_context),
@@ -380,10 +415,8 @@ def upload_archive(
     checksum = hashlib.sha256(data).hexdigest()
     scanner = _build_archive_scanner()
     scan = scanner.scan(data, file.filename or "archive.zip")
-    document = _get_or_create_source_document(
-        db, project, "archive", f"archive:{checksum}", file.filename or "archive.zip"
-    )
-    from ...infrastructure.storage.minio_storage import MinioObjectStorage  # noqa: F401
+    origin = f"archive:{checksum}"
+    document = _find_source_document(db, project, "archive", origin)
 
     result = _reindex(
         db,
@@ -396,8 +429,12 @@ def upload_archive(
             "include_patterns": [],
             "exclude_patterns": [],
         },
+        principal=principal,
+        filename=file.filename or "archive.zip",
+        origin=origin,
+        classification=data_classification,
     )
-    return {"source_type": "archive", "document_id": str(document.id), **result}
+    return {"source_type": "archive", **result}
 
 
 @router.post("/directories/scan")
@@ -419,9 +456,7 @@ def scan_directory(
         exclude_patterns=payload.exclude_patterns,
     )
     origin = f"{payload.allowed_root_alias}:{payload.relative_path}"
-    document = _get_or_create_source_document(
-        db, project, "directory", origin, payload.relative_path
-    )
+    document = _find_source_document(db, project, "directory", origin)
     result = _reindex(
         db,
         project,
@@ -433,8 +468,12 @@ def scan_directory(
             "include_patterns": payload.include_patterns,
             "exclude_patterns": payload.exclude_patterns,
         },
+        principal=principal,
+        filename=payload.relative_path,
+        origin=origin,
+        classification=payload.data_classification,
     )
-    return {"source_type": "directory", "document_id": str(document.id), **result}
+    return {"source_type": "directory", **result}
 
 
 def _scoped_document(
@@ -499,6 +538,8 @@ def refresh_document(
             access_key=settings.MINIO_ACCESS_KEY,
             secret_key=settings.MINIO_SECRET_KEY,
             bucket=settings.MINIO_BUCKET,
+            encryption_key=settings.OBJECT_STORAGE_ENCRYPTION_KEY,
+            allow_legacy_plaintext_reads=settings.OBJECT_STORAGE_ALLOW_LEGACY_PLAINTEXT_READS,
         )
         data = storage.get(artifact.storage_key)
         with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
@@ -517,8 +558,18 @@ def refresh_document(
         )
 
     project = require_project_access(db, principal, project_id)
-    result = _reindex(db, project, document, scan, scan_config=dict(cfg))
-    return {"document_id": str(document.id), "source_type": source_type, **result}
+    result = _reindex(
+        db,
+        project,
+        document,
+        scan,
+        scan_config=dict(cfg),
+        principal=principal,
+        filename=document.name,
+        origin=document.origin_uri or document.name,
+        classification=document.data_classification,
+    )
+    return {"source_type": source_type, **result}
 
 
 @router.get("/documents/{document_id}/files")

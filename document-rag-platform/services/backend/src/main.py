@@ -27,6 +27,7 @@ from .infrastructure.observability import (
     RequestContextMiddleware,
     configure_logging,
 )
+from .infrastructure.storage.minio_storage import decode_encryption_key
 
 configure_logging()
 
@@ -43,6 +44,7 @@ def validate_runtime_security(cfg: Settings) -> None:
     """Reject insecure authentication and credential combinations at boot."""
 
     environment = cfg.APP_ENV.strip().lower()
+    decode_encryption_key(cfg.OBJECT_STORAGE_ENCRYPTION_KEY)
     if cfg.AUTH_MODE == "disabled" and (
         environment != "local" or cfg.BIND_HOST.strip().lower() not in LOOPBACK_HOSTS
     ):

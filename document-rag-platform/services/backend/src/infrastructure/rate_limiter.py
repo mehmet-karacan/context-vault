@@ -157,9 +157,7 @@ class RateLimiter:
             return
         key = f"{self._key_prefix}:{self._key_fn(request)}"
         try:
-            allowed = self._store.allow(
-                key, self._max_requests, self._window_seconds
-            )
+            allowed = self._store.allow(key, self._max_requests, self._window_seconds)
             if inspect.isawaitable(allowed):
                 allowed = await allowed
         except Exception as exc:

@@ -167,7 +167,9 @@ class RetrievalResult:
         }
 
 
-def _redacted_debug_context(context: Optional[ContextBuildResult]) -> Dict[str, Any] | None:
+def _redacted_debug_context(
+    context: Optional[ContextBuildResult],
+) -> Dict[str, Any] | None:
     if context is None:
         return None
     return {

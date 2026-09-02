@@ -172,4 +172,6 @@ def test_repository_url_rejects_non_public_dns_results(address):
 
 def test_repository_url_rejects_host_outside_allowlist():
     with pytest.raises(RepositoryUrlRejected, match="allow-listed"):
-        validate_repository_url("https://example.com/o/r.git", {"github.com"}, _public_resolver)
+        validate_repository_url(
+            "https://example.com/o/r.git", {"github.com"}, _public_resolver
+        )

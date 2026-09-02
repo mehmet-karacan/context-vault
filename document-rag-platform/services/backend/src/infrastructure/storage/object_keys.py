@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+import hashlib
 
 # Characters allowed in a sanitized filename segment. Everything else is
 # replaced with "_". Deliberately conservative (ASCII alnum + a handful of
@@ -90,6 +91,31 @@ def original_key(
     d = _segment(document_id, "document_id")
     v = _segment(version_id, "version_id")
     return f"projects/{p}/documents/{d}/versions/{v}/original/{safe_filename(filename)}"
+
+
+def staging_key(idempotency_key: str, checksum: str, filename: str) -> str:
+    """Deterministic pre-transaction key; never contains the raw client key."""
+    digest = hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()
+    if not re.fullmatch(r"[0-9a-f]{64}", checksum):
+        raise ValueError("checksum must be a lowercase SHA-256 hex digest")
+    return f"staging/{digest}/{checksum}/{safe_filename(filename)}"
+
+
+def immutable_original_key(
+    project_id: str,
+    document_id: str,
+    version_id: str,
+    artifact_id: str,
+    checksum: str,
+    filename: str,
+) -> str:
+    """Final original key includes version, artifact identity, and checksum."""
+    base = original_key(project_id, document_id, version_id, filename)
+    artifact = _segment(artifact_id, "artifact_id")
+    if not re.fullmatch(r"[0-9a-f]{64}", checksum):
+        raise ValueError("checksum must be a lowercase SHA-256 hex digest")
+    prefix, safe_name = base.rsplit("/", 1)
+    return f"{prefix}/{artifact}/{checksum}/{safe_name}"
 
 
 def normalized_json_key(project_id: str, document_id: str, version_id: str) -> str:

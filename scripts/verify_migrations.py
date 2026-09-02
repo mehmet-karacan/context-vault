@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 TOOL_VERSION = "1.0.0"
-EXPECTED_HEAD = "cv3_00000003"
+EXPECTED_HEAD = "cv3_00000004"
 VERSIONS_RELATIVE = Path("document-rag-platform/services/backend/alembic/versions_v3")
 BACKEND_RELATIVE = Path("document-rag-platform/services/backend")
 
@@ -142,7 +142,7 @@ def database_snapshot(database_url: str) -> dict[str, Any]:
             WHERE (stage IS NOT NULL AND stage NOT IN
                     ('validating','storing','parsing','ocr','normalizing','chunking','embedding','indexing','activating'))
                OR (status IS NOT NULL AND status NOT IN
-                    ('queued','running','retrying','completed','failed','cancelled'))
+                    ('started','queued','running','retrying','completed','failed','cancelled'))
         """,
         "document_errors_without_details": """
             SELECT count(*) FROM documents
@@ -152,9 +152,40 @@ def database_snapshot(database_url: str) -> dict[str, Any]:
             SELECT count(*) FROM document_versions
             WHERE status = 'failed' AND (error_code IS NULL OR error_message IS NULL)
         """,
+        "versions_without_immutable_profiles_or_policy": """
+            SELECT count(*) FROM document_versions
+            WHERE parser_profile IS NULL OR chunker_profile IS NULL
+               OR embedding_profile_id IS NULL
+               OR content_policy_decision_id IS NULL
+        """,
+        "unsafe_remote_policy_decisions": """
+            SELECT count(*) FROM content_policy_decisions
+            WHERE permit_remote_embedding
+              AND (contains_credentials OR contains_private_key OR contains_pii
+                   OR classification IN ('confidential','restricted'))
+        """,
+        "terminal_jobs_without_receipts": """
+            SELECT count(*) FROM ingestion_jobs j
+            WHERE j.status IN ('completed','failed','cancelled')
+              AND NOT EXISTS (
+                SELECT 1 FROM ingestion_receipts r
+                WHERE r.job_id = j.id
+                  AND r.status = CASE j.status
+                    WHEN 'completed' THEN 'completed'
+                    WHEN 'cancelled' THEN 'cancelled'
+                    ELSE 'failed' END
+              )
+        """,
+        "invalid_job_leases": """
+            SELECT count(*) FROM ingestion_jobs
+            WHERE (lease_expires_at IS NOT NULL AND lease_owner IS NULL)
+               OR (status IN ('completed','failed','cancelled')
+                   AND lease_expires_at IS NOT NULL)
+        """,
         "invalid_activated_versions": """
             SELECT count(*) FROM document_versions
-            WHERE activated_at IS NOT NULL AND status NOT IN ('ready', 'completed')
+            WHERE activated_at IS NOT NULL
+              AND status NOT IN ('ready', 'completed', 'superseded')
         """,
         "legacy_embeddings_without_canonical_copy": """
             SELECT count(*) FROM chunks c

@@ -1,8 +1,8 @@
 """Shared scan result model for repository/archive/directory sources (Aşama 7).
 
 Format types produced by the source scanners (``git_source`` /
-``archive_source``) and consumed by the incremental re-index service
-(``application.reindex_service``). This module deliberately owns the small
+``archive_source``) and consumed by the canonical ingestion orchestrator
+(``application.ingestion_orchestrator``). This module deliberately owns the small
 data model (not any discovery logic) so the concurrently-developed discovery
 layer and this code agree on one shape.
 
@@ -48,6 +48,7 @@ class ScanResult:
     commit_sha: str = ""
     files: List[ScannedFile] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
+    cleanup_root: Optional[str] = None
 
     def file_map(self) -> dict:
         """Returns ``relative_path -> ScannedFile`` for O(1) lookups."""
