@@ -22,6 +22,9 @@ test-results/
 .coverage
 coverage.xml
 
+# Generated verification projection (exact current HEAD; never canonical input)
+status/verified-state.json
+
 # IDE
 .idea/
 .vscode/

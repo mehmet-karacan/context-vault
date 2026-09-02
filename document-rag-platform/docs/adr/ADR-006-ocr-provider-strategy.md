@@ -2,7 +2,9 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-20
-- **Deciders:** Context Vault platform implementation (Aşama 8)
+- **Owner:** Mehmet KARACAN
+- **Supersedes:** none
+- **Evidence:** OCR factory, routing and parser tests
 
 ## Context
 

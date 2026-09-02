@@ -1,3 +1,10 @@
+> **Sınıflandırma:** historical/non-canonical completion projection
+> **last_verified_sha:** `6b99a53d19e7f5f7b07b403e751c629f79ab7663`
+> **last_verified_at:** `2026-09-02T11:59:53Z`
+> **evidence_manifest:** `document-rag-platform/artifacts/audit/2026-09-02-baseline/audit-manifest.json`
+> **STALE UYARISI:** Bu dosyadaki geçmiş tamamlanma iddiaları güncel kabul
+> kanıtı değildir; root `AKTIF_GOREV.md` tarafından geçersiz kılınır.
+
 ## 2026-08-31 — Aşama 0: Git sahiplik temizliği ve araç-bağımsızlaştırma
 
 - Eski aktif görev `AKTIF_GOREV.md` → `done/active-tasks/2026-08-19-context-vault-rag-v2.md` arşivlendi.

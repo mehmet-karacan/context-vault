@@ -2,7 +2,9 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-20
-- **Deciders:** Context Vault platform implementation (Aşama 10)
+- **Owner:** Mehmet KARACAN
+- **Supersedes:** none
+- **Evidence:** root `README.md`; `artifacts/repository/2026-09-02-tree-inventory.json`
 
 ## Context
 
@@ -22,15 +24,16 @@ future operations never diverge (see `AKTIF_GOREV.md` Aşama 10 & `README`).
   - Backend: `document-rag-platform/services/backend/src/`
   - Frontend: `document-rag-platform/apps/web/`
   - Compose: `document-rag-platform/docker-compose.yml`
-- Repo-root skeleton dirs (`apps/`, `services/`, `docs/`, `tests/`,
-  `packages/`, `infra/`) are **not** canonical and are listed (not deleted) in
-  `docs/cleanup-candidates.md` (see section "Yinelenen / iskelet dizinler").
+- Repo-root application skeleton dirs (`apps/`, `services/`, `tests/`,
+  `packages`, `infra` and `docs/adr`) are **not** canonical and are removed.
+- Root historical coordination views (`active`, `done`, `plan` and the remaining
+  root documents) are not application source and are explicitly classified.
 - Nothing new is authored under the root skeleton dirs.
 
 ## Consequences
 
 - One `docker-compose.yml` / `Dockerfile` / `package.json` source per concern;
   no duplicated skeleton to keep in sync.
-- Cleanup remains a checklist that requires explicit approval
-  (`AKTIF_GOREV.md` Bölüm 4 madde 12 — nothing is auto-deleted).
+- Empty skeleton cleanup is recorded in the tree inventory; directories carrying
+  real content require an explicit classification decision before removal.
 - All ADR paths and documentation assume `document-rag-platform/` as the root.

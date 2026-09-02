@@ -1,5 +1,12 @@
 # Document RAG Platform — Gerçek Durum Checklist'i
 
+> **Sınıflandırma:** historical/non-canonical checklist
+> **last_verified_sha:** `6b99a53d19e7f5f7b07b403e751c629f79ab7663`
+> **last_verified_at:** `2026-09-02T11:59:53Z`
+> **evidence_manifest:** `document-rag-platform/artifacts/audit/2026-09-02-baseline/audit-manifest.json`
+> **STALE UYARISI:** İşaretli kutular çalışan sistem kanıtı değildir. Güncel
+> kabul kriterleri ve gerçek ilerleme yalnız root `AKTIF_GOREV.md` içindedir.
+
 **Kanonik plan:** `AKTIF_GOREV.md` (aşamalar, §11 env, §12 API, §16 feature flag/rollback, §18 ilerleme kaydı)
 **Doğrulama yöntemi:** Gerçek kod okunarak doğrulandı (`document-rag-platform/services/backend/src`).
 **Son güncelleme:** 2026-08-20

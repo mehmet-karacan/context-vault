@@ -2,7 +2,9 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-20
-- **Deciders:** Context Vault platform implementation (Aşama 3)
+- **Owner:** Mehmet KARACAN
+- **Supersedes:** none
+- **Evidence:** `services/backend/tests/test_normalized_content.py`
 
 ## Context
 

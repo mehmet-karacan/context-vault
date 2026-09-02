@@ -1,5 +1,12 @@
 # Aktif Görevler
 
+> **Sınıflandırma:** historical/non-canonical human projection
+> **last_verified_sha:** `6b99a53d19e7f5f7b07b403e751c629f79ab7663`
+> **last_verified_at:** `2026-09-02T11:59:53Z`
+> **evidence_manifest:** `document-rag-platform/artifacts/audit/2026-09-02-baseline/audit-manifest.json`
+> **STALE UYARISI:** Bu dosya aktif iş otoritesi değildir. Güncel ve tek görev
+> kaydı root `AKTIF_GOREV.md` dosyasıdır.
+
 **Son güncelleme:** 2026-08-20
 **Kanonik plan:** `AKTIF_GOREV.md` (ilerleme kaydı §18)
 
