@@ -1,0 +1,82 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "verify",
+  "operation_id": "cv3-v3-lineage-20260902-001",
+  "work_item_id": "CV3-PHASE-1-MIGRATION-LINEAGE",
+  "attempt_id": "cv3-v3-lineage-attempt-001",
+  "actor": "codex-local-agent",
+  "tool_adapter": "codex-desktop-local-shell",
+  "started_at": "2026-09-02T11:16:00Z",
+  "finished_at": "2026-09-02T12:14:00Z",
+  "baseline_revision": "6b99a53d19e7f5f7b07b403e751c629f79ab7663",
+  "result_revision": "73003964367a314fe880ef9dc21c5dde9237610d",
+  "scope_hash": "sha256:5ca4d421a9bd8282b65c3b288b9c0fc53ca201d8586d94842b2b46bf7146022d",
+  "context_manifest_hash": "sha256:320643427c25e5c194ab6e1ff5247317c979b3227a7ccd2d2e434bcc00cc3cb9",
+  "idempotency_key_hash": "sha256:8d41eff0240a9a6ff11bf40d6d1448d17909ed6611b7a72e92da0d7b964c1c72",
+  "commands": [
+    "migration graph verification without provider credentials",
+    "isolated blank upgrade and no-op re-run",
+    "isolated disposable downgrade and re-upgrade",
+    "Alembic autogenerate drift check",
+    "synthetic PostgreSQL and MinIO restore drill",
+    "backend regression test suite"
+  ],
+  "exit_status": 0,
+  "tests": [
+    {
+      "name": "backend pytest",
+      "result": "PASS",
+      "passed": 516,
+      "skipped": 6
+    },
+    {
+      "name": "focused migration tests",
+      "result": "PASS",
+      "passed": 8
+    },
+    {
+      "name": "alembic check",
+      "result": "PASS",
+      "message": "No new upgrade operations detected"
+    },
+    {
+      "name": "migration verifier",
+      "result": "PASS",
+      "head": "cv3_00000001",
+      "invariant_violations": 0
+    },
+    {
+      "name": "clean baseline verifier",
+      "result": "PASS",
+      "evidence_sha256": "55d8af5dab905115db9adf4af5aa1020000a22db583eb8d70133c8f5167f2a7b"
+    }
+  ],
+  "artifacts": [
+    {
+      "reference": "private-evidence:cv3-v3-lineage-20260902/postgresql-custom-dump",
+      "classification": "private-backup-synthetic",
+      "sha256": "d03b3917dd2b4f207e7e92352b4c0df91406c058e78d54d057564ecbfd553804"
+    },
+    {
+      "reference": "private-evidence:cv3-v3-lineage-20260902/object-backup",
+      "classification": "private-backup-synthetic",
+      "sha256": "39bccd0bc73b6af8397a4a4e3274a0543aa1dbf4e0c4eeff2f58884d814dc93b"
+    }
+  ],
+  "security_redactions": [
+    "database URL",
+    "credentials",
+    "local private paths",
+    "object key and content"
+  ],
+  "rollback": {
+    "strategy": "restore-and-cutover",
+    "destructive_downgrade_allowed": false,
+    "legacy_source_mutated": false
+  },
+  "known_limits": [
+    "Legacy database and object source were unavailable and were not migrated",
+    "Existing-data importer remains an open Phase 1 deliverable"
+  ],
+  "result": "PASS"
+}

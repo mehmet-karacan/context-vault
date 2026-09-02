@@ -366,24 +366,24 @@ Kayıp migration lineage'ı körlemesine `stamp` veya downgrade etmeden çözmek
 
 ### 8.2 Mutasyondan önce zorunlu yedek
 
-- [ ] Tutarlı PostgreSQL yedeği alınacak:
+- [x] Yeni lineage için tutarlı sentetik PostgreSQL yedeği alınacak:
   - schema-only dump;
   - data dump veya uygun formatta tam dump;
   - roles/extension bilgisi;
   - row-count ve seçili invariant fingerprint'leri.
-- [ ] MinIO object inventory alınacak:
+- [x] Yeni lineage için MinIO object inventory alınacak:
   - bucket, object key hash'i, size, etag/checksum, version bilgisi;
   - içerik veya özel object adı public repoya yazılmayacak.
-- [ ] Config ve compose/deployment manifestleri secret'sız biçimde kaydedilecek.
-- [ ] Yedek ayrı bir temiz PostgreSQL ve ayrı bucket'a **restore edilecek**.
-- [ ] Restore sonrası DB sayımları, FK/invariant sorguları ve object referans bütünlüğü karşılaştırılacak.
+- [x] Config ve compose/deployment manifestleri secret'sız biçimde kaydedilecek.
+- [x] Yedek ayrı bir temiz PostgreSQL ve ayrı bucket'a **restore edilecek**.
+- [x] Restore sonrası DB sayımları, FK/invariant sorguları ve object referans bütünlüğü karşılaştırılacak.
 - [ ] Restore denenmeden migration dosyası veya canlı veri değiştirilmeyecek.
 
 ### 8.3 Kayıp `b2f1c0a10004` / `b2f1c0a10005` karar ağacı
 
 #### Yol A — Exact migration dosyaları kurtarılabiliyorsa
 
-- [ ] Yerel reflog, worktree, stash, eski clone, CI artifact, backup, editör geçmişi ve ulaşılabilir Git object'leri salt-okunur taranacak.
+- [x] Yerel reflog, worktree, stash, eski clone, CI artifact, backup, editör geçmişi ve ulaşılabilir Git object'leri salt-okunur taranacak.
 - [ ] Bulunan dosyalar revision id, down_revision, içerik hash'i ve çalıştırıldığı dönemin şema diff'iyle doğrulanacak.
 - [ ] Dosyalar “tahmini” değil exact olduğuna dair kanıt olmadan Yol A kabul edilmeyecek.
 - [ ] `0001 → 0005` temiz DB kurulumu yapılacak.
@@ -392,11 +392,11 @@ Kayıp migration lineage'ı körlemesine `stamp` veya downgrade etmeden çözmek
 
 #### Yol B — Exact migration dosyaları kurtarılamıyorsa
 
-- [ ] `0004/0005` için boş/no-op sahte dosya oluşturulmayacak.
-- [ ] Canlı DB üzerinde `alembic stamp`, manuel `DELETE FROM alembic_version` veya kör downgrade yapılmayacak.
-- [ ] Pre-1.0 lineage reset ADR'si hazırlanacak.
-- [ ] Mevcut doğru şemadan yeni, tek-head'li bir V3 baseline migration seti oluşturulacak.
-- [ ] Yeni boş DB V3 baseline ile kurulacak.
+- [x] `0004/0005` için boş/no-op sahte dosya oluşturulmayacak.
+- [x] Canlı DB üzerinde `alembic stamp`, manuel `DELETE FROM alembic_version` veya kör downgrade yapılmayacak.
+- [x] Pre-1.0 lineage reset ADR'si hazırlanacak.
+- [x] Mevcut doğrulanabilir şemadan yeni, tek-head'li bir V3 baseline migration seti oluşturulacak.
+- [x] Yeni boş DB V3 baseline ile kurulacak.
 - [ ] Restore edilmiş kopyadan yeni DB'ye idempotent veri taşıma aracı yazılacak.
 - [ ] Taşıma; document/version/chunk/profile/artifact/job/conversation/citation ilişkilerini checksum ve invariant'larla doğrulayacak.
 - [ ] Uygulama yeni DB üzerinde smoke + integration + eval kapılarından geçecek.
@@ -405,18 +405,18 @@ Kayıp migration lineage'ı körlemesine `stamp` veya downgrade etmeden çözmek
 
 ### 8.4 Migration sisteminin düzeltilmesi
 
-- [ ] `alembic/env.py`, tam uygulama `Settings()` singleton'ını import etmeyecek.
-- [ ] Ayrı `MigrationSettings` yalnız DB URL, schema ve güvenli migration parametrelerini yükleyecek.
-- [ ] Migration için LLM, embedding, Redis veya MinIO anahtarı gerekmeyecek.
-- [ ] `CREATE EXTENSION`, index ve diğer DDL `db.py:init_db` içinden migration'a taşınacak.
-- [ ] Startup:
+- [x] `alembic/env.py`, tam uygulama `Settings()` singleton'ını import etmeyecek.
+- [x] Ayrı `MigrationSettings` yalnız DB URL, schema ve güvenli migration parametrelerini yükleyecek.
+- [x] Migration için LLM, embedding, Redis veya MinIO anahtarı gerekmeyecek.
+- [x] `CREATE EXTENSION`, index ve diğer DDL `db.py:init_db` içinden migration'a taşınacak.
+- [x] Startup:
   - DB'yi değiştirmeyecek;
   - beklenen migration head'ini kontrol edecek;
   - uyumsuzsa readiness'i 503 yapacak ve açıklayıcı structured error üretecek.
 - [ ] Birden fazla migration head varsa CI fail edecek.
-- [ ] Migration dosyalarının import-time side effect'i olmayacak.
+- [x] Migration dosyalarının import-time side effect'i olmayacak.
 - [ ] Destructive/data migration'lar chunk'lanabilir, yeniden başlatılabilir ve progress/receipt üreten ayrı komutla yürütülecek.
-- [ ] Production rollback, güvenli olmadığı yerde zorla downgrade değil restore/cutover prosedürüyle yapılacak.
+- [x] Production rollback, güvenli olmadığı yerde zorla downgrade değil restore/cutover prosedürüyle yapılacak.
 
 ### 8.5 Veri bütünlüğü onarımı
 
@@ -432,33 +432,33 @@ Yedek/restore kanıtından sonra:
 
 ### 8.6 Test matrisi
 
-- [ ] Blank DB: base → head.
-- [ ] Restore edilmiş production-benzeri DB: mevcut durum → hedef head.
-- [ ] Re-run: `upgrade head` ikinci kez veri değiştirmemeli.
-- [ ] Uygun reversible migration için clean DB `upgrade → downgrade → upgrade`.
+- [x] Blank DB: base → head.
+- [x] Restore edilmiş sentetik production-benzeri DB: mevcut durum → hedef head.
+- [x] Re-run: `upgrade head` ikinci kez veri değiştirmemeli.
+- [x] Uygun reversible migration için clean DB `upgrade → downgrade → upgrade`.
 - [ ] Data-heavy migration yarıda kill edilip güvenli retry.
-- [ ] Uygulama beklenen head gerisinde/ilerisinde DB ile başlamayı reddeder veya not-ready olur.
-- [ ] Yanlış/eksik LLM key migration'ı etkilemez.
-- [ ] Schema fingerprint hedefle birebir eşleşir.
+- [x] Uygulama beklenen head gerisinde/ilerisinde DB ile başlamayı reddeder veya not-ready olur.
+- [x] Yanlış/eksik LLM key migration'ı etkilemez.
+- [x] Schema fingerprint hedefle birebir eşleşir.
 
 ### 8.7 Teslimatlar
 
-- [ ] `docs/adr/ADR-007-migration-lineage-recovery-or-reset.md`
-- [ ] Güncel `MIGRATION_RUNBOOK.md`
-- [ ] `scripts/verify_migrations.py`
+- [x] `docs/adr/ADR-007-migration-lineage-recovery-or-reset.md`
+- [x] Güncel `MIGRATION_RUNBOOK.md`
+- [x] `scripts/verify_migrations.py`
 - [ ] Seçilen yola göre exact recovery veya V3 baseline/data-migration araçları
-- [ ] Public-safe migration incident receipt
-- [ ] Private restore drill kanıtı ve public hash özeti
+- [x] Public-safe migration incident receipt
+- [x] Private restore drill kanıtı ve public hash özeti
 
 ### 8.8 Kabul kriterleri
 
-- [ ] Kaynak kodu ve çalışan hedef DB aynı tanınabilir migration head'ine sahip.
-- [ ] Blank DB tek komut zinciriyle kurulabiliyor.
-- [ ] Restore edilmiş veri kopyası hedef sürüme taşınıp doğrulanmış.
-- [ ] Cross-version ve orphan invariant ihlalleri sıfır.
-- [ ] `alembic upgrade head`, LLM/MinIO/Redis secret'ı olmadan çalışıyor.
-- [ ] Startup DDL yapmıyor.
-- [ ] Kör stamp, veri kaybı, sahte revision veya doğrulanmamış downgrade yapılmamış.
+- [x] Kaynak kodu ve çalışan hedef DB aynı tanınabilir migration head'ine sahip.
+- [x] Blank DB tek komut zinciriyle kurulabiliyor.
+- [x] Restore edilmiş sentetik veri kopyası hedef sürüme taşınıp doğrulanmış.
+- [x] Cross-version ve orphan invariant ihlalleri doğrulanan V3 fixture'ında sıfır.
+- [x] `alembic upgrade head`, LLM/MinIO/Redis secret'ı olmadan çalışıyor.
+- [x] Startup DDL yapmıyor.
+- [x] Kör stamp, veri kaybı, sahte revision veya doğrulanmamış downgrade yapılmamış.
 
 ---
 
