@@ -25,42 +25,47 @@ import {
 } from "../lib/types";
 
 const markdownComponents = {
-  text: ({ children }: any) =>
+  text: ({ children }: MarkdownComponentProps) =>
     typeof children === "string" ? renderTextTokens(children) : children,
-  p: ({ children }: any) => <p className="mb-3 last:mb-0">{children}</p>,
-  strong: ({ children }: any) => <strong className="font-semibold text-ink">{children}</strong>,
-  ul: ({ children }: any) => <ul className="list-disc pl-5 mb-3 space-y-1 last:mb-0">{children}</ul>,
-  ol: ({ children }: any) => <ol className="list-decimal pl-5 mb-3 space-y-1 last:mb-0">{children}</ol>,
-  li: ({ children }: any) => <li>{children}</li>,
-  h1: ({ children }: any) => <h1 className="font-display text-lg text-ink mb-2 mt-3 first:mt-0">{children}</h1>,
-  h2: ({ children }: any) => <h2 className="font-display text-base text-ink mb-2 mt-3 first:mt-0">{children}</h2>,
-  h3: ({ children }: any) => <h3 className="font-display text-[15px] text-ink mb-1.5 mt-3 first:mt-0">{children}</h3>,
-  a: ({ children, href }: any) => (
+  p: ({ children }: MarkdownComponentProps) => <p className="mb-3 last:mb-0">{children}</p>,
+  strong: ({ children }: MarkdownComponentProps) => <strong className="font-semibold text-ink">{children}</strong>,
+  ul: ({ children }: MarkdownComponentProps) => <ul className="list-disc pl-5 mb-3 space-y-1 last:mb-0">{children}</ul>,
+  ol: ({ children }: MarkdownComponentProps) => <ol className="list-decimal pl-5 mb-3 space-y-1 last:mb-0">{children}</ol>,
+  li: ({ children }: MarkdownComponentProps) => <li>{children}</li>,
+  h1: ({ children }: MarkdownComponentProps) => <h1 className="font-display text-lg text-ink mb-2 mt-3 first:mt-0">{children}</h1>,
+  h2: ({ children }: MarkdownComponentProps) => <h2 className="font-display text-base text-ink mb-2 mt-3 first:mt-0">{children}</h2>,
+  h3: ({ children }: MarkdownComponentProps) => <h3 className="font-display text-[15px] text-ink mb-1.5 mt-3 first:mt-0">{children}</h3>,
+  a: ({ children, href }: MarkdownComponentProps) => (
     <a href={href} target="_blank" rel="noreferrer" className="text-brass-dim underline hover:text-ink">
       {children}
     </a>
   ),
-  code: ({ children }: any) => (
+  code: ({ children }: MarkdownComponentProps) => (
     <code className="bg-paper-dim px-1.5 py-0.5 rounded font-mono text-[13px]">{children}</code>
   ),
-  pre: ({ children }: any) => (
+  pre: ({ children }: MarkdownComponentProps) => (
     <pre className="bg-paper-dim rounded-md p-3 overflow-x-auto font-mono text-[13px] mb-3 last:mb-0">{children}</pre>
   ),
-  blockquote: ({ children }: any) => (
+  blockquote: ({ children }: MarkdownComponentProps) => (
     <blockquote className="border-l-2 border-brass pl-3 italic text-ink/80 mb-3 last:mb-0">{children}</blockquote>
   ),
-  table: ({ children }: any) => (
+  table: ({ children }: MarkdownComponentProps) => (
     <div className="overflow-x-auto mb-3 last:mb-0">
       <table className="w-full text-[13px] border-collapse">{children}</table>
     </div>
   ),
-  th: ({ children }: any) => (
+  th: ({ children }: MarkdownComponentProps) => (
     <th className="border border-ink-line px-2 py-1 text-left font-mono text-[11px] uppercase bg-paper-dim">
       {children}
     </th>
   ),
-  td: ({ children }: any) => <td className="border border-ink-line px-2 py-1">{children}</td>,
+  td: ({ children }: MarkdownComponentProps) => <td className="border border-ink-line px-2 py-1">{children}</td>,
 };
+
+interface MarkdownComponentProps {
+  children?: React.ReactNode;
+  href?: string;
+}
 
 function MarkdownContent({ content }: { content: string }) {
   return (
@@ -128,6 +133,11 @@ function CodeTicker() {
 }
 
 interface Project {
+  id: string;
+  name: string;
+}
+
+interface ApiProject {
   id: string;
   name: string;
 }
@@ -348,7 +358,7 @@ export default function ChatWidget() {
   useEffect(() => {
     fetch(apiUrl("/projects"))
       .then((r) => r.json())
-      .then((data) => setProjects(data.map((p: any) => ({ id: p.id, name: p.name }))))
+      .then((data: ApiProject[]) => setProjects(data.map((p) => ({ id: p.id, name: p.name }))))
       .catch((error) => console.error("Failed to fetch projects:", error));
 
     fetch(apiUrl("/chat/models"))

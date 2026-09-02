@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Nav from "../components/Nav";
 import {
   UploadIcon,
@@ -29,6 +29,22 @@ interface Project {
   id: string;
   name: string;
   documentCount: number;
+}
+
+interface ApiProject {
+  id: string;
+  name: string;
+  document_count: number;
+}
+
+interface ApiDocument {
+  id: string;
+  name: string;
+  size: number;
+  status: Document["status"];
+  uploaded_at: string;
+  project_id: string;
+  project_name: string | null;
 }
 
 const NEW_PROJECT_VALUE = "__new__";
@@ -237,40 +253,30 @@ export default function Home() {
   const [chunkSize, setChunkSize] = useState(DEFAULT_CHUNK_SIZE);
   const [uploadJobs, setUploadJobs] = useState<UploadJob[]>([]);
 
-  useEffect(() => {
-    fetchProjects();
-  }, []);
-
-  useEffect(() => {
-    fetchDocuments(documentsFilterProjectId);
-  }, [documentsFilterProjectId]);
-
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     try {
       const response = await fetch(apiUrl("/projects"));
-      const data = await response.json();
-      const mapped: Project[] = data.map((p: any) => ({
+      const data: ApiProject[] = await response.json();
+      const mapped: Project[] = data.map((p) => ({
         id: p.id,
         name: p.name,
         documentCount: p.document_count,
       }));
       setProjects(mapped);
-      if (!selectedProjectId && mapped.length > 0) {
-        setSelectedProjectId(mapped[0].id);
-      }
+      setSelectedProjectId((current) => current || mapped[0]?.id || "");
     } catch (error) {
       console.error("Failed to fetch projects:", error);
       setProjects([]);
     }
-  };
+  }, []);
 
-  const fetchDocuments = async (projectId?: string) => {
+  const fetchDocuments = useCallback(async (projectId?: string) => {
     try {
       const url = projectId ? `/documents?project_id=${projectId}` : "/documents";
       const response = await fetch(apiUrl(url));
-      const data = await response.json();
+      const data: ApiDocument[] = await response.json();
       setDocuments(
-        data.map((doc: any) => ({
+        data.map((doc) => ({
           id: doc.id,
           name: doc.name,
           size: doc.size,
@@ -284,7 +290,19 @@ export default function Home() {
       console.error("Failed to fetch documents:", error);
       setDocuments([]);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // Network completion, not the effect body, performs the state update.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchProjects();
+  }, [fetchProjects]);
+
+  useEffect(() => {
+    // Network completion, not the effect body, performs the state update.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchDocuments(documentsFilterProjectId);
+  }, [documentsFilterProjectId, fetchDocuments]);
 
   const createProject = async () => {
     const name = newProjectName.trim();
