@@ -1,16 +1,8 @@
 """Aşama 2.3: unit tests for the ingestion Celery task's state machine.
 
-These tests deliberately do NOT touch a real Postgres, MinIO or LLM gateway
-— the new tables ``run_ingestion_job`` reads/writes
-(``ingestion_jobs``/``document_versions``/``source_files``/
-``document_artifacts`` and the additive columns on ``documents``/``chunks``)
-have not been applied to the real database yet (Aşama 2.1 migration is
-written but not run — see MIGRATION_RUNBOOK.md at the repo root). Running
-this task against the real DB right now would fail with
-``UndefinedTable``/``UndefinedColumn`` errors, which is expected until that
-migration is applied.
-
-Instead, ``db`` is a minimal in-memory fake that mimics just the SQLAlchemy
+These unit tests deliberately do not touch PostgreSQL, MinIO, or an LLM
+gateway. Real schema behavior is covered by the integration suite. Here,
+``db`` is a minimal in-memory fake that mimics just the SQLAlchemy
 ``Session`` surface ``run_ingestion_job`` actually calls (``get``, ``query``
 + ``filter``/``first``/``delete``/``order_by``, ``add``, ``commit``,
 ``flush``, ``rollback``), and ``storage``/``extract_text_fn``/
@@ -23,7 +15,7 @@ specifically so it's testable this way (see
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -163,7 +155,7 @@ def _make_chain(db: FakeSession, storage: FakeStorage, *, active_version_id=None
         name="report.txt",
         size=123,
         status="uploaded",
-        uploaded_at=datetime.utcnow(),
+        uploaded_at=datetime.now(timezone.utc),
         active_version_id=active_version_id,
     )
     version = DocumentVersion(
@@ -172,14 +164,14 @@ def _make_chain(db: FakeSession, storage: FakeStorage, *, active_version_id=None
         version_no=1,
         status="pending",
         storage_key=f"projects/{document.project_id}/documents/{document.id}/versions/x/original/report.txt",
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     job = IngestionJob(
         id=uuid.uuid4(),
         version_id=version.id,
         status="queued",
         attempt=0,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     db.add(document)
     db.add(version)
@@ -319,7 +311,7 @@ def test_retry_after_partial_failure_clears_stale_chunks_before_reindexing():
         version_id=version.id,
         chunk_index=0,
         content="stale leftover chunk from a crashed attempt",
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     db.add(stale_chunk)
     job.status = "queued"  # re-enqueued for retry
@@ -351,7 +343,7 @@ def test_missing_version_marks_job_failed():
         version_id=uuid.uuid4(),  # no matching DocumentVersion
         status="queued",
         attempt=0,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     db.add(job)
 
@@ -470,11 +462,12 @@ def test_transient_failure_is_wrapped_as_retryable():
             embed_texts_fn=_flaky_embedder,
         )
 
-    # The job is marked failed so the durable status/events are accurate...
-    assert job.status == "failed"
+    # A transient attempt is explicitly non-terminal so the DB transition
+    # guard permits the next Celery attempt to move it back to running.
+    assert job.status == "retrying"
     assert job.error_message == "embedding gateway timed out"
-    # ...but the transient classification is what lets Celery autoretry it.
     assert job.error_code == "TimeoutError"
+    assert job.finished_at is None
 
 
 def test_permanent_validation_error_is_not_retryable():
@@ -496,3 +489,12 @@ def test_permanent_validation_error_is_not_retryable():
         )
     assert job.status == "failed"
     assert document.active_version_id is None
+
+
+def test_failed_job_cannot_be_redelivered_as_running():
+    db = FakeSession()
+    storage = FakeStorage()
+    _, _, job = _make_chain(db, storage)
+    job.status = "failed"
+    with pytest.raises(IngestionJobError, match="terminal"):
+        run_ingestion_job(db=db, job_id=job.id, storage=storage)

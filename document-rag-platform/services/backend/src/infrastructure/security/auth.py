@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
-from datetime import datetime, timezone
 from typing import Protocol
 from uuid import UUID
 
@@ -18,14 +17,16 @@ from src.domain.identity import (
     LOCAL_WORKSPACE_ID,
     PrincipalContext,
 )
+from src.domain.clock import utc_now
 from src.models import ApiKey, Principal, Project, WorkspaceMembership
 
 
 class OidcIdentityAdapter(Protocol):
     """Adapter contract; an enterprise provider is intentionally not assumed."""
 
-    def authenticate(self, bearer_token: str, workspace_id: UUID) -> PrincipalContext:
-        ...
+    def authenticate(
+        self, bearer_token: str, workspace_id: UUID
+    ) -> PrincipalContext: ...
 
 
 def hash_api_key(raw_key: str, pepper: str) -> str:
@@ -100,7 +101,7 @@ def get_principal_context(
         ),
         None,
     )
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     if (
         api_key is None
         or api_key.revoked_at is not None
@@ -150,12 +151,15 @@ def require_project_access(
     try:
         parsed_id = project_id if isinstance(project_id, UUID) else UUID(project_id)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail="project_id must be a UUID") from exc
+        raise HTTPException(
+            status_code=422, detail="project_id must be a UUID"
+        ) from exc
     project = (
         db.query(Project)
         .filter(
             Project.id == parsed_id,
             Project.workspace_id == principal.workspace_id,
+            Project.deleted_at.is_(None),
         )
         .first()
     )

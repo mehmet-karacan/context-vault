@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from src.application.reindex_service import ReindexService
 from src.infrastructure.repositories.scan_result import ScannedFile, ScanResult
@@ -141,7 +141,7 @@ def _seed_prev_version(db, doc):
         document_id=doc.id,
         version_no=1,
         status="ready",
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     db.add(prev)
     doc.active_version_id = prev.id
@@ -165,7 +165,7 @@ def _seed_prev_version(db, doc):
         model="m",
         dimension=4,
         is_active=True,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     db.add(profile)
 
@@ -211,8 +211,8 @@ def test_changed_reparsed_unchanged_skipped_deleted_absent(tmp_path):
         name="repo",
         size=0,
         status="indexed",
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     db.add(doc)
     prev = _seed_prev_version(db, doc)
@@ -279,7 +279,7 @@ def test_atomic_activation_not_swapped_without_all_ready(tmp_path):
         name="repo",
         size=0,
         status="indexed",
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     db.add(doc)
     _seed_prev_version(db, doc)
@@ -311,7 +311,7 @@ def test_first_ingest_creates_version_one_without_prev(tmp_path):
         project_id=uuid.uuid4(),
         name="repo",
         size=0,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     db.add(doc)
 
@@ -353,8 +353,8 @@ def test_default_wiring_uses_real_code_parser_and_plsql_chunker(tmp_path):
         name="repo",
         size=0,
         status="indexed",
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     db.add(doc)
 

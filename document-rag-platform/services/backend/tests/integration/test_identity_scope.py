@@ -13,7 +13,14 @@ from src.config import Settings
 from src.db import get_db
 from src.infrastructure.security.auth import hash_api_key
 from src.main import create_app
-from src.models import ApiKey, Document, Principal, Project, Workspace, WorkspaceMembership
+from src.models import (
+    ApiKey,
+    Document,
+    Principal,
+    Project,
+    Workspace,
+    WorkspaceMembership,
+)
 
 
 @pytest.mark.integration
@@ -32,6 +39,7 @@ def test_api_key_cannot_enumerate_another_workspace() -> None:
     other_workspace_id = uuid.uuid4()
     own_project_id = uuid.uuid4()
     other_project_id = uuid.uuid4()
+    own_document_id = uuid.uuid4()
     other_document_id = uuid.uuid4()
 
     try:
@@ -71,6 +79,14 @@ def test_api_key_cannot_enumerate_another_workspace() -> None:
                     name="Hidden",
                 ),
                 Document(
+                    id=own_document_id,
+                    project_id=own_project_id,
+                    name="visible.txt",
+                    size=7,
+                    status="uploaded",
+                    uploaded_at=datetime.now(timezone.utc),
+                ),
+                Document(
                     id=other_document_id,
                     project_id=other_project_id,
                     name="secret.txt",
@@ -107,12 +123,34 @@ def test_api_key_cannot_enumerate_another_workspace() -> None:
                 params={"project_id": uuid.uuid4()},
                 headers=headers,
             )
+            removed = client.delete(
+                f"/api/v1/documents/{own_document_id}",
+                params={"project_id": own_project_id},
+                headers=headers,
+            )
+            after_delete = client.get(
+                f"/api/v1/documents/{own_document_id}",
+                params={"project_id": own_project_id},
+                headers=headers,
+            )
+            listed_documents = client.get(
+                "/api/v1/documents",
+                params={"project_id": own_project_id},
+                headers=headers,
+            )
 
         assert listed.status_code == 200
         assert [row["id"] for row in listed.json()] == [str(own_project_id)]
         assert cross_project.status_code == 404
         assert absent.status_code == 404
         assert cross_project.json() == absent.json()
+        assert removed.status_code == 200
+        assert after_delete.status_code == 404
+        assert listed_documents.json() == []
+        session.expire_all()
+        retained = session.get(Document, own_document_id)
+        assert retained is not None
+        assert retained.deleted_at is not None
     finally:
         session.close()
         outer_transaction.rollback()

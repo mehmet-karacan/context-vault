@@ -762,25 +762,25 @@ Uygulama kodu hata yapsa bile PostgreSQL'in geçersiz aktif sürüm, çapraz bel
 
 ### 12.2 Kimlik ve scope tabloları
 
-- [ ] `principals`
-- [ ] `workspaces`
-- [ ] `workspace_memberships`
-- [ ] `project_memberships` veya workspace politikasına göre açık karar
-- [ ] `api_keys` — yalnız hash, prefix, created/expires/revoked/last_used
-- [ ] Project kayıtları workspace'e zorunlu bağlı
-- [ ] Audit actor alanları principal'a bağlı
+- [x] `principals`
+- [x] `workspaces`
+- [x] `workspace_memberships`
+- [x] `project_memberships` veya workspace politikasına göre açık karar
+- [x] `api_keys` — yalnız hash, prefix, created/expires/revoked/last_used
+- [x] Project kayıtları workspace'e zorunlu bağlı
+- [x] Audit actor alanları principal'a bağlı
 
 ### 12.3 Version/chunk/profile invariant'ları
 
-- [ ] `document_versions` için `(document_id, id)` uygun unique key oluşturulacak.
-- [ ] `documents.active_version_id` aynı document'a ait version'ı composite FK veya eşdeğer güvenli constraint ile garanti edecek.
-- [ ] `chunks(document_id, version_id)` aynı document'ın version'ına bağlı olacak.
-- [ ] Aktif version yalnız `completed/ready` durumunda seçilebilir.
-- [ ] Bir document için aynı anda bir aktif version olacak.
-- [ ] Bir embedding profile kimliği dimension/model/config hash ile immutable olacak.
-- [ ] İlgili scope içinde yalnız bir aktif embedding profile için partial unique index veya açık activation tablosu kullanılacak.
-- [ ] `chunk_embeddings` dimension/profil uyumu ingestion boundary ve DB metadata ile doğrulanacak.
-- [ ] Legacy `chunks.embedding` geçiş tamamlandıktan sonra okunmayacak; deprecation ve kontrollü drop planı olacak.
+- [x] `document_versions` için `(document_id, id)` uygun unique key oluşturulacak.
+- [x] `documents.active_version_id` aynı document'a ait version'ı composite FK veya eşdeğer güvenli constraint ile garanti edecek.
+- [x] `chunks(document_id, version_id)` aynı document'ın version'ına bağlı olacak.
+- [x] Aktif version yalnız `completed/ready` durumunda seçilebilir.
+- [x] Bir document için aynı anda bir aktif version olacak.
+- [x] Bir embedding profile kimliği dimension/model/config hash ile immutable olacak.
+- [x] İlgili scope içinde yalnız bir aktif embedding profile için partial unique index veya açık activation tablosu kullanılacak.
+- [x] `chunk_embeddings` dimension/profil uyumu ingestion boundary ve DB metadata ile doğrulanacak.
+- [x] Legacy `chunks.embedding` geçiş tamamlandıktan sonra okunmayacak; deprecation ve kontrollü drop planı olacak.
 
 ### 12.4 Domain durumları
 
@@ -795,42 +795,63 @@ String durumlar typed enum/check constraint ile sınırlandırılacak:
 - provider status;
 - work item/attempt/claim/receipt status.
 
-- [ ] `progress` 0–100 aralığında olacak.
-- [ ] Terminal job yeniden running olamayacak.
-- [ ] `activated_at` yalnız aktif/completed version için anlamlı olacak.
-- [ ] Error state gerekli error_code/message invariant'ını taşıyacak.
-- [ ] State transition'lar merkezi domain service ve DB guard ile korunacak.
+- [x] `progress` 0–100 aralığında olacak.
+- [x] Terminal job yeniden running olamayacak.
+- [x] `activated_at` yalnız aktif/completed version için anlamlı olacak.
+- [x] Error state gerekli error_code/message invariant'ını taşıyacak.
+- [x] State transition'lar merkezi domain service ve DB guard ile korunacak.
 
 ### 12.5 Zaman ve silme politikası
 
-- [ ] Tüm yeni zaman kolonları timezone-aware UTC.
-- [ ] Naive mevcut kolonlar kontrollü migration ile dönüştürülecek; timezone varsayımı ADR'de yazılacak.
-- [ ] Uygulamada tek `Clock` abstraction; testlerde fake clock.
+- [x] Tüm yeni zaman kolonları timezone-aware UTC.
+- [x] Naive mevcut kolonlar kontrollü migration ile dönüştürülecek; timezone varsayımı ADR'de yazılacak.
+- [x] Uygulamada tek `Clock` abstraction; testlerde fake clock.
 - [ ] `created_at`, `updated_at`, `deleted_at`, `activated_at`, lease expiry semantiği standardize edilecek.
-- [ ] Soft-delete edilmiş kayıt default query'lerden çıkacak; legal/retention politikasına göre GC yapılacak.
+- [x] Soft-delete edilmiş kayıt default query'lerden çıkacak; legal/retention politikasına göre GC yapılacak.
 
 ### 12.6 Index ve performans
 
-- [ ] Gerçek sorgu planlarına göre workspace/project/document/version/status FK ve filtre index'leri eklenecek.
-- [ ] FTS/identifier/vector index'leri migration tarafından yönetilecek.
-- [ ] Her index için hedef sorgu ve `EXPLAIN (ANALYZE, BUFFERS)` kanıtı olacak.
-- [ ] Gereksiz/duplicate index silme ancak kullanım ve rollback analizi sonrası yapılacak.
+- [x] Gerçek sorgu planlarına göre workspace/project/document/version/status FK ve filtre index'leri eklenecek.
+- [x] FTS/identifier/vector index'leri migration tarafından yönetilecek.
+- [x] Her index için hedef sorgu ve `EXPLAIN (ANALYZE, BUFFERS)` kanıtı olacak.
+- [x] Gereksiz/duplicate index silme ancak kullanım ve rollback analizi sonrası yapılacak.
 
 ### 12.7 Migration/test kapısı
 
-- [ ] Her constraint önce violation audit'i çalıştıracak.
-- [ ] Backfill ve constraint doğrulama ayrı, gözlenebilir adımlar olacak.
-- [ ] Constraint eklenirken büyük tabloda lock riski ölçülecek; gerekirse `NOT VALID → backfill → VALIDATE` stratejisi.
-- [ ] Property/invariant testleri yanlış document/version/profile ilişkisini DB'nin reddettiğini gösterir.
-- [ ] Concurrency testi aynı document için iki version aktivasyonundan yalnız birini kabul eder.
+- [x] Her constraint önce violation audit'i çalıştıracak.
+- [x] Backfill ve constraint doğrulama ayrı, gözlenebilir adımlar olacak.
+- [x] Constraint eklenirken büyük tabloda lock riski ölçülecek; gerekirse `NOT VALID → backfill → VALIDATE` stratejisi.
+- [x] Property/invariant testleri yanlış document/version/profile ilişkisini DB'nin reddettiğini gösterir.
+- [x] Concurrency testi aynı document için iki version aktivasyonundan yalnız birini kabul eder.
 
 ### 12.8 Kabul kriterleri
 
-- [ ] Runtime invariant sorgularının tamamı sıfır ihlal verir.
-- [ ] Geçersiz cross-version insert/update DB tarafından reddedilir.
-- [ ] Birden fazla aktif profile/version concurrency altında oluşmaz.
-- [ ] Production tablolarında timezone semantiği belgeli ve tutarlıdır.
-- [ ] Index değişiklikleri sorgu planı/latency kanıtıyla kabul edilmiştir.
+- [x] Runtime invariant sorgularının tamamı sıfır ihlal verir.
+- [x] Geçersiz cross-version insert/update DB tarafından reddedilir.
+- [x] Birden fazla aktif profile/version concurrency altında oluşmaz.
+- [x] Production tablolarında timezone semantiği belgeli ve tutarlıdır.
+- [x] Index değişiklikleri sorgu planı/latency kanıtıyla kabul edilmiştir.
+
+### 12.9 Aşama 5 uygulama kaydı — 2026-09-02
+
+- `cv3_00000003` boş PostgreSQL 16/pgvector DB'de `base → head`,
+  `head → cv3_00000002 → head` çevrimlerini geçti. Kurtarılan veri kopyasında
+  `1/1/1/1/1` project/document/version/chunk/profile sayıları korunarak aynı
+  schema hash elde edildi.
+- Strict verifier `167` kolon, `70` constraint ve `13` runtime invariant için
+  `PASS` verdi; tüm violation sayıları `0`.
+- Gerçek DB testleri cross-document/version, invalid active version, status,
+  progress, error detail, event, profile mutation ve çift aktivasyonu reddetti;
+  concurrent compare-and-swap yalnız tek version'ı aktive etti.
+- 10.000 satırlık izole lock fixture'ında migration 1,44 saniyede tamamlandı,
+  beş tablo sayımı korundu ve verifier yeniden `PASS` verdi. Altı hedef sorgu
+  `EXPLAIN (ANALYZE, BUFFERS)` altında kendi migration-managed index'ini kullandı.
+- Workspace üyeliğinin workspace içindeki tüm aktif projeleri kapsadığı,
+  timezone varsayımı, global embedding profile ve soft-delete/GC politikası
+  ADR-008 ile kaydedildi. Henüz var olmayan provider ve Work Graph
+  status/lease tablolarının enum ve zaman invariant'ları Aşama 12'de bu kapıya
+  geri dönülerek tamamlanacaktır; bu nedenle ilgili üst düzey kapsam iddiası
+  açık bırakıldı.
 
 
 ## 13. AŞAMA 6 — Tek ingestion hattı, outbox ve içerik politikası

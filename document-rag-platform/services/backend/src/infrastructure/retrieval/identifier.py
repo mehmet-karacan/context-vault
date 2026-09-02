@@ -174,7 +174,7 @@ def identifier_sql_from_spec(spec: Dict[str, Any]) -> "tuple[str, Dict[str, Any]
         f"    CASE WHEN lower(coalesce({sf}.relative_path,'')) LIKE ANY(:like_ids) THEN 0.6 ELSE 0.0 END"
         f"\n) AS score"
     )
-    clauses = [match_pred]
+    clauses = [match_pred, "d.deleted_at IS NULL"]
     if where_f:
         clauses.append(where_f)
     params["candidate_k"] = int(spec["candidate_k"])

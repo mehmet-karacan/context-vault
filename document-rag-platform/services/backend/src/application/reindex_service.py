@@ -29,10 +29,12 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from datetime import datetime
 from typing import Callable, Dict, List, Optional
 
+from ..domain.clock import Clock, SYSTEM_CLOCK, utc_now
+from ..domain.version_activation import activate_document_version
 from ..infrastructure.storage import object_keys
+from ..infrastructure.embeddings.cache import profile_config_hash
 from ..models import (
     EMBEDDING_DIMENSION,
     Chunk,
@@ -145,8 +147,9 @@ def _get_or_create_active_embedding_profile(db) -> EmbeddingProfile:
         distance_metric="cosine",
         profile_version=1,
         is_active=True,
-        created_at=datetime.utcnow(),
+        created_at=utc_now(),
     )
+    profile.config_hash = profile_config_hash(profile)
     db.add(profile)
     db.flush()
     return profile
@@ -165,6 +168,7 @@ class ReindexService:
         chunk_size: Optional[int] = None,
         chunk_overlap: Optional[int] = None,
         embed_instruction: str = "",
+        clock: Clock | None = None,
     ):
         self.storage = storage
         self.parse_fn = parse_fn or _default_parse
@@ -173,6 +177,7 @@ class ReindexService:
         self.chunk_size = chunk_size or 500
         self.chunk_overlap = chunk_overlap if chunk_overlap is not None else 50
         self.embed_instruction = embed_instruction
+        self.clock = clock or SYSTEM_CLOCK
 
     # --- internals -----------------------------------------------------------
 
@@ -206,7 +211,7 @@ class ReindexService:
                 checksum=sf.content_hash,
                 size_bytes=sf.size_bytes,
                 metadata_json={"relative_path": sf.relative_path},
-                created_at=datetime.utcnow(),
+                created_at=self.clock.now(),
             )
         )
 
@@ -255,7 +260,7 @@ class ReindexService:
                     "source_file": sf.relative_path,
                     "language": file.language,
                 },
-                created_at=datetime.utcnow(),
+                created_at=self.clock.now(),
             )
             db.add(chunk)
             db.flush()
@@ -264,7 +269,7 @@ class ReindexService:
                     chunk_id=chunk.id,
                     embedding_profile_id=profile.id,
                     embedding=embedding,
-                    created_at=datetime.utcnow(),
+                    created_at=self.clock.now(),
                 )
             )
         return len(chunks)
@@ -297,7 +302,7 @@ class ReindexService:
                 line_start=pc.line_start,
                 line_end=pc.line_end,
                 metadata_json=pc.metadata_json,
-                created_at=datetime.utcnow(),
+                created_at=self.clock.now(),
             )
             db.add(chunk)
             db.flush()
@@ -306,7 +311,7 @@ class ReindexService:
                     chunk_id=chunk.id,
                     embedding_profile_id=profile.id,
                     embedding=pc.embedding,
-                    created_at=datetime.utcnow(),
+                    created_at=self.clock.now(),
                 )
             )
             count += 1
@@ -317,7 +322,8 @@ class ReindexService:
     def run(self, db, document: Document, scan: ScanResult) -> dict:
         """Builds a new ``DocumentVersion`` for ``scan`` under ``document`` and
         activates it atomically only once fully ready. Returns a summary dict."""
-        now = datetime.utcnow()
+        now = self.clock.now()
+        expected_active_version_id = document.active_version_id
 
         prev_version = self._previous_version(db, document)
         prev_by_path: Dict[str, SourceFile] = {}
@@ -394,10 +400,20 @@ class ReindexService:
 
         # ---- atomic activation: only after the whole version is ready ----
         new_version.status = "ready"
-        new_version.activated_at = now
-        document.active_version_id = new_version.id
-        document.status = "indexed"
-        document.updated_at = now
+        db.flush()
+        if hasattr(db, "execute"):
+            activate_document_version(
+                db,
+                document_id=document.id,
+                version_id=new_version.id,
+                expected_current_version_id=expected_active_version_id,
+                clock=self.clock,
+            )
+        else:
+            new_version.activated_at = now
+            document.active_version_id = new_version.id
+            document.status = "indexed"
+            document.updated_at = now
         db.commit()
 
         return {

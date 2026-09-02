@@ -15,6 +15,7 @@ skorlarını gösterebilir".
 from __future__ import annotations
 
 import hashlib
+import uuid
 from typing import List, Optional
 from uuid import UUID
 
@@ -35,6 +36,7 @@ from src.infrastructure.retrieval.dense import DenseVectorRetriever
 from src.infrastructure.retrieval.identifier import IdentifierRetriever
 from src.infrastructure.retrieval.lexical import LexicalRetriever
 from src.infrastructure.security.auth import require_admin, require_project_access
+from src.models import AuditEvent
 
 router = APIRouter(tags=["debug"])
 
@@ -67,6 +69,21 @@ def debug_retrieval(
             "principal_id": str(principal.principal_id),
         },
     )
+    db.add(
+        AuditEvent(
+            id=uuid.uuid4(),
+            actor_principal_id=principal.principal_id,
+            workspace_id=principal.workspace_id,
+            project_id=req.project_id,
+            event_type="retrieval_debug_access",
+            metadata_json={
+                "query_sha256_prefix": hashlib.sha256(
+                    req.query.encode("utf-8")
+                ).hexdigest()[:16]
+            },
+        )
+    )
+    db.commit()
     scope = RetrievalScope(
         principal_id=principal.principal_id,
         workspace_id=principal.workspace_id,

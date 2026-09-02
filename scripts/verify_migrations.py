@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 TOOL_VERSION = "1.0.0"
-EXPECTED_HEAD = "cv3_00000002"
+EXPECTED_HEAD = "cv3_00000003"
 VERSIONS_RELATIVE = Path("document-rag-platform/services/backend/alembic/versions_v3")
 BACKEND_RELATIVE = Path("document-rag-platform/services/backend")
 
@@ -121,10 +121,53 @@ def database_snapshot(database_url: str) -> dict[str, Any]:
             LEFT JOIN embedding_profiles ep ON ep.id = ce.embedding_profile_id
             WHERE ep.id IS NULL
         """,
-        "inactive_version_retrieval_candidates": """
+        "indexed_documents_without_active_version": """
+            SELECT count(*) FROM documents
+            WHERE status = 'indexed' AND deleted_at IS NULL
+              AND active_version_id IS NULL
+        """,
+        "invalid_active_document_versions": """
+            SELECT count(*) FROM documents d
+            JOIN document_versions v ON v.id = d.active_version_id
+            WHERE v.document_id <> d.id OR v.status NOT IN ('ready', 'completed')
+        """,
+        "invalid_ingestion_jobs": """
+            SELECT count(*) FROM ingestion_jobs
+            WHERE status NOT IN ('queued','running','retrying','completed','failed','cancelled')
+               OR (progress IS NOT NULL AND (progress < 0 OR progress > 100))
+               OR (status = 'failed' AND (error_code IS NULL OR error_message IS NULL))
+        """,
+        "invalid_ingestion_events": """
+            SELECT count(*) FROM ingestion_events
+            WHERE (stage IS NOT NULL AND stage NOT IN
+                    ('validating','storing','parsing','ocr','normalizing','chunking','embedding','indexing','activating'))
+               OR (status IS NOT NULL AND status NOT IN
+                    ('queued','running','retrying','completed','failed','cancelled'))
+        """,
+        "document_errors_without_details": """
+            SELECT count(*) FROM documents
+            WHERE status = 'error' AND (error_code IS NULL OR error_message IS NULL)
+        """,
+        "version_failures_without_details": """
+            SELECT count(*) FROM document_versions
+            WHERE status = 'failed' AND (error_code IS NULL OR error_message IS NULL)
+        """,
+        "invalid_activated_versions": """
+            SELECT count(*) FROM document_versions
+            WHERE activated_at IS NOT NULL AND status NOT IN ('ready', 'completed')
+        """,
+        "legacy_embeddings_without_canonical_copy": """
             SELECT count(*) FROM chunks c
-            JOIN documents d ON d.id = c.document_id
-            WHERE c.version_id IS DISTINCT FROM d.active_version_id
+            WHERE c.embedding IS NOT NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM chunk_embeddings ce WHERE ce.chunk_id = c.id
+              )
+        """,
+        "non_utc_timestamp_columns": """
+            SELECT count(*)
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND data_type = 'timestamp without time zone'
         """,
     }
     try:

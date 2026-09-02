@@ -4,7 +4,6 @@ Moved verbatim from ``main.py`` — no behavior change.
 """
 
 import uuid
-from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
@@ -15,7 +14,11 @@ from sqlalchemy.orm import Session
 from ...db import get_db
 from ...models import Project
 from src.domain.identity import PrincipalContext
-from src.infrastructure.security.auth import get_principal_context, require_project_access
+from src.domain.clock import utc_now
+from src.infrastructure.security.auth import (
+    get_principal_context,
+    require_project_access,
+)
 
 router = APIRouter(tags=["projects"])
 
@@ -42,7 +45,10 @@ def list_projects(
 ):
     projects = (
         db.query(Project)
-        .filter(Project.workspace_id == principal.workspace_id)
+        .filter(
+            Project.workspace_id == principal.workspace_id,
+            Project.deleted_at.is_(None),
+        )
         .order_by(Project.created_at.desc())
         .all()
     )
@@ -63,6 +69,7 @@ def create_project(
         .filter(
             Project.workspace_id == principal.workspace_id,
             Project.name == name,
+            Project.deleted_at.is_(None),
         )
         .first()
     ):
@@ -71,7 +78,8 @@ def create_project(
         id=uuid.uuid4(),
         workspace_id=principal.workspace_id,
         name=name,
-        created_at=datetime.utcnow(),
+        created_at=utc_now(),
+        updated_at=utc_now(),
     )
     db.add(project)
     db.commit()
@@ -86,6 +94,8 @@ def delete_project(
     principal: PrincipalContext = Depends(get_principal_context),
 ):
     project = require_project_access(db, principal, project_id)
-    db.delete(project)
+    now = utc_now()
+    project.deleted_at = now
+    project.updated_at = now
     db.commit()
     return {"success": True, "message": f"Project {project_id} deleted"}

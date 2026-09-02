@@ -113,7 +113,10 @@ def test_sql_uses_simple_config_and_filters():
     assert "plainto_tsquery('simple', :query_text)" in sql
     assert "query @@ chunks.search_vector" in sql
     assert "ts_rank_cd(chunks.search_vector, query) AS score" in sql
-    assert "WHERE query @@ chunks.search_vector AND d.project_id = :fp0" in sql
+    assert (
+        "WHERE query @@ chunks.search_vector AND d.deleted_at IS NULL "
+        "AND d.project_id = :fp0"
+    ) in sql
     assert params["query_text"] == "PAYMENT_FLAG"
     assert params["fp0"] == "proj-1"
     assert params["candidate_k"] == 15
@@ -122,9 +125,7 @@ def test_sql_uses_simple_config_and_filters():
 def test_search_returns_candidate_shape_via_fake_session():
     session = FakeSession(rows=[_Row("chunk-a", 0.88), _Row("chunk-b", 0.6)])
     retriever = LexicalRetriever(session=session)
-    results = retriever.search(
-        "billing", top_k=5, filters={"project_id": "project"}
-    )
+    results = retriever.search("billing", top_k=5, filters={"project_id": "project"})
     assert [c.chunk_id for c in results] == ["chunk-a", "chunk-b"]
     assert {c.source for c in results} == {"lexical"}
     assert results[0].rank == 1

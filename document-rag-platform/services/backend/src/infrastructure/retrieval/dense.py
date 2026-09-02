@@ -1,8 +1,7 @@
 """pgvector dense retrieval (Aşama 5.1).
 
 ``DenseVectorRetriever`` implements ``domain.ports.VectorRetriever``: cosine
-vector search over ``ChunkEmbedding.embedding`` (or, configurably, the legacy
-``Chunks.embedding`` column), returning candidate chunks with a dense score.
+vector search over the versioned ``ChunkEmbedding.embedding`` table.
 
 DB-free testability: everything that matters for correctness — candidate count
 (``candidate_k``, injectable override), HNSW ``ef_search``, distance metric and
@@ -109,29 +108,9 @@ class DenseVectorRetriever:
     ) -> List[RetrievalCandidate]:
         filters = require_scoped_filters(filters)
         spec = self.build_spec(query_embedding, top_k, filters)
-        primary = self._search_spec(spec, session, source_tag=spec["embedding_table"])
-
-        # Legacy dense source merge. The canonical source is the versioned
-        # ``chunk_embeddings`` table (Bölüm 8.9), but the synchronous upload
-        # path (and any deployment before the versioned schema) writes the
-        # dense vector into the HNSW-indexed ``chunks.embedding`` column and
-        # leaves ``chunk_embeddings`` empty for those chunks. Coverage can be
-        # PARTIAL across the two sources (some documents in one, some in the
-        # other), so a mere empty-result fallback would silently mask chunks
-        # that live only in ``chunks.embedding``. Instead we query BOTH sources
-        # and merge their candidate sets by ``chunk_id`` (union + dedup, keeping
-        # the higher score), tagging which physical source produced each hit.
-        # This does NOT run when the retriever is already pointed at ``chunks``
-        # (avoids an infinite self-merge).
-        if self.table != "chunks":
-            legacy = legacy_spec_from_spec(spec)
-            legacy_candidates = self._search_spec(
-                legacy, session, source_tag="chunks.embedding"
-            )
-            return merge_dense_candidates(
-                primary, legacy_candidates, int(spec["candidate_k"])
-            )
-        return primary
+        # Legacy ``chunks.embedding`` is deliberately never queried. It
+        # remains a transition-only column until a separately audited drop.
+        return self._search_spec(spec, session, source_tag=spec["embedding_table"])
 
     def _search_spec(
         self,
@@ -162,8 +141,11 @@ def dense_sql_from_spec(spec: Dict[str, Any]) -> "tuple[str, Dict[str, Any]]":
     cid = spec["chunk_id_column"]
     terms = [FilterTerm(**t) for t in spec["filters"]]
     where_sql, params = render_where(terms, prefix="f")
-    if where_sql:
-        where_sql = f"WHERE {where_sql}"
+    where_sql = (
+        f"WHERE d.deleted_at IS NULL AND {where_sql}"
+        if where_sql
+        else "WHERE d.deleted_at IS NULL"
+    )
     params["query_embedding"] = list(spec["query_embedding"])
     params["candidate_k"] = int(spec["candidate_k"])
 
@@ -180,7 +162,7 @@ def dense_sql_from_spec(spec: Dict[str, Any]) -> "tuple[str, Dict[str, Any]]":
             "candidate_k": int(spec["candidate_k"]),
         }
         params.update(filter_params)
-        where_parts = ["c.embedding IS NOT NULL"]
+        where_parts = ["c.embedding IS NOT NULL", "d.deleted_at IS NULL"]
         if filter_sql:
             where_parts.append(filter_sql)
         sql = (

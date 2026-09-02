@@ -11,6 +11,7 @@ live in ``api/v1/*``.
 
 import logging
 import traceback
+from contextlib import asynccontextmanager
 from typing import Optional
 from urllib.parse import urlsplit
 
@@ -51,7 +52,9 @@ def validate_runtime_security(cfg: Settings) -> None:
     if cfg.AUTH_MODE == "api_key" and (
         not cfg.API_KEY_PEPPER or len(cfg.API_KEY_PEPPER) < 32
     ):
-        raise ValueError("AUTH_MODE=api_key requires API_KEY_PEPPER of at least 32 chars")
+        raise ValueError(
+            "AUTH_MODE=api_key requires API_KEY_PEPPER of at least 32 chars"
+        )
     if environment in {"production", "staging"}:
         if not cfg.RATE_LIMIT_ENABLED or cfg.RATE_LIMIT_BACKEND != "redis":
             raise ValueError(
@@ -78,7 +81,12 @@ def create_app(cfg: Optional[Settings] = None) -> FastAPI:
     app_cfg = cfg or settings
     validate_runtime_security(app_cfg)
 
-    application = FastAPI(title="Document RAG API")
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        init_db()
+        yield
+
+    application = FastAPI(title="Document RAG API", lifespan=lifespan)
     application.state.settings = app_cfg
 
     # Aşama 9.5: never "*" in production. allow_origins comes from resolved
@@ -111,10 +119,6 @@ def create_app(cfg: Optional[Settings] = None) -> FastAPI:
         return JSONResponse(
             status_code=500, content={"detail": "Internal Server Error"}
         )
-
-    @application.on_event("startup")
-    def _startup():
-        init_db()
 
     application.include_router(api_router)
     application.include_router(probe_router)

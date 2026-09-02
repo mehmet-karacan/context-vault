@@ -11,7 +11,6 @@ import mimetypes
 import os
 import tempfile
 import uuid
-from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
@@ -30,8 +29,12 @@ from ...infrastructure.storage.minio_storage import MinioObjectStorage
 from ...llm import PASSAGE_INSTRUCTION, embed_texts
 from ...models import Chunk, Document, DocumentVersion, IngestionJob, Project
 from src.domain.identity import PrincipalContext
+from src.domain.clock import utc_now
 from src.infrastructure.rate_limiter import rate_limiter
-from src.infrastructure.security.auth import get_principal_context, require_project_access
+from src.infrastructure.security.auth import (
+    get_principal_context,
+    require_project_access,
+)
 
 router = APIRouter(tags=["documents"])
 
@@ -205,7 +208,7 @@ def _upload_document_async(
     document_id = uuid.uuid4()
     version_id = uuid.uuid4()
     job_id = uuid.uuid4()
-    now = datetime.utcnow()
+    now = utc_now()
 
     document = Document(
         id=document_id,
@@ -295,7 +298,7 @@ def upload_document(
         name=file.filename,
         size=file.size or 0,
         status="uploaded",
-        uploaded_at=datetime.utcnow(),
+        uploaded_at=utc_now(),
     )
     db.add(document)
     db.commit()
@@ -355,9 +358,12 @@ def upload_document(
 
     except Exception as exc:
         document.status = "error"
+        document.error_code = type(exc).__name__
         document.error_message = "document ingestion failed"
         db.commit()
-        raise HTTPException(status_code=422, detail="Document ingestion failed") from exc
+        raise HTTPException(
+            status_code=422, detail="Document ingestion failed"
+        ) from exc
 
     finally:
         if tmp_path and os.path.exists(tmp_path):
@@ -371,7 +377,10 @@ def list_documents(
     principal: PrincipalContext = Depends(get_principal_context),
 ):
     require_project_access(db, principal, project_id)
-    query = db.query(Document).filter(Document.project_id == project_id)
+    query = db.query(Document).filter(
+        Document.project_id == project_id,
+        Document.deleted_at.is_(None),
+    )
     documents = query.order_by(Document.uploaded_at.desc()).all()
     return [
         serialize_document(doc, job=_latest_job_for_document(db, doc.id))
@@ -382,7 +391,11 @@ def list_documents(
 def _scoped_document(db: Session, project_id: UUID, doc_id: UUID) -> Document:
     document = (
         db.query(Document)
-        .filter(Document.id == doc_id, Document.project_id == project_id)
+        .filter(
+            Document.id == doc_id,
+            Document.project_id == project_id,
+            Document.deleted_at.is_(None),
+        )
         .first()
     )
     if not document:
@@ -429,6 +442,9 @@ def delete_document(
 ):
     require_project_access(db, principal, project_id)
     document = _scoped_document(db, project_id, doc_id)
-    db.delete(document)
+    now = utc_now()
+    document.deleted_at = now
+    document.updated_at = now
+    document.status = "deleted"
     db.commit()
     return {"success": True, "message": f"Document {doc_id} deleted"}

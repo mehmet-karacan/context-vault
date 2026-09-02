@@ -13,6 +13,7 @@ kod, test veya receipt kaynağını gösterir.
 | [ADR-005](ADR-005-repository-scan-security-model.md) | Accepted | Mehmet KARACAN | none | repository security tests |
 | [ADR-006](ADR-006-ocr-provider-strategy.md) | Accepted | Mehmet KARACAN | none | OCR routing tests |
 | [ADR-007](ADR-007-migration-lineage-recovery-or-reset.md) | Accepted | Mehmet KARACAN | legacy `b2f1c0a10001..5` operations | migration receipts |
+| [ADR-008](ADR-008-schema-time-scope-and-retention.md) | Accepted | Mehmet KARACAN | none | `cv3_00000003`, invariant and query-plan tests |
 
 Last inventory verification: 2026-09-02. `scripts/generate_verified_status.py`
 checks that every `ADR-*.md` file is represented here.

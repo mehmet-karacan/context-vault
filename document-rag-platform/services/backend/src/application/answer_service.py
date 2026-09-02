@@ -493,6 +493,7 @@ def ensure_conversation(
             .filter(
                 Conversation.id == _uuid(conversation_id),
                 Conversation.project_id == parsed_project_id,
+                Conversation.deleted_at.is_(None),
             )
             .first()
         )

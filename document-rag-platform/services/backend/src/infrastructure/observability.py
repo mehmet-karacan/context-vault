@@ -35,8 +35,8 @@ import threading
 import time
 import uuid
 from collections import defaultdict
-from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
+from src.domain.clock import utc_now
 
 # The canonical Aşama 9.4 structured-log field set (AKTIF_GOREV.md §9.4).
 STRUCTURED_FIELDS: tuple = (
@@ -89,7 +89,7 @@ class StructuredJsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         payload: Dict[str, Any] = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utc_now().isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),

@@ -1,8 +1,8 @@
 # Context Vault V3 Migration Runbook
 
-Status: verified for the new empty V3 lineage on 2026-09-02.
+Status: verified through the V3 schema-invariant migration on 2026-09-02.
 
-Operational head: `cv3_00000001`  
+Operational head: `cv3_00000003`
 Configured versions directory: `alembic/versions_v3/`
 
 The files under `alembic/versions/` are legacy incident evidence. They are not
@@ -59,7 +59,7 @@ python -m alembic current
 python -m alembic upgrade head
 ```
 
-Expected head/current: `cv3_00000001`. The second upgrade must be a no-op.
+Expected head/current: `cv3_00000003`. The second upgrade must be a no-op.
 
 Then run from the repository root:
 
@@ -134,9 +134,11 @@ extensions, tables or indexes.
 
 ## Verified 2026-09-02 evidence
 
-- Blank `base → cv3_00000001`: PASS.
+- Blank `base → cv3_00000003`: PASS.
 - Re-run `upgrade head`: PASS/no-op.
-- Disposable `head → base → head`: PASS.
+- Disposable `cv3_00000003 → cv3_00000002 → cv3_00000003`: PASS.
+- Recovered fixture `cv3_00000001 → cv3_00000003`: PASS with project,
+  document, version, chunk, profile counts preserved at `1/1/1/1/1`.
 - Migration without provider/object-store credentials: PASS.
 - Exact startup revision admission: PASS.
 - PostgreSQL custom dump SHA-256:

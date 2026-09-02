@@ -246,7 +246,7 @@ def lexical_sql_from_spec(spec: Dict[str, Any]) -> "tuple[str, Dict[str, Any]]":
     ts_cfg = spec["ts_config"]
     terms = [FilterTerm(**t) for t in spec["filters"]]
     where_sql, params = render_where(terms, prefix="f")
-    clauses = [f"query @@ {c}.{sv}"]
+    clauses = [f"query @@ {c}.{sv}", "d.deleted_at IS NULL"]
     if where_sql:
         clauses.append(where_sql)
     params["query_text"] = spec["query_text"]

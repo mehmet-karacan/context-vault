@@ -24,7 +24,6 @@ import hashlib
 import os
 import re
 import uuid
-from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
@@ -43,8 +42,12 @@ from ...infrastructure.repositories.git_source import (
 from ...infrastructure.repositories.scan_result import ScanResult
 from ...models import Document, DocumentArtifact, DocumentVersion, Project, SourceFile
 from src.domain.identity import PrincipalContext
+from src.domain.clock import utc_now
 from src.infrastructure.rate_limiter import rate_limiter
-from src.infrastructure.security.auth import get_principal_context, require_project_access
+from src.infrastructure.security.auth import (
+    get_principal_context,
+    require_project_access,
+)
 
 router = APIRouter(tags=["repositories"])
 
@@ -185,7 +188,7 @@ def _get_or_create_source_document(
     )
     if doc is not None:
         return doc
-    now = datetime.utcnow()
+    now = utc_now()
     doc = Document(
         id=uuid.uuid4(),
         project_id=project.id,
@@ -213,7 +216,7 @@ def _store_scan_config(db: Session, version: DocumentVersion, metadata: dict) ->
             storage_key="inline:scan_config",
             size_bytes=0,
             metadata_json=metadata,
-            created_at=datetime.utcnow(),
+            created_at=utc_now(),
         )
     )
 

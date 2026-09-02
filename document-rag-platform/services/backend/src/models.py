@@ -1,14 +1,15 @@
 import uuid
-from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     Boolean,
     Column,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -20,6 +21,7 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import relationship
 
 from .persistence import Base
+from .domain.clock import utc_now
 
 EMBEDDING_DIMENSION = 1024  # BAAI/bge-m3 output size
 
@@ -38,7 +40,9 @@ class Project(Base):
         index=True,
     )
     name = Column(String, nullable=False)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     documents = relationship(
         "Document", back_populates="project", cascade="all, delete-orphan"
@@ -54,7 +58,7 @@ class Principal(Base):
     subject = Column(String, nullable=False, unique=True)
     display_name = Column(String, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
 class Workspace(Base):
@@ -62,11 +66,17 @@ class Workspace(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String, nullable=False)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
 class WorkspaceMembership(Base):
     __tablename__ = "workspace_memberships"
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('admin','member','reader')",
+            name="ck_workspace_memberships_role",
+        ),
+    )
 
     workspace_id = Column(
         UUID(as_uuid=True),
@@ -79,7 +89,7 @@ class WorkspaceMembership(Base):
         primary_key=True,
     )
     role = Column(String, nullable=False)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
 class ApiKey(Base):
@@ -94,14 +104,68 @@ class ApiKey(Base):
     )
     key_prefix = Column(String(16), nullable=False, index=True)
     key_hash = Column(String(64), nullable=False, unique=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    expires_at = Column(DateTime, nullable=True)
-    revoked_at = Column(DateTime, nullable=True)
-    last_used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class AuditEvent(Base):
+    """Content-free security/audit receipt tied to an authenticated actor."""
+
+    __tablename__ = "audit_events"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    actor_principal_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("principals.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    workspace_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    project_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    event_type = Column(String, nullable=False)
+    metadata_json = Column(JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
 class Document(Base):
     __tablename__ = "documents"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["id", "active_version_id"],
+            ["document_versions.document_id", "document_versions.id"],
+            name="fk_documents_active_version_same_document",
+            use_alter=True,
+        ),
+        CheckConstraint(
+            "status IN ('uploaded','processing','indexed','error','deleted')",
+            name="ck_documents_status",
+        ),
+        CheckConstraint(
+            "source_type IS NULL OR source_type IN "
+            "('document','image','repository','directory','archive')",
+            name="ck_documents_source_type",
+        ),
+        CheckConstraint(
+            "data_classification IN ('public','internal','confidential','restricted')",
+            name="ck_documents_data_classification",
+        ),
+        CheckConstraint(
+            "status <> 'error' OR (error_code IS NOT NULL AND error_message IS NOT NULL)",
+            name="ck_documents_error_details",
+        ),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     project_id = Column(
@@ -112,8 +176,9 @@ class Document(Base):
     name = Column(String, nullable=False)
     size = Column(Integer, nullable=False)
     status = Column(String, nullable=False, default="uploaded")
+    error_code = Column(String, nullable=True)
     error_message = Column(String, nullable=True)
-    uploaded_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    uploaded_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     # --- Aşama 2 additive fields (nullable; see AKTIF_GOREV.md Bölüm 8.1) --
     source_type = Column(
@@ -122,15 +187,15 @@ class Document(Base):
     origin_uri = Column(Text, nullable=True)
     mime_type = Column(String, nullable=True)
     checksum = Column(String, nullable=True)
+    data_classification = Column(String, nullable=False, default="internal")
     active_version_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("document_versions.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    created_at = Column(DateTime, nullable=True)
-    updated_at = Column(DateTime, nullable=True)
-    deleted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     project = relationship("Project", back_populates="documents")
     chunks = relationship(
@@ -153,6 +218,12 @@ class Document(Base):
 class Chunk(Base):
     __tablename__ = "chunks"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["document_id", "version_id"],
+            ["document_versions.document_id", "document_versions.id"],
+            name="fk_chunks_version_same_document",
+            ondelete="CASCADE",
+        ),
         Index(
             "chunks_embedding_idx",
             "embedding",
@@ -174,8 +245,7 @@ class Chunk(Base):
     # --- Aşama 2 additive fields (nullable; see AKTIF_GOREV.md Bölüm 8.7) --
     version_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("document_versions.id", ondelete="SET NULL"),
-        nullable=True,
+        nullable=False,
         index=True,
     )
     source_file_id = Column(
@@ -205,13 +275,16 @@ class Chunk(Base):
     metadata_json = Column(JSONB, nullable=True)
     search_vector = Column(TSVECTOR, nullable=True)
     identifiers = Column(ARRAY(Text), nullable=True)
-    created_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     document = relationship(
         "Document", back_populates="chunks", foreign_keys=[document_id]
     )
     version = relationship(
-        "DocumentVersion", back_populates="chunks", foreign_keys=[version_id]
+        "DocumentVersion",
+        back_populates="chunks",
+        foreign_keys=[version_id],
+        overlaps="chunks,document",
     )
     source_file = relationship("SourceFile", foreign_keys=[source_file_id])
     parent_chunk = relationship(
@@ -237,6 +310,23 @@ class DocumentVersion(Base):
             "version_no",
             name="uq_document_versions_document_id_version_no",
         ),
+        UniqueConstraint(
+            "document_id",
+            "id",
+            name="uq_document_versions_document_id_id",
+        ),
+        CheckConstraint(
+            "status IN ('pending','processing','completed','ready','failed','superseded')",
+            name="ck_document_versions_status",
+        ),
+        CheckConstraint(
+            "activated_at IS NULL OR status IN ('completed','ready')",
+            name="ck_document_versions_activation",
+        ),
+        CheckConstraint(
+            "status <> 'failed' OR (error_code IS NOT NULL AND error_message IS NOT NULL)",
+            name="ck_document_versions_failed_error",
+        ),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -257,8 +347,9 @@ class DocumentVersion(Base):
         ForeignKey("document_artifacts.id", ondelete="SET NULL"),
         nullable=True,
     )
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    activated_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    activated_at = Column(DateTime(timezone=True), nullable=True)
+    error_code = Column(String, nullable=True)
     error_message = Column(Text, nullable=True)
 
     document = relationship(
@@ -279,7 +370,7 @@ class DocumentVersion(Base):
     ingestion_jobs = relationship(
         "IngestionJob", back_populates="version", cascade="all, delete-orphan"
     )
-    chunks = relationship("Chunk", back_populates="version")
+    chunks = relationship("Chunk", back_populates="version", overlaps="chunks,document")
 
 
 class SourceFile(Base):
@@ -315,6 +406,13 @@ class DocumentArtifact(Base):
     """
 
     __tablename__ = "document_artifacts"
+    __table_args__ = (
+        CheckConstraint(
+            "artifact_type IN "
+            "('original','normalized_json','normalized_md','page_image','thumbnail','ocr_json','scan_config')",
+            name="ck_document_artifacts_type",
+        ),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     version_id = Column(
@@ -328,7 +426,7 @@ class DocumentArtifact(Base):
     checksum = Column(String, nullable=True)
     size_bytes = Column(BigInteger, nullable=True)
     metadata_json = Column(JSONB, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     version = relationship(
         "DocumentVersion", back_populates="artifacts", foreign_keys=[version_id]
@@ -344,6 +442,25 @@ class IngestionJob(Base):
     """
 
     __tablename__ = "ingestion_jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued','running','retrying','completed','failed','cancelled')",
+            name="ck_ingestion_jobs_status",
+        ),
+        CheckConstraint(
+            "stage IS NULL OR stage IN "
+            "('validating','storing','parsing','ocr','normalizing','chunking','embedding','indexing','activating')",
+            name="ck_ingestion_jobs_stage",
+        ),
+        CheckConstraint(
+            "progress IS NULL OR progress BETWEEN 0 AND 100",
+            name="ck_ingestion_jobs_progress",
+        ),
+        CheckConstraint(
+            "status <> 'failed' OR (error_code IS NOT NULL AND error_message IS NOT NULL)",
+            name="ck_ingestion_jobs_failed_error",
+        ),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     version_id = Column(
@@ -358,9 +475,9 @@ class IngestionJob(Base):
     attempt = Column(Integer, nullable=False, default=0)
     error_code = Column(String, nullable=True)
     error_message = Column(Text, nullable=True)
-    started_at = Column(DateTime, nullable=True)
-    finished_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     version = relationship("DocumentVersion", back_populates="ingestion_jobs")
     events = relationship(
@@ -375,6 +492,18 @@ class IngestionEvent(Base):
     """
 
     __tablename__ = "ingestion_events"
+    __table_args__ = (
+        CheckConstraint(
+            "stage IS NULL OR stage IN "
+            "('validating','storing','parsing','ocr','normalizing','chunking','embedding','indexing','activating')",
+            name="ck_ingestion_events_stage",
+        ),
+        CheckConstraint(
+            "status IS NULL OR status IN "
+            "('queued','running','retrying','completed','failed','cancelled')",
+            name="ck_ingestion_events_status",
+        ),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_id = Column(
@@ -387,7 +516,7 @@ class IngestionEvent(Base):
     status = Column(String, nullable=True)
     message = Column(Text, nullable=True)
     payload_json = Column(JSONB, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     job = relationship("IngestionJob", back_populates="events")
 
@@ -408,6 +537,10 @@ class EmbeddingProfile(Base):
             unique=True,
             postgresql_where=sa_text("is_active"),
         ),
+        CheckConstraint("dimension = 1024", name="ck_embedding_profiles_dimension"),
+        CheckConstraint(
+            "length(config_hash) > 0", name="ck_embedding_profiles_config_hash"
+        ),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -420,7 +553,7 @@ class EmbeddingProfile(Base):
     profile_version = Column(Integer, nullable=False, default=1)
     config_hash = Column(String, nullable=False)
     is_active = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     chunk_embeddings = relationship(
         "ChunkEmbedding",
@@ -450,7 +583,7 @@ class ChunkEmbedding(Base):
         index=True,
     )
     embedding = Column(Vector(EMBEDDING_DIMENSION), nullable=False)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     chunk = relationship("Chunk", back_populates="chunk_embeddings")
     embedding_profile = relationship(
@@ -471,8 +604,9 @@ class Conversation(Base):
         index=True,
     )
     title = Column(String, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     messages = relationship(
         "Message", back_populates="conversation", cascade="all, delete-orphan"
@@ -483,6 +617,12 @@ class Message(Base):
     """A single turn in a conversation (Bölüm 8.10)."""
 
     __tablename__ = "messages"
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('system','user','assistant','tool')",
+            name="ck_messages_role",
+        ),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     conversation_id = Column(
@@ -495,7 +635,7 @@ class Message(Base):
     content = Column(Text, nullable=False)
     model = Column(String, nullable=True)
     answerable = Column(Boolean, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     conversation = relationship("Conversation", back_populates="messages")
     citations = relationship(

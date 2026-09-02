@@ -48,7 +48,6 @@ import hashlib
 import os
 import tempfile
 import uuid
-from datetime import datetime
 from typing import Callable, List, Optional
 
 from sqlalchemy.orm import Session
@@ -56,7 +55,11 @@ from sqlalchemy.orm import Session
 from ..api.v1.documents import chunk_text, extract_text
 from ..config import settings
 from ..db import SessionLocal
+from ..domain.clock import Clock, SYSTEM_CLOCK
+from ..domain.ingestion_state import JobStatus, transition_job
+from ..domain.version_activation import activate_document_version
 from ..infrastructure.security import redact_secrets
+from ..infrastructure.embeddings.cache import profile_config_hash
 from ..infrastructure.retrieval.indexing import (
     build_search_vector_stmt,
     chunk_identifiers,
@@ -135,6 +138,7 @@ def _emit_event(
     stage: str,
     status: str,
     message: Optional[str] = None,
+    clock: Clock = SYSTEM_CLOCK,
 ) -> None:
     db.add(
         IngestionEvent(
@@ -143,7 +147,7 @@ def _emit_event(
             stage=stage,
             status=status,
             message=message,
-            created_at=datetime.utcnow(),
+            created_at=clock.now(),
         )
     )
 
@@ -178,14 +182,18 @@ def _validate_stage_transition(current, new) -> None:
         )
 
 
-def _advance_stage(db: Session, job: IngestionJob, stage: str) -> None:
+def _advance_stage(
+    db: Session, job: IngestionJob, stage: str, clock: Clock = SYSTEM_CLOCK
+) -> None:
     _validate_stage_transition(job.stage, stage)
     job.stage = stage
-    _emit_event(db, job, stage=stage, status="started")
+    _emit_event(db, job, stage=stage, status="started", clock=clock)
     db.commit()
 
 
-def _get_or_create_active_embedding_profile(db: Session) -> EmbeddingProfile:
+def _get_or_create_active_embedding_profile(
+    db: Session, clock: Clock = SYSTEM_CLOCK
+) -> EmbeddingProfile:
     """Returns the single active embedding profile, creating it from the
     current ``settings.EMBEDDING_MODEL`` config if none exists yet.
 
@@ -212,8 +220,9 @@ def _get_or_create_active_embedding_profile(db: Session) -> EmbeddingProfile:
         distance_metric="cosine",
         profile_version=1,
         is_active=True,
-        created_at=datetime.utcnow(),
+        created_at=clock.now(),
     )
+    profile.config_hash = profile_config_hash(profile)
     db.add(profile)
     db.flush()
     return profile
@@ -250,6 +259,7 @@ def run_ingestion_job(
     embed_texts_fn: Callable[..., List[List[float]]] = embed_texts,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
+    clock: Clock = SYSTEM_CLOCK,
 ) -> dict:
     """Runs one ingestion job to completion (or failure) on ``db``.
 
@@ -268,34 +278,47 @@ def run_ingestion_job(
     # re-activate a version that's already active.
     if job.status == "completed":
         return {"job_id": str(job_id), "status": "completed", "skipped": True}
+    if job.status in {"failed", "cancelled"}:
+        raise IngestionJobError(f"IngestionJob {job_id} is terminal ({job.status})")
 
     version = db.get(DocumentVersion, job.version_id)
     if version is None:
-        job.status = "failed"
+        transition_job(job, JobStatus.FAILED)
         job.error_code = "version_not_found"
         job.error_message = f"DocumentVersion {job.version_id} not found"
-        job.finished_at = datetime.utcnow()
+        job.finished_at = clock.now()
         _emit_event(
-            db, job, stage="validating", status="failed", message=job.error_message
+            db,
+            job,
+            stage="validating",
+            status="failed",
+            message=job.error_message,
+            clock=clock,
         )
         db.commit()
         raise IngestionJobError(job.error_message)
 
     document = db.get(Document, version.document_id)
     if document is None:
-        job.status = "failed"
+        transition_job(job, JobStatus.FAILED)
         job.error_code = "document_not_found"
         job.error_message = f"Document {version.document_id} not found"
-        job.finished_at = datetime.utcnow()
+        job.finished_at = clock.now()
         _emit_event(
-            db, job, stage="validating", status="failed", message=job.error_message
+            db,
+            job,
+            stage="validating",
+            status="failed",
+            message=job.error_message,
+            clock=clock,
         )
         db.commit()
         raise IngestionJobError(job.error_message)
 
-    job.status = "running"
+    expected_active_version_id = document.active_version_id
+    transition_job(job, JobStatus.RUNNING)
     job.attempt = (job.attempt or 0) + 1
-    job.started_at = datetime.utcnow()
+    job.started_at = clock.now()
     job.error_code = None
     job.error_message = None
     # Mirror job progress onto documents.status using the same vocabulary the
@@ -303,19 +326,19 @@ def run_ingestion_job(
     # / "indexed" / "error") so existing frontend status labels keep working
     # unchanged for async-ingested documents too (Aşama 2.4).
     document.status = "processing"
-    document.updated_at = datetime.utcnow()
+    document.updated_at = clock.now()
     db.commit()
 
     try:
         # --- validating -----------------------------------------------
-        _advance_stage(db, job, "validating")
+        _advance_stage(db, job, "validating", clock)
         if not version.storage_key:
             raise IngestionJobError(
                 "DocumentVersion.storage_key is empty; original was never stored"
             )
 
         # --- storing (fetch + register the original artifact) ----------
-        _advance_stage(db, job, "storing")
+        _advance_stage(db, job, "storing", clock)
         original_bytes = storage.get(version.storage_key)
         original_artifact = (
             db.query(DocumentArtifact)
@@ -333,13 +356,13 @@ def run_ingestion_job(
                     artifact_type="original",
                     storage_key=version.storage_key,
                     size_bytes=len(original_bytes),
-                    created_at=datetime.utcnow(),
+                    created_at=clock.now(),
                 )
             )
             db.commit()
 
         # --- parsing -----------------------------------------------------
-        _advance_stage(db, job, "parsing")
+        _advance_stage(db, job, "parsing", clock)
         suffix = os.path.splitext(document.name or "")[1]
         tmp_path = None
         try:
@@ -377,7 +400,7 @@ def run_ingestion_job(
                 artifact_type="normalized_md",
                 storage_key=normalized_key,
                 size_bytes=len(text.encode("utf-8")),
-                created_at=datetime.utcnow(),
+                created_at=clock.now(),
             )
             db.add(normalized_artifact)
             db.flush()
@@ -385,7 +408,7 @@ def run_ingestion_job(
         db.commit()
 
         # --- chunking ------------------------------------------------------
-        _advance_stage(db, job, "chunking")
+        _advance_stage(db, job, "chunking", clock)
         chunks = chunk_text_fn(text, chunk_size=chunk_size, overlap=chunk_overlap)
         if not chunks:
             raise IngestionJobError("Chunking produced zero chunks")
@@ -396,15 +419,15 @@ def run_ingestion_job(
         chunks = [redact_secrets(c) for c in chunks]
 
         # --- embedding -----------------------------------------------------
-        _advance_stage(db, job, "embedding")
+        _advance_stage(db, job, "embedding", clock)
         embeddings = embed_texts_fn(chunks, instruction=PASSAGE_INSTRUCTION)
         if len(embeddings) != len(chunks):
             raise IngestionJobError("Embedding count does not match chunk count")
 
         # --- indexing (idempotent: wipe + rewrite this version's chunks) --
-        _advance_stage(db, job, "indexing")
+        _advance_stage(db, job, "indexing", clock)
         _clear_existing_chunks_for_version(db, version.id)
-        profile = _get_or_create_active_embedding_profile(db)
+        profile = _get_or_create_active_embedding_profile(db, clock)
 
         for index, (content, embedding) in enumerate(zip(chunks, embeddings)):
             chunk = Chunk(
@@ -418,7 +441,7 @@ def run_ingestion_job(
                 embedding=embedding,
                 identifiers=chunk_identifiers(content),
                 content_hash=hashlib.sha256(content.encode("utf-8")).hexdigest(),
-                created_at=datetime.utcnow(),
+                created_at=clock.now(),
             )
             db.add(chunk)
             db.flush()
@@ -427,7 +450,7 @@ def run_ingestion_job(
                     chunk_id=chunk.id,
                     embedding_profile_id=profile.id,
                     embedding=embedding,
-                    created_at=datetime.utcnow(),
+                    created_at=clock.now(),
                 )
             )
         # Build the lexical (tsvector) index so LexicalRetriever can find these
@@ -441,15 +464,25 @@ def run_ingestion_job(
         db.commit()
 
         # --- activating ------------------------------------------------
-        _advance_stage(db, job, "activating")
+        _advance_stage(db, job, "activating", clock)
         version.status = "ready"
-        version.activated_at = datetime.utcnow()
-        document.active_version_id = version.id
-        document.status = "indexed"
-        document.updated_at = datetime.utcnow()
-        job.status = "completed"
-        job.finished_at = datetime.utcnow()
-        _emit_event(db, job, stage="activating", status="completed")
+        db.flush()
+        if hasattr(db, "execute"):
+            activate_document_version(
+                db,
+                document_id=document.id,
+                version_id=version.id,
+                expected_current_version_id=expected_active_version_id,
+                clock=clock,
+            )
+        else:
+            version.activated_at = clock.now()
+            document.active_version_id = version.id
+            document.status = "indexed"
+            document.updated_at = clock.now()
+        transition_job(job, JobStatus.COMPLETED)
+        job.finished_at = clock.now()
+        _emit_event(db, job, stage="activating", status="completed", clock=clock)
         db.commit()
 
         return {
@@ -463,12 +496,18 @@ def run_ingestion_job(
         db.rollback()
         job = db.get(IngestionJob, job_id)  # re-fetch: rollback expired instances
         if job is not None:
-            job.status = "failed"
+            permanent = isinstance(exc, IngestionJobError)
+            transition_job(job, JobStatus.FAILED if permanent else JobStatus.RETRYING)
             job.error_code = type(exc).__name__
             job.error_message = str(exc)
-            job.finished_at = datetime.utcnow()
+            job.finished_at = clock.now() if permanent else None
             _emit_event(
-                db, job, stage=job.stage or "unknown", status="failed", message=str(exc)
+                db,
+                job,
+                stage=job.stage or "validating",
+                status="failed" if permanent else "retrying",
+                message=str(exc),
+                clock=clock,
             )
             # Best-effort: also surface the failure on documents.status (same
             # re-fetch-after-rollback pattern as ``job`` above). Never lets a
@@ -482,8 +521,9 @@ def run_ingestion_job(
                 failed_document = None
             if failed_document is not None:
                 failed_document.status = "error"
+                failed_document.error_code = type(exc).__name__
                 failed_document.error_message = str(exc)
-                failed_document.updated_at = datetime.utcnow()
+                failed_document.updated_at = clock.now()
             db.commit()
 
         # Permanent, code-level failures (validation, stage machine) propagate
