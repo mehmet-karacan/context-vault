@@ -880,22 +880,22 @@ IngestionOrchestrator
   schedule_old_version_gc()
 ```
 
-- [ ] `api/v1/documents.py` içindeki legacy `extract_text` ve karakter bazlı `chunk_text` üretim yolundan çıkarılacak.
-- [ ] Worker, API modülünden parser/chunker import etmeyecek.
-- [ ] Reindex aynı orchestrator'ı ve immutable profile'ları kullanacak.
-- [ ] Sync endpoint gerekiyorsa ayrı pipeline çalıştırmayacak; aynı job'ı oluşturup bounded wait/poll ile sonucu döndürecek.
-- [ ] Varsayılan ürün davranışı async job olacak.
-- [ ] Parser/chunker/embedding profile kimlikleri version üzerinde zorunlu ve immutable olacak.
-- [ ] UI'dan gönderilen raw karakter chunk size üretim semantiğini değiştirmeyecek.
+- [x] `api/v1/documents.py` içindeki legacy `extract_text` ve karakter bazlı `chunk_text` üretim yolundan çıkarılacak.
+- [x] Worker, API modülünden parser/chunker import etmeyecek.
+- [x] Reindex aynı orchestrator'ı ve immutable profile'ları kullanacak.
+- [x] Sync endpoint gerekiyorsa ayrı pipeline çalıştırmayacak; aynı job'ı oluşturup bounded wait/poll ile sonucu döndürecek.
+- [x] Varsayılan ürün davranışı async job olacak.
+- [x] Parser/chunker/embedding profile kimlikleri version üzerinde zorunlu ve immutable olacak.
+- [x] UI'dan gönderilen raw karakter chunk size üretim semantiğini değiştirmeyecek.
 
 ### 13.3 Kaynak ve dosya tespiti
 
-- [ ] Source adapter'ları ortak `SourceDescriptor` üretir: source_type, origin, revision, content length/hash, detected MIME, declared MIME, data classification hint.
-- [ ] Extension tek başına güven kaynağı değildir; magic/MIME/structure birlikte değerlendirilir.
-- [ ] Extension'sız desteklenen dosya tespit edilebilir.
-- [ ] Declared MIME ile detected type uyuşmazlığı policy event üretir.
-- [ ] Archive traversal, decompression bomb, symlink escape, generated/binary file ve ignore kuralları tek scanner katmanında uygulanır.
-- [ ] Repository clone geçici sandbox, timeout, boyut, dosya sayısı, history depth ve egress sınırına sahiptir.
+- [x] Source adapter'ları ortak `SourceDescriptor` üretir: source_type, origin, revision, content length/hash, detected MIME, declared MIME, data classification hint.
+- [x] Extension tek başına güven kaynağı değildir; magic/MIME/structure birlikte değerlendirilir.
+- [x] Extension'sız desteklenen dosya tespit edilebilir.
+- [x] Declared MIME ile detected type uyuşmazlığı policy event üretir.
+- [x] Archive traversal, decompression bomb, symlink escape, generated/binary file ve ignore kuralları tek scanner katmanında uygulanır.
+- [x] Repository clone geçici sandbox, timeout, boyut, dosya sayısı, history depth ve egress sınırına sahiptir.
 
 ### 13.4 İçerik politikası ve hassas veri
 
@@ -917,81 +917,119 @@ quarantine_reason
 policy_version
 ```
 
-- [ ] Credential/private key/token tespit edilen içerik otomatik remote servise gönderilmez.
-- [ ] Yüksek riskli içerik silent redaction ile “normal belge” yapılmaz; quarantine + kullanıcı kararı gerekir.
-- [ ] Confidential iş dokümanı ile credential/secret aynı kategori sayılmaz; politika ayrı karar verir.
-- [ ] Orijinal artifact saklanacaksa encryption-at-rest, erişim kontrolü, retention ve audit uygulanır.
-- [ ] Normalize artifact, policy kararı verilmeden kalıcı storage'a yazılmaz.
-- [ ] Chunk/log/debug/eval artifact'inde secret veya tam belge içeriği bulunmaz.
-- [ ] Remote provider çağrısına data classification ve policy kararının audit izi eklenir.
+- [x] Credential/private key/token tespit edilen içerik otomatik remote servise gönderilmez.
+- [x] Yüksek riskli içerik silent redaction ile “normal belge” yapılmaz; quarantine + kullanıcı kararı gerekir.
+- [x] Confidential iş dokümanı ile credential/secret aynı kategori sayılmaz; politika ayrı karar verir.
+- [x] Orijinal artifact saklanacaksa encryption-at-rest, erişim kontrolü, retention ve audit uygulanır.
+- [x] Normalize artifact, policy kararı verilmeden kalıcı storage'a yazılmaz.
+- [x] Chunk/log/debug/eval artifact'inde secret veya tam belge içeriği bulunmaz.
+- [x] Remote provider çağrısına data classification ve policy kararının audit izi eklenir.
 
 ### 13.5 DB–object storage–queue tutarlılığı
 
-- [ ] Object önce deterministic staging key'e yüklenir; checksum doğrulanır.
-- [ ] DB transaction document/version/job ve `outbox_events` kaydını birlikte oluşturur.
-- [ ] Commit sonrası dispatcher outbox event'ini Celery/queue'ya teslim eder.
-- [ ] Queue publish başarısızlığı event'i kaybetmez; retry edilir.
-- [ ] Staging object için referanssız/orphan sweeper vardır.
-- [ ] Final immutable object key, version/artifact id ve checksum'dan türetilir.
-- [ ] Outbox/inbox idempotency key unique constraint ile korunur.
-- [ ] Worker aynı mesajı birden çok aldığında aynı terminal sonucu üretir; duplicate chunk/artifact/version oluşturmaz.
+- [x] Object önce deterministic staging key'e yüklenir; checksum doğrulanır.
+- [x] DB transaction document/version/job ve `outbox_events` kaydını birlikte oluşturur.
+- [x] Commit sonrası dispatcher outbox event'ini Celery/queue'ya teslim eder.
+- [x] Queue publish başarısızlığı event'i kaybetmez; retry edilir.
+- [x] Staging object için referanssız/orphan sweeper vardır.
+- [x] Final immutable object key, version/artifact id ve checksum'dan türetilir.
+- [x] Outbox/inbox idempotency key unique constraint ile korunur.
+- [x] Worker aynı mesajı birden çok aldığında aynı terminal sonucu üretir; duplicate chunk/artifact/version oluşturmaz.
 
 ### 13.6 Job claim, lease ve retry
 
-- [ ] Worker job'ı etki öncesi atomik claim eder.
-- [ ] Lease owner, lease expiry, heartbeat ve attempt kayıtları tutulur.
-- [ ] Stale lease güvenli reconcile edilir.
-- [ ] Retryable ve terminal error code'ları ayrılır.
-- [ ] Retry mevcut aktif version'ı silmez.
-- [ ] Stage geçişleri monotonic ve receipt'li olur.
-- [ ] Cancel yalnız güvenli noktalarda etkili olur; yarım artifact/chunk cleanup planı üretir.
-- [ ] Celery task id operasyonel otorite değil, attempt metadata'sıdır.
+- [x] Worker job'ı etki öncesi atomik claim eder.
+- [x] Lease owner, lease expiry, heartbeat ve attempt kayıtları tutulur.
+- [x] Stale lease güvenli reconcile edilir.
+- [x] Retryable ve terminal error code'ları ayrılır.
+- [x] Retry mevcut aktif version'ı silmez.
+- [x] Stage geçişleri monotonic ve receipt'li olur.
+- [x] Cancel yalnız güvenli noktalarda etkili olur; yarım artifact/chunk cleanup planı üretir.
+- [x] Celery task id operasyonel otorite değil, attempt metadata'sıdır.
 
 ### 13.7 Build-new → validate → activate
 
-- [ ] Yeni version bağımsız candidate olarak parse/chunk/embed/index edilir.
-- [ ] Candidate için minimum invariant'lar:
+- [x] Yeni version bağımsız candidate olarak parse/chunk/embed/index edilir.
+- [x] Candidate için minimum invariant'lar:
   - source/artifact checksum tutarlı;
   - chunk sequence deterministik ve unique;
   - embeddings eksiksiz ve doğru profile/dimension;
   - gerekli index alanları dolu;
   - content policy ihlali yok;
   - smoke retrieval başarılı.
-- [ ] Aktivasyon tek DB transaction'ında yapılır.
-- [ ] Eski aktif version aktivasyon tamamlanana kadar okunabilir kalır.
-- [ ] Eski version/artifact/chunk silme ayrı retention/GC işi olur.
-- [ ] Aktivasyon sonrası query cache/profile cache invalidate edilir.
+- [x] Aktivasyon tek DB transaction'ında yapılır.
+- [x] Eski aktif version aktivasyon tamamlanana kadar okunabilir kalır.
+- [x] Eski version/artifact/chunk silme ayrı retention/GC işi olur.
+- [x] Aktivasyon sonrası query cache/profile cache invalidate edilir.
 
 ### 13.8 Silme ve garbage collection
 
-- [ ] Delete önce soft-delete/retention state üretir.
-- [ ] Conversation/citation retention ve legal hold politikası belirlenir.
-- [ ] GC yalnız referans sayımı ve retention dolduktan sonra object/vector/chunk siler.
-- [ ] GC idempotent, dry-run destekli ve receipt üretir.
-- [ ] Failed/abandoned staging object'ler için ayrı sweeper vardır.
-- [ ] Restore edilen DB ile object store arasında missing/orphan raporu üretilebilir.
+- [x] Delete önce soft-delete/retention state üretir.
+- [x] Conversation/citation retention ve legal hold politikası belirlenir.
+- [x] GC yalnız referans sayımı ve retention dolduktan sonra object/vector/chunk siler.
+- [x] GC idempotent, dry-run destekli ve receipt üretir.
+- [x] Failed/abandoned staging object'ler için ayrı sweeper vardır.
+- [x] Restore edilen DB ile object store arasında missing/orphan raporu üretilebilir.
 
 ### 13.9 Test matrisi
 
-- [ ] Aynı upload/idempotency key iki kez gönderilir; tek version/job sonucu.
-- [ ] Object upload sonrası DB commit fail; sweeper orphan'ı bulur.
-- [ ] DB commit sonrası queue fail; outbox daha sonra teslim eder.
-- [ ] Worker parsing/embedding/indexing/activation aşamalarının her birinde kill edilir ve retry edilir.
-- [ ] Eski aktif version tüm candidate hatalarında erişilebilir kalır.
-- [ ] Extension'sız TXT/PDF/DOCX/image fixture doğru router'a gider.
-- [ ] MIME spoof, zip bomb, traversal, symlink escape ve oversized source reddedilir.
-- [ ] Secret fixture quarantine olur; remote provider mock'una byte gönderilmez.
-- [ ] Concurrent iki reindex yalnız geçerli candidate'ı aktive eder.
-- [ ] Delete/GC retry duplicate veya yanlış object silmez.
+- [x] Aynı upload/idempotency key iki kez gönderilir; tek version/job sonucu.
+- [x] Object upload sonrası DB commit fail; sweeper orphan'ı bulur.
+- [x] DB commit sonrası queue fail; outbox daha sonra teslim eder.
+- [x] Worker parsing/embedding/indexing/activation aşamalarının her birinde kill edilir ve retry edilir.
+- [x] Eski aktif version tüm candidate hatalarında erişilebilir kalır.
+- [x] Extension'sız TXT/PDF/DOCX/image fixture doğru router'a gider.
+- [x] MIME spoof, zip bomb, traversal, symlink escape ve oversized source reddedilir.
+- [x] Secret fixture quarantine olur; remote provider mock'una byte gönderilmez.
+- [x] Concurrent iki reindex yalnız geçerli candidate'ı aktive eder.
+- [x] Delete/GC retry duplicate veya yanlış object silmez.
 
 ### 13.10 Kabul kriterleri
 
-- [ ] Üretim kodunda tek ingestion orchestrator vardır.
-- [ ] Legacy sync chunker ve dual write yolu kullanılmaz.
-- [ ] DB/object/queue fault injection testleri veri kaybı ve sonsuz queued job üretmez.
-- [ ] Aktif version candidate hazır olmadan değişmez.
-- [ ] Secret/high-risk içerik remote provider'a sızmaz.
-- [ ] Tüm ingestion terminal durumları receipt ve error code taşır.
+- [x] Üretim kodunda tek ingestion orchestrator vardır.
+- [x] Legacy sync chunker ve dual write yolu kullanılmaz.
+- [x] DB/object/queue fault injection testleri veri kaybı ve sonsuz queued job üretmez.
+- [x] Aktif version candidate hazır olmadan değişmez.
+- [x] Secret/high-risk içerik remote provider'a sızmaz.
+- [x] Tüm ingestion terminal durumları receipt ve error code taşır.
+
+### 13.11 Aşama 6 uygulama kaydı — 2026-09-02
+
+- Durum: `PASS`; uygulama commit'i
+  `69096dc485c91ff6dcda13d6b9d247946dbff3c5`.
+- Üretim ağacındaki legacy `ReindexService` ve sync upload/chunker yolu
+  kaldırıldı. Upload, repository, directory, archive, refresh/reindex ve retry
+  tek `IngestionOrchestrator` üzerinden immutable profile/policy ile çalışıyor;
+  yapısal guard ikinci orchestrator ve dual-path flag'ini reddediyor.
+- `cv3_00000004` izole PostgreSQL'de
+  `0003 → 0004 → 0003 → 0004` çevrimini geçti; `alembic check` temiz. Strict
+  verifier 255 kolon, 110 constraint ve 17 runtime invariant'ın tamamını `0`
+  buldu; schema hash
+  `7328301b5e7ccd22ba66b1c4e3c23292ac751049ede639628cae1dca339d087b`.
+- Gerçek PostgreSQL testleri upload/inbox/outbox idempotency, publish recovery,
+  stale claim/lease, safe cancel, registered ve unregistered staging sweep,
+  reindex active-version koruması, concurrent compare-and-swap, her kritik
+  stage sonrası crash/retry yakınsaması ve citation/legal-hold GC kapılarını
+  doğruladı.
+- Gerçek MinIO testleri application-layer AES-256-GCM ciphertext, AAD/tamper
+  reddi, üç final immutable artifact ve staging cleanup davranışını doğruladı.
+  Eksik/bozuk encryption key startup'ı durduruyor; legacy plaintext read
+  varsayılan kapalı.
+- Source router extension'sız TXT/PDF/DOCX/image, MIME mismatch audit, spoof,
+  traversal, zip bomb, symlink, boyut ve ignore sınırlarını test etti. Secret
+  fixture storage/queue/provider öncesi quarantine edildi; izinli remote
+  embedding çağrısı actor/workspace/classification/policy audit izi üretti.
+- Backend tam regresyonu: `587 passed, 2 skipped`; Ruff lint PASS ve
+  `171 files already formatted`. Skip'ler koşula bağlı optional entegrasyon
+  yollarıdır; A6 zorunlu PostgreSQL/MinIO testleri çalıştırıldı ve geçildi.
+- Aktivasyon sonrası stale active-version query/profile cache riski yoktur:
+  runtime'da böyle bir cache bulunmuyor; embedding cache yalnız immutable
+  content/profile hash'iyle anahtarlanıyor ve aktivasyon pointer'ını cache'lemiyor.
+- Public-safe kanıt:
+  `artifacts/ingestion/2026-09-02-a6/INGESTION_RECEIPT.json`; işletim ve
+  retention kararı ADR-009 ile güncel ingestion runbook'unda kayıtlıdır.
+- Yapılmayanlar: kullanıcı/verili DB migration'ı, mevcut object silme, remote
+  push/PR/merge/release ve history rewrite.
 
 ---
 

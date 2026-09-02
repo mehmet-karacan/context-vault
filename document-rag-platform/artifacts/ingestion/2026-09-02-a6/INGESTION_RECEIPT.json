@@ -1,0 +1,93 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "verify",
+  "operation_id": "cv3-a6-durable-ingestion-20260902-001",
+  "work_item_id": "CV3-A6-INGESTION-CONTROL-PLANE",
+  "actor": "codex-local-agent",
+  "observed_at_utc": "2026-09-02T16:53:26Z",
+  "baseline_revision": "34ce199b30a23c1835fc555e967367b69fc985d6",
+  "result_revision": "69096dc485c91ff6dcda13d6b9d247946dbff3c5",
+  "result": "PASS",
+  "tests": [
+    {
+      "name": "backend full pytest",
+      "result": "PASS",
+      "passed": 587,
+      "skipped": 2,
+      "warning_count": 1
+    },
+    {
+      "name": "PostgreSQL ingestion control-plane and schema invariants",
+      "result": "PASS",
+      "passed": 12
+    },
+    {
+      "name": "real MinIO encryption and ingestion E2E",
+      "result": "PASS",
+      "passed": 20
+    },
+    {
+      "name": "Ruff lint",
+      "result": "PASS"
+    },
+    {
+      "name": "Ruff format check",
+      "result": "PASS",
+      "files": 171
+    },
+    {
+      "name": "Alembic disposable round-trip",
+      "result": "PASS",
+      "path": "cv3_00000003 -> cv3_00000004 -> cv3_00000003 -> cv3_00000004"
+    },
+    {
+      "name": "Alembic autogenerate drift check",
+      "result": "PASS",
+      "message": "No new upgrade operations detected"
+    },
+    {
+      "name": "strict migration verifier",
+      "result": "PASS",
+      "head": "cv3_00000004",
+      "columns": 255,
+      "constraints": 110,
+      "invariant_violations": 0,
+      "provider_credentials_loaded": false,
+      "schema_sha256": "7328301b5e7ccd22ba66b1c4e3c23292ac751049ede639628cae1dca339d087b"
+    }
+  ],
+  "verified_behaviors": [
+    "single production ingestion orchestrator",
+    "deterministic staging and immutable final objects",
+    "transactional job and outbox creation",
+    "outbox and inbox idempotency",
+    "lease, heartbeat, attempt, cancellation and terminal receipts",
+    "stage crash injection and retry convergence",
+    "build-new validate compare-and-swap activation",
+    "source detection and scanner security limits",
+    "secret quarantine before storage or remote provider",
+    "attributed remote-provider policy audit",
+    "AES-256-GCM encryption-at-rest with authenticated storage-key AAD",
+    "soft delete, retention, citation hold, legal hold and idempotent dry-run GC",
+    "DB and object-store missing/orphan reconciliation"
+  ],
+  "security_redactions": [
+    "database URL",
+    "object-storage credentials",
+    "encryption key",
+    "raw object keys",
+    "document content"
+  ],
+  "data_safety": {
+    "user_database_mutated": false,
+    "existing_user_objects_deleted": false,
+    "tests_used_isolated_postgresql": true,
+    "tests_used_dedicated_minio_prefixes_or_buckets": true
+  },
+  "remote_actions": {
+    "push": false,
+    "pull_request": false,
+    "merge": false,
+    "release": false
+  }
+}
