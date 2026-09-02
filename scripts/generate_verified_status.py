@@ -29,6 +29,12 @@ REMOTE_EVIDENCE = (
     "document-rag-platform/artifacts/ci/latest/ci-runs.json",
     "document-rag-platform/artifacts/governance/latest/main-ruleset.json",
 )
+HISTORICAL_PROJECTIONS = (
+    "context-summary.md",
+    "active/current-tasks.md",
+    "IMPLEMENTATION_CHECKLIST.md",
+    "done/completed-tasks.md",
+)
 
 
 def git(*args: str) -> str:
@@ -115,6 +121,18 @@ def main() -> int:
         for name in ("apps", "services", "tests", "packages", "infra")
         if (REPO / name).exists()
     ]
+    projection_errors = []
+    for relative in HISTORICAL_PROJECTIONS:
+        content = (REPO / relative).read_text(encoding="utf-8")
+        required_labels = (
+            "historical/non-canonical",
+            "last_verified_sha",
+            "last_verified_at",
+            "evidence_manifest",
+            "STALE UYARISI",
+        )
+        if any(label not in content for label in required_labels):
+            projection_errors.append(relative)
 
     checks = {
         "clean_worktree": not dirty_paths,
@@ -132,6 +150,7 @@ def main() -> int:
         "no_root_application_skeletons": not root_skeletons,
         "adr_index_complete": not missing_adrs,
         "runbook_index_complete": not missing_runbooks,
+        "historical_projections_warn_when_stale": not projection_errors,
     }
     verified = all(checks.values())
     payload = {
@@ -154,6 +173,7 @@ def main() -> int:
             "missing_from_adr_index": missing_adrs,
             "runbook_files": runbook_files,
             "missing_from_runbook_index": missing_runbooks,
+            "projection_errors": projection_errors,
         },
         "root_skeletons": root_skeletons,
     }

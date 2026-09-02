@@ -14,3 +14,6 @@
 The inventory is completeness-checked by `scripts/generate_verified_status.py`.
 Operational commands must still be verified against the exact candidate SHA
 before production use.
+
+Historical, non-runbook operational records live under `../operations/` and are
+not included in the runbook completeness set.

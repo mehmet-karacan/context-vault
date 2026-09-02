@@ -17,9 +17,9 @@
       "IMPLEMENTATION_CHECKLIST.md",
       "DOCUMENT_RAG_PLATFORM_ARCHITECTURE_AND_ROADMAP.md"
     ],
-    "retained_for_separate_review": [
-      "docs/operations/2026-08-31-claude-removal.md",
-      "new 1.txt"
+    "reviewed_noncanonical_payloads": [
+      "docs/operations/2026-08-31-claude-removal.md -> sanitized canonical operations record",
+      "new 1.txt -> removed duplicate local launch note"
     ],
     "removed_empty_root_skeletons": [
       "apps",

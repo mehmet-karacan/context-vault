@@ -1,5 +1,0 @@
-cd C:\innova\projeler\context-vault\document-rag-platform
-docker compose up --build
-
-cd C:\innova\projeler\context-vault\document-rag-platform\apps\web
-npm run dev
