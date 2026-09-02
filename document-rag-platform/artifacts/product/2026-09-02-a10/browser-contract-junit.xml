@@ -1,0 +1,26 @@
+<testsuites id="" name="" tests="11" failures="0" skipped="0" errors="0" time="5.476279000000001">
+<testsuite name="home.spec.ts" timestamp="2026-09-02T19:03:03.156Z" hostname="" tests="11" failures="0" skipped="0" time="4.436" errors="0">
+<testcase name="auth/project/upload/job/chat/citation/delete contract flow and keyboard access" classname="home.spec.ts" time="0.525">
+</testcase>
+<testcase name="same-project follow-up keeps conversation; switching project resets it" classname="home.spec.ts" time="0.455">
+</testcase>
+<testcase name="quarantine remains visible with no raw error or fake progress" classname="home.spec.ts" time="0.317">
+</testcase>
+<testcase name="transport retry reuses upload idempotency key" classname="home.spec.ts" time="0.336">
+</testcase>
+<testcase name="provider outage is distinct from insufficient evidence and has no citation" classname="home.spec.ts" time="0.354">
+</testcase>
+<testcase name="expired credential does not open the workspace" classname="home.spec.ts" time="0.255">
+</testcase>
+<testcase name="login and selected workspace pass automated WCAG scan on mobile" classname="home.spec.ts" time="0.841">
+</testcase>
+<testcase name="project create is explicit and a URL cannot inject another project scope" classname="home.spec.ts" time="0.465">
+</testcase>
+<testcase name="permission failure is visible without server detail" classname="home.spec.ts" time="0.253">
+</testcase>
+<testcase name="local mode still requires explicit workspace selection and server confirmation" classname="home.spec.ts" time="0.269">
+</testcase>
+<testcase name="production diagnostics route has no interactive admin surface" classname="home.spec.ts" time="0.366">
+</testcase>
+</testsuite>
+</testsuites>

@@ -1523,70 +1523,107 @@ apps/web/
   tests/
 ```
 
-- [ ] Route/page bileşenleri orchestration dışında iş mantığı taşımayacak.
-- [ ] Server state için tek veri erişim katmanı; ad-hoc `fetch` tekrarları olmayacak.
-- [ ] Form/schema validation backend contract'ıyla uyumlu olacak.
+- [x] Route/page bileşenleri orchestration dışında iş mantığı taşımayacak.
+- [x] Server state için tek veri erişim katmanı; ad-hoc `fetch` tekrarları olmayacak.
+- [x] Form/schema validation backend contract'ıyla uyumlu olacak.
 - [ ] Loading/error/empty/partial/permission-denied durumları ayrı gösterilecek.
-- [ ] Development debug görünümü production bundle'da yetkisiz erişilebilir olmayacak.
+- [x] Development debug görünümü production bundle'da yetkisiz erişilebilir olmayacak.
 
 ### 17.3 Typed API sözleşmesi
 
 - [ ] Backend OpenAPI schema CI'da deterministic üretilir.
-- [ ] TypeScript client/schema otomatik oluşturulur.
-- [ ] Generated client elle düzenlenmez.
+- [x] TypeScript client/schema otomatik oluşturulur.
+- [x] Generated client elle düzenlenmez.
 - [ ] Backend schema değişip client güncellenmezse CI fail eder.
-- [ ] Problem detail/error code'lar typed UI mesajlarına eşlenir.
-- [ ] API base URL ve auth config build-time hardcode değil deployment config'tir.
+- [x] Problem detail/error code'lar typed UI mesajlarına eşlenir.
+- [x] API base URL ve auth config build-time hardcode değil deployment config'tir.
 
 ### 17.4 Proje, kaynak ve ingestion deneyimi
 
-- [ ] Kullanıcı workspace/project seçmeden upload/chat/retrieval yapamaz.
-- [ ] Sessiz default proje yoktur.
-- [ ] Kaynak ekleme ekranı source type, data classification ve remote-processing policy kararını açık gösterir.
-- [ ] Raw “chunk size (karakter)” alanı kaldırılır.
-- [ ] Gelişmiş kullanıcıya yalnız kayıtlı immutable chunker/embedding profile seçimi sunulabilir.
-- [ ] Job durumu gerçek backend event'inden gelir; sahte progress yoktur.
-- [ ] SSE/WebSocket veya bounded polling; reconnect ve terminal state güvenli.
-- [ ] Retry aynı idempotency key/iş kaydı üzerinden yapılır; duplicate upload yaratmaz.
-- [ ] Quarantine/policy-rejected source kullanıcıya anlaşılır ve secret göstermeyen nedenle sunulur.
+- [x] Kullanıcı workspace/project seçmeden upload/chat/retrieval yapamaz.
+- [x] Sessiz default proje yoktur.
+- [x] Kaynak ekleme ekranı source type, data classification ve remote-processing policy kararını açık gösterir.
+- [x] Raw “chunk size (karakter)” alanı kaldırılır.
+- [x] Gelişmiş kullanıcıya yalnız kayıtlı immutable chunker/embedding profile seçimi sunulabilir. (Keyfî profil seçimi sunulmuyor.)
+- [x] Job durumu gerçek backend event'inden gelir; sahte progress yoktur.
+- [x] SSE/WebSocket veya bounded polling; reconnect ve terminal state güvenli.
+- [x] Retry aynı idempotency key/iş kaydı üzerinden yapılır; duplicate upload yaratmaz.
+- [x] Quarantine/policy-rejected source kullanıcıya anlaşılır ve secret göstermeyen nedenle sunulur.
 
 ### 17.5 Chat ve citation deneyimi
 
-- [ ] Conversation project scope'u görünür ve değiştirilemez bağlam olarak gösterilir.
-- [ ] No-answer, provider error, permission denied ve policy refusal farklı UI durumlarıdır.
-- [ ] Citation panel yalnız kullanılan source'ları gösterir.
-- [ ] Belge/version/file/page/line/bbox/symbol locator ve güvenli excerpt sunulur.
-- [ ] Eski citation'ın dayandığı version ile güncel version farklıysa kullanıcıya gösterilir.
-- [ ] Retrieval score son kullanıcı için yanıltıcı “doğruluk yüzdesi” şeklinde gösterilmez.
-- [ ] Admin diagnostics; stage ranks, fallback reason ve timing'i yalnız yetkili role gösterir.
-- [ ] Tam prompt/context veya secret içeriği UI debug'ında bulunmaz.
+- [x] Conversation project scope'u görünür ve değiştirilemez bağlam olarak gösterilir.
+- [x] No-answer, provider error, permission denied ve policy refusal farklı UI durumlarıdır.
+- [x] Citation panel yalnız kullanılan source'ları gösterir.
+- [x] Belge/version/file/page/line/bbox/symbol locator ve güvenli excerpt sunulur.
+- [x] Eski citation'ın dayandığı version ile güncel version farklıysa kullanıcıya gösterilir.
+- [x] Retrieval score son kullanıcı için yanıltıcı “doğruluk yüzdesi” şeklinde gösterilmez.
+- [x] Admin diagnostics; stage ranks, fallback reason ve timing'i yalnız yetkili role gösterir.
+- [x] Tam prompt/context veya secret içeriği UI debug'ında bulunmaz.
 
 ### 17.6 Erişilebilirlik ve güvenlik
 
-- [ ] Klavye erişimi, focus yönetimi, semantik etiket, ekran okuyucu ve kontrast testleri.
-- [ ] File upload tür/boyut/policy bilgisi erişilebilir şekilde sunulur.
-- [ ] XSS için model cevabı/source HTML'i güvenli render edilir; raw HTML varsayılan yasak.
-- [ ] Auth token localStorage'da düz metin kalıcı tutulmaz; seçilen auth mimarisine uygun güvenli yöntem kullanılır.
-- [ ] CSRF/session politikası auth moduna göre uygulanır.
-- [ ] Hassas error detail ve stack trace gösterilmez.
+- [x] Klavye erişimi, focus yönetimi, semantik etiket, ekran okuyucu ve kontrast testleri. (Otomatik WCAG + klavye smoke; insan ekran okuyucu incelemesi iddia edilmez.)
+- [x] File upload tür/boyut/policy bilgisi erişilebilir şekilde sunulur.
+- [x] XSS için model cevabı/source HTML'i güvenli render edilir; raw HTML varsayılan yasak.
+- [x] Auth token localStorage'da düz metin kalıcı tutulmaz; seçilen auth mimarisine uygun güvenli yöntem kullanılır.
+- [x] CSRF/session politikası auth moduna göre uygulanır.
+- [x] Hassas error detail ve stack trace gösterilmez.
 
 ### 17.7 Test kapısı
 
-- [ ] Unit: state reducers/hooks/schema mapping.
-- [ ] Component: project selection, upload/job, no-answer, citation, permission states.
-- [ ] Contract: generated client ve backend fixture.
-- [ ] E2E: login/local auth, project create/select, upload, completed job, chat, used citation, delete/retention.
-- [ ] E2E negatif: cross-project URL, expired key, failed/quarantined job, provider outage.
-- [ ] Accessibility otomatik tarama + kritik akışta keyboard smoke.
-- [ ] Production build ve bundle secret/config taraması.
+- [x] Unit: state reducers/hooks/schema mapping. (Schema/API unit; hook durum geçişleri tarayıcı senaryolarında.)
+- [x] Component: project selection, upload/job, no-answer, citation, permission states.
+- [x] Contract: generated client ve backend fixture.
+- [x] E2E: login/local auth, project create/select, upload, completed job, chat, used citation, delete/retention.
+- [x] E2E negatif: cross-project URL, expired key, failed/quarantined job, provider outage.
+- [x] Accessibility otomatik tarama + kritik akışta keyboard smoke.
+- [x] Production build ve bundle secret/config taraması.
 
 ### 17.8 Kabul kriterleri
 
-- [ ] `page.tsx` monoliti işlevsel feature'lara ayrılmış.
-- [ ] Backend API tipleri elle kopyalanmıyor; generated contract kullanılıyor.
-- [ ] Project scope ve auth olmadan veri işlemi yapılamıyor.
-- [ ] UI gerçek job/citation/no-answer semantiğini doğru gösteriyor.
+- [x] `page.tsx` monoliti işlevsel feature'lara ayrılmış.
+- [x] Backend API tipleri elle kopyalanmıyor; generated contract kullanılıyor.
+- [x] Project scope ve auth olmadan veri işlemi yapılamıyor.
+- [x] UI gerçek job/citation/no-answer semantiğini doğru gösteriyor.
 - [ ] Unit/component/e2e/build/a11y kapıları CI'da çalışıyor.
+
+### 17.9 Aşama 10 yerel uygulama kaydı — 2026-09-02
+
+Implementation SHA: `4bf56429304b33fa5b75a2eea05a6c9e918f0d2e`.
+
+Durum: **yerel ürün/contract doğrulaması geçti; aşama/global kapanış değildir**.
+A9 gerçek provider/private-pack/owner-review kapısı açık kalır. A11–A13 atlanmadı,
+production-ready veya release iddiası yapılmaz. Remote CI çalışması/push yapılmadı.
+
+- Monolit route ve chat; auth/projects/ingestion/conversations/citations/retrieval
+  feature'larına ayrıldı. Generated OpenAPI → TS ve runtime schema validation eklendi.
+- API base/auth deployment sırasında gelir; memory-only anahtar, açık workspace ve
+  project seçimi, aynı-project conversation id ve aynı-key upload retry uygulandı.
+- Sahte thinking/code ticker kaldırıldı. Ölçülmemiş progress null; yalnız kanıtlı
+  completed/indexed son durumu 100 olabilir. Terminal job hataları gizlenmez.
+- Yeni gerçek HTTP/browser koşusu A8'in önceki testlerinin kaçırdığı commit eksikliğini
+  yeniden üretti: ekranda citation olmasına rağmen fresh DB connection 0 message/claim/
+  citation gördü. `query_chat` artık answer transaction'ını commit eder ve kalıcılık
+  bayrağı API'den kapatılamaz. Bu bulgu önceki A8 genel runtime kalıcılığı iddiasını
+  daraltır; düzeltme ve yeni bağımsız bağlantı kanıtı A10 receipt'indedir.
+- Debug endpoint log signature hatası yeniden üretildi; raw query/context dönen yol
+  allowlisted rank/timing/fallback view ile değiştirildi. Member 403 ve production
+  diagnostics görünmezliği test edildi. Mypy strict kapısındaki üç annotation hatası
+  da yeniden üretilip tip kapsamı küçültülmeden giderildi.
+- Backend: **620 passed, 2 skipped**, 1 Starlette/httpx deprecation warning.
+  Frontend: **13 unit/component + 11 browser-contract + 1 connected browser PASS**;
+  lint/typecheck/build/bundle-pattern scan/audit, OpenAPI drift ve MyPy strict PASS.
+- Connected fixture: gerçek HTTP/auth/PG/MinIO/parser/worker-core/retrieval; model
+  deterministik yerel fixture, dispatch synchronous. Gerçek sağlayıcı/queue delivery
+  kalite kanıtı değildir. Fresh connection: **2 message, 1 claim, 1 encrypted citation,
+  1 soft-deleted document, 3 retained encrypted object** doğrulandı.
+- A10 için yeni, boş `cv3_a10_browser` DB ve `cv3-a10-browser` bucket kullanıldı;
+  kullanıcı verisi veya mevcut isolated baseline silinmedi. Test kayıtları korundu.
+- Remote CI YAML'ları schema/client/browser/connected durability gate'lerini içerir
+  ve yerelde parse edildi; remote koşu doğrulanmadığı için ilgili kutular açık kaldı.
+- Detay/komut/kanıt: ADR-012, `docs/runbooks/web-product-contract.md`,
+  `artifacts/product/2026-09-02-a10/PRODUCT_RECEIPT.json`.
 
 ---
 
