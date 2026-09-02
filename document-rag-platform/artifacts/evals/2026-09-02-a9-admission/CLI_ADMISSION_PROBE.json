@@ -1,0 +1,7 @@
+{
+  "command": "python scripts/run_eval.py --tier real-benchmark --json-output <isolated-report-path> --markdown-output <isolated-report-path>",
+  "expected_exit_code": 3,
+  "actual_exit_code": 3,
+  "stdout": {"tier": "real-benchmark", "result": "ENVIRONMENT_UNAVAILABLE", "reason": "real-benchmark requires approval id, private manifest and provider runner"},
+  "real_provider_invoked": false
+}

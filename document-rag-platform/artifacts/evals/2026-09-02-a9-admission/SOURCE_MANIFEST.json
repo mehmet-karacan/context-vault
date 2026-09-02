@@ -1,0 +1,26 @@
+[
+  {
+    "path": "AKTIF_GOREV.md",
+    "sha256": "56c83e443bce4e9656ec8fbaa22ebedfb512dd9dfc10d326a213f289f3d4639e"
+  },
+  {
+    "path": "document-rag-platform/services/backend/pyproject.toml",
+    "sha256": "08979c386cd0d1a2c9be6b55c48479de849107d4bdb4ef451f5fdf4ec83ede72"
+  },
+  {
+    "path": "document-rag-platform/services/backend/tests/evals/test_tier_contracts.py",
+    "sha256": "c84bc506663c07420b714da988d4cb0e7eb7e1ed0668caaf8bee5640b01efbc3"
+  },
+  {
+    "path": "document-rag-platform/services/backend/uv.lock",
+    "sha256": "c9cb9cc886d4930d7e3c49b4c3fe1733d1032c7a6bea8b963710f1d4e054e219"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/real_benchmark/README.md",
+    "sha256": "274add8f91a0b91656af81e78428ee5b1fab9bce20dc4144343638c06cc685ed"
+  },
+  {
+    "path": "scripts/run_eval.py",
+    "sha256": "a2ba4743331f257d1b83be4ab1344030732cfdbdbeac5175cf1793ad3cc673cb"
+  }
+]

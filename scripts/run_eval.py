@@ -6,7 +6,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
+import re
 import statistics
 import subprocess
 import tempfile
@@ -15,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-TOOL_VERSION = "1.0.0"
+TOOL_VERSION = "1.1.0"
 DETERMINISTIC_SEED = 20260902
 REPO = Path(__file__).resolve().parents[1]
 BACKEND = REPO / "document-rag-platform/services/backend"
@@ -24,6 +26,14 @@ PUBLIC_DATASET = (
     REPO / "document-rag-platform/tests/evals/datasets/public-synthetic-v2.jsonl"
 )
 CONTRACT_DATASET = BACKEND / "tests/evals/datasets/golden.jsonl"
+PRIVATE_MANIFEST_SCHEMA = PUBLIC_DATASET.parent / "private-pack-manifest.schema.json"
+QUALITY_METRICS = ("recall@5", "mrr@10", "citation_precision", "citation_coverage")
+ABSOLUTE_METRICS = (
+    "permission_version_leakage",
+    "invalid_citation_labels",
+    "fabricated_no_answer_responses",
+    "critical_high_security_findings",
+)
 
 
 class EnvironmentUnavailable(RuntimeError):
@@ -151,58 +161,139 @@ def _offline_e2e(work: Path) -> dict[str, Any]:
     }
 
 
+def _private_manifest(path: Path) -> dict[str, Any]:
+    # Eval tooling uses the backend's locked dev environment. Import lazily so
+    # contract/offline tiers retain their existing startup requirements.
+    from jsonschema import Draft202012Validator, FormatChecker
+
+    manifest = json.loads(path.read_text())
+    validator = Draft202012Validator(
+        json.loads(PRIVATE_MANIFEST_SCHEMA.read_text()), format_checker=FormatChecker()
+    )
+    if next(validator.iter_errors(manifest), None) is not None:
+        # jsonschema's detailed error may contain raw private manifest values.
+        raise EnvironmentUnavailable("private pack manifest fails schema validation")
+    if any(not manifest[name].strip() for name in ("opaque_pack_id", "reviewed_by")):
+        raise EnvironmentUnavailable("private pack manifest requires nonblank review")
+    if manifest["reviewed_by"].upper().startswith("PENDING"):
+        raise EnvironmentUnavailable("private pack manifest requires completed review")
+    return manifest
+
+
+def _finite_number(
+    value: Any, *, minimum: float = 0, maximum: float = math.inf
+) -> bool:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(value) and minimum <= value <= maximum
+    except OverflowError:
+        return False
+
+
+def _benchmark_report(report: Any) -> dict[str, Any]:
+    if not isinstance(report, dict):
+        raise EnvironmentUnavailable("provider report must be an object")
+    for name in ("provider", "model"):
+        value = report.get(name)
+        if not isinstance(value, str) or not value.strip() or len(value) > 200:
+            raise EnvironmentUnavailable(
+                "provider report lacks provider/model provenance"
+            )
+    for name in ("embedding_profile_hash", "prompt_hash", "config_hash"):
+        value = report.get(name)
+        if not isinstance(value, str) or not re.fullmatch(r"[a-f0-9]{64}", value):
+            raise EnvironmentUnavailable("provider report lacks immutable provenance")
+    metrics = report.get("metrics")
+    if not isinstance(metrics, dict):
+        raise EnvironmentUnavailable("provider report lacks metrics")
+    for name in ABSOLUTE_METRICS:
+        if (
+            not isinstance(metrics.get(name), int)
+            or isinstance(metrics[name], bool)
+            or metrics[name] < 0
+        ):
+            raise EnvironmentUnavailable("provider report has invalid safety counters")
+    for name in QUALITY_METRICS:
+        if not _finite_number(metrics.get(name), maximum=1):
+            raise EnvironmentUnavailable(
+                "provider report has missing/invalid quality metrics"
+            )
+    latency = metrics.get("latency_ms")
+    if (
+        not isinstance(latency, dict)
+        or not _finite_number(latency.get("p95"))
+        or latency["p95"] <= 0
+    ):
+        raise EnvironmentUnavailable("provider report has missing/invalid p95 latency")
+    golden_transfer = report.get("golden_results_sent_to_provider")
+    if golden_transfer is not None and not isinstance(golden_transfer, bool):
+        raise EnvironmentUnavailable(
+            "provider report has invalid golden-data assertion"
+        )
+    # Only the bounded contract reaches our report envelope. Arbitrary runner
+    # fields must not override exact SHA/tier or copy raw prompts into evidence.
+    return {
+        **{
+            name: report[name]
+            for name in (
+                "provider",
+                "model",
+                "embedding_profile_hash",
+                "prompt_hash",
+                "config_hash",
+            )
+        },
+        "metrics": {
+            **{name: metrics[name] for name in (*ABSOLUTE_METRICS, *QUALITY_METRICS)},
+            "latency_ms": {"p95": latency["p95"]},
+        },
+        "golden_results_sent_to_provider": golden_transfer,
+    }
+
+
 def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
     if (
         not args.approval_id
+        or not args.approval_id.strip()
         or not args.private_pack_manifest
         or not args.provider_runner
     ):
         raise EnvironmentUnavailable(
             "real-benchmark requires approval id, private manifest and provider runner"
         )
-    manifest = json.loads(args.private_pack_manifest.read_text())
-    required = {"opaque_pack_id", "dataset_sha256", "classification", "reviewed_by"}
-    if not required.issubset(manifest):
-        raise EnvironmentUnavailable("private pack manifest is incomplete")
+    manifest = _private_manifest(args.private_pack_manifest)
     output = work / "provider-report.json"
     env = os.environ.copy()
     env["CV_EVAL_OUTPUT"] = str(output)
     env["CV_EVAL_APPROVAL_ID"] = args.approval_id
-    completed = subprocess.run(args.provider_runner, cwd=REPO, env=env)
+    completed = subprocess.run(
+        args.provider_runner, cwd=REPO, env=env, capture_output=True
+    )
     if completed.returncode != 0 or not output.exists():
         raise EnvironmentUnavailable("approved provider runner failed")
-    report = json.loads(output.read_text())
-    required_report = {
-        "provider",
-        "model",
-        "embedding_profile_hash",
-        "prompt_hash",
-        "config_hash",
-        "metrics",
-    }
-    if not required_report.issubset(report):
-        raise EnvironmentUnavailable("provider report lacks immutable provenance")
+    report = _benchmark_report(json.loads(output.read_text()))
     metrics = report["metrics"]
-    absolute_pass = all(
-        metrics.get(name) == 0
-        for name in (
-            "permission_version_leakage",
-            "invalid_citation_labels",
-            "fabricated_no_answer_responses",
-            "critical_high_security_findings",
-        )
+    absolute_pass = (
+        all(metrics.get(name) == 0 for name in ABSOLUTE_METRICS)
+        and report["golden_results_sent_to_provider"] is not True
     )
     return {
         **report,
         "result": "PASS" if absolute_pass else "FAIL",
         "approval_id_hash": hashlib.sha256(args.approval_id.encode()).hexdigest(),
+        "dataset_sha256": manifest["dataset_sha256"],
         "private_pack": {
             "opaque_pack_id": manifest["opaque_pack_id"],
             "dataset_sha256": manifest["dataset_sha256"],
             "classification": manifest["classification"],
         },
-        "release_gate_eligible": absolute_pass,
-        "golden_results_sent_to_provider": False,
+        # Shape and reported counters cannot prove actual provider execution,
+        # non-leakage of golden answers or human approval of a baseline.
+        "release_gate_eligible": False,
+        "baseline_review_required": True,
+        "quality_claim": "runner-reported-unverified",
+        "evidence_basis": "provider-runner report; not independently observed",
     }
 
 
@@ -211,18 +302,33 @@ def _compare(report: dict[str, Any], baseline_path: Path | None) -> list[str]:
         return []
     baseline = json.loads(baseline_path.read_text())
     current = report.get("metrics", {})
-    previous = baseline.get("metrics", {})
+    previous = baseline.get("metrics", {}) if isinstance(baseline, dict) else None
+    if not isinstance(current, dict) or not isinstance(previous, dict):
+        return ["baseline/current metrics must be objects"]
     findings = []
-    for name in ("recall@5", "mrr@10", "citation_precision", "citation_coverage"):
-        if (
-            name in current
-            and name in previous
-            and current[name] < previous[name] - 0.02
+    for name in QUALITY_METRICS:
+        if not _finite_number(current.get(name), maximum=1) or not _finite_number(
+            previous.get(name), maximum=1
         ):
+            findings.append(f"{name} missing or invalid for regression comparison")
+        elif current[name] < previous[name] - 0.02 - 1e-12:
             findings.append(f"{name} regressed by more than 0.02")
-    current_p95 = current.get("latency_ms", {}).get("p95")
-    baseline_p95 = previous.get("latency_ms", {}).get("p95")
-    if current_p95 and baseline_p95 and current_p95 > baseline_p95 * 1.2:
+    current_latency = current.get("latency_ms")
+    previous_latency = previous.get("latency_ms")
+    current_p95 = (
+        current_latency.get("p95") if isinstance(current_latency, dict) else None
+    )
+    baseline_p95 = (
+        previous_latency.get("p95") if isinstance(previous_latency, dict) else None
+    )
+    if (
+        not _finite_number(current_p95)
+        or not _finite_number(baseline_p95)
+        or current_p95 <= 0
+        or baseline_p95 <= 0
+    ):
+        findings.append("p95 latency missing or invalid for regression comparison")
+    elif current_p95 > baseline_p95 * 1.2:
         findings.append("p95 latency regressed by more than 20 percent")
     return findings
 
@@ -267,13 +373,13 @@ def main() -> int:
             else:
                 details = _real_benchmark(args, work)
         report = {
+            **details,
             "schema_version": "1.0",
             "tool_version": TOOL_VERSION,
             "tier": args.tier,
             "observed_at_utc": datetime.now(timezone.utc).isoformat(),
             "repository_revision": _revision(),
-            "dataset_sha256": _sha(PUBLIC_DATASET),
-            **details,
+            "dataset_sha256": details.get("dataset_sha256", _sha(PUBLIC_DATASET)),
         }
         report["regression_findings"] = _compare(report, args.baseline)
         if report["regression_findings"]:
@@ -284,13 +390,15 @@ def main() -> int:
         args.markdown_output.write_text(_markdown(report))
         print(json.dumps({"tier": args.tier, "result": report["result"]}))
         return 0 if report["result"] == "PASS" else 1
-    except (OSError, ValueError, EnvironmentUnavailable) as exc:
+    except (OSError, ValueError, ImportError, EnvironmentUnavailable) as exc:
         print(
             json.dumps(
                 {
                     "tier": args.tier,
                     "result": "ENVIRONMENT_UNAVAILABLE",
-                    "reason": str(exc),
+                    "reason": str(exc)
+                    if isinstance(exc, EnvironmentUnavailable)
+                    else "eval input/output or tooling unavailable",
                 }
             )
         )

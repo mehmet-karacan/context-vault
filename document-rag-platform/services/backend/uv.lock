@@ -382,6 +382,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "cyclonedx-bom" },
+    { name = "jsonschema", extra = ["format-nongpl"] },
     { name = "mypy" },
     { name = "pip-audit" },
     { name = "pip-licenses" },
@@ -418,6 +419,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "cyclonedx-bom", specifier = ">=7.1.0,<8" },
+    { name = "jsonschema", extras = ["format-nongpl"], specifier = "==4.26.0" },
     { name = "mypy", specifier = "==1.9.0" },
     { name = "pip-audit", specifier = ">=2.9.0,<3" },
     { name = "pip-licenses", specifier = "==5.5.5" },

@@ -1,0 +1,502 @@
+[
+  {
+    "source_report": "a9-admission-before.xml",
+    "cases": [
+      {
+        "name": "test_public_dataset_has_reviewable_v2_contract_and_required_coverage",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_offline_fixture_does_not_read_golden_expected_results",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_contract_smoke_is_never_release_gate_eligible",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_regression_comparator_enforces_quality_and_latency_budgets",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_invalid_private_manifest_never_dispatches_provider[change0]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "FAIL"
+      },
+      {
+        "name": "test_invalid_private_manifest_never_dispatches_provider[change1]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "FAIL"
+      },
+      {
+        "name": "test_invalid_private_manifest_never_dispatches_provider[change2]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "FAIL"
+      },
+      {
+        "name": "test_invalid_private_manifest_never_dispatches_provider[change3]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "FAIL"
+      },
+      {
+        "name": "test_invalid_private_manifest_never_dispatches_provider[change4]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "FAIL"
+      },
+      {
+        "name": "test_invalid_private_manifest_never_dispatches_provider[change5]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "FAIL"
+      },
+      {
+        "name": "test_empty_security_only_report_cannot_pass_quality_gate",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "FAIL"
+      },
+      {
+        "name": "test_runner_report_is_not_automatically_sealed_or_claimed_observed",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "FAIL"
+      },
+      {
+        "name": "test_non_numeric_or_nonfinite_quality_metric_is_rejected[None]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "FAIL"
+      },
+      {
+        "name": "test_non_numeric_or_nonfinite_quality_metric_is_rejected[True]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "FAIL"
+      },
+      {
+        "name": "test_non_numeric_or_nonfinite_quality_metric_is_rejected[nan]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "FAIL"
+      },
+      {
+        "name": "test_non_numeric_or_nonfinite_quality_metric_is_rejected[inf]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "FAIL"
+      },
+      {
+        "name": "test_non_numeric_or_nonfinite_quality_metric_is_rejected[-1]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "FAIL"
+      },
+      {
+        "name": "test_non_numeric_or_nonfinite_quality_metric_is_rejected[2]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "FAIL"
+      },
+      {
+        "name": "test_non_numeric_or_nonfinite_quality_metric_is_rejected[0.9]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "FAIL"
+      },
+      {
+        "name": "test_provider_cannot_override_envelope_or_leak_extra_fields",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "FAIL"
+      },
+      {
+        "name": "test_missing_regression_metrics_are_a_failure_not_a_silent_pass",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "FAIL"
+      }
+    ]
+  },
+  {
+    "source_report": "a9-admission-evals.xml",
+    "cases": [
+      {
+        "name": "test_fresh_postgres_redis_minio_are_real_and_writable",
+        "classname": "tests.evals.offline_e2e.test_dependencies",
+        "outcome": "FAIL"
+      },
+      {
+        "name": "test_production_pipeline_without_golden_derived_candidates",
+        "classname": "tests.evals.offline_e2e.test_pipeline",
+        "outcome": "FAIL"
+      },
+      {
+        "name": "test_runner_produces_report_dict",
+        "classname": "tests.evals.test_eval_runner",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_runner_writes_loggable_json",
+        "classname": "tests.evals.test_eval_runner",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_fake_retriever_is_deterministic_and_relevant",
+        "classname": "tests.evals.test_eval_runner",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_fake_retriever_returns_nothing_for_no_answer",
+        "classname": "tests.evals.test_eval_runner",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_full_fake_run_is_never_a_quality_claim",
+        "classname": "tests.evals.test_eval_runner",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_explicit_fake_components_are_never_a_quality_claim",
+        "classname": "tests.evals.test_eval_runner",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_citation_coverage",
+        "classname": "tests.evals.test_generation_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_unsourced_claim_rate_is_complement",
+        "classname": "tests.evals.test_generation_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_citation_accuracy_no_fabrication",
+        "classname": "tests.evals.test_generation_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_citation_accuracy_fabrication_penalized",
+        "classname": "tests.evals.test_generation_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_citation_accuracy_none_cited",
+        "classname": "tests.evals.test_generation_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_answer_sufficiency",
+        "classname": "tests.evals.test_generation_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_contradictory_source_behavior_clean",
+        "classname": "tests.evals.test_generation_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_contradictory_source_behavior_both_cited_requires_hedge",
+        "classname": "tests.evals.test_generation_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_compute_generation_metrics",
+        "classname": "tests.evals.test_generation_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_dataset_exists",
+        "classname": "tests.evals.test_golden_dataset",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_dataset_has_at_least_50_items",
+        "classname": "tests.evals.test_golden_dataset",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_dataset_schema_valid",
+        "classname": "tests.evals.test_golden_dataset",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_dataset_ids_unique",
+        "classname": "tests.evals.test_golden_dataset",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_all_91_categories_present",
+        "classname": "tests.evals.test_golden_dataset",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_expected_category_coverage_report",
+        "classname": "tests.evals.test_golden_dataset",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_recall_at_k",
+        "classname": "tests.evals.test_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_mrr_at_10",
+        "classname": "tests.evals.test_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_ndcg_at_10_perfect",
+        "classname": "tests.evals.test_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_ndcg_at_10_known_value",
+        "classname": "tests.evals.test_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_ndcg_at_10_no_relevant_is_zero",
+        "classname": "tests.evals.test_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_no_answer_fp_fn",
+        "classname": "tests.evals.test_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_latency_percentiles",
+        "classname": "tests.evals.test_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_latency_percentiles_single",
+        "classname": "tests.evals.test_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_latency_empty",
+        "classname": "tests.evals.test_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_compute_retrieval_metrics_aggregate",
+        "classname": "tests.evals.test_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_evaluate_quality_gate_pass",
+        "classname": "tests.evals.test_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_evaluate_quality_gate_fail_recall",
+        "classname": "tests.evals.test_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_evaluate_quality_gate_fail_mrr",
+        "classname": "tests.evals.test_metrics",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_public_dataset_has_reviewable_v2_contract_and_required_coverage",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_offline_fixture_does_not_read_golden_expected_results",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_contract_smoke_is_never_release_gate_eligible",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_regression_comparator_enforces_quality_and_latency_budgets",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_invalid_private_manifest_never_dispatches_provider[change0]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_invalid_private_manifest_never_dispatches_provider[change1]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_invalid_private_manifest_never_dispatches_provider[change2]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_invalid_private_manifest_never_dispatches_provider[change3]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_invalid_private_manifest_never_dispatches_provider[change4]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_invalid_private_manifest_never_dispatches_provider[change5]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_empty_security_only_report_cannot_pass_quality_gate",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_runner_report_is_not_automatically_sealed_or_claimed_observed",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_non_numeric_or_nonfinite_quality_metric_is_rejected[None]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_non_numeric_or_nonfinite_quality_metric_is_rejected[True]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_non_numeric_or_nonfinite_quality_metric_is_rejected[nan]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_non_numeric_or_nonfinite_quality_metric_is_rejected[inf]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_non_numeric_or_nonfinite_quality_metric_is_rejected[-1]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_non_numeric_or_nonfinite_quality_metric_is_rejected[2]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_non_numeric_or_nonfinite_quality_metric_is_rejected[0.9]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_provider_cannot_override_envelope_or_leak_extra_fields",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_missing_regression_metrics_are_a_failure_not_a_silent_pass",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_each_required_manifest_field_is_enforced_before_effect[schema_version]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_each_required_manifest_field_is_enforced_before_effect[opaque_pack_id]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_each_required_manifest_field_is_enforced_before_effect[dataset_sha256]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_each_required_manifest_field_is_enforced_before_effect[classification]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_each_required_manifest_field_is_enforced_before_effect[reviewed_by]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_each_required_manifest_field_is_enforced_before_effect[approved_at_utc]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_missing_admission_never_dispatches_provider[approval_id]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_missing_admission_never_dispatches_provider[private_pack_manifest]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_missing_admission_never_dispatches_provider[provider_runner]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_nonobject_manifest_is_rejected_before_dispatch[None]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_nonobject_manifest_is_rejected_before_dispatch[value1]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_nonobject_manifest_is_rejected_before_dispatch[private-text]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_nonobject_manifest_is_rejected_before_dispatch[True]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_malformed_provider_provenance_is_rejected[provider-]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_malformed_provider_provenance_is_rejected[model-None]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_malformed_provider_provenance_is_rejected[prompt_hash-fake]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_malformed_provider_provenance_is_rejected[metrics-None]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_malformed_provider_provenance_is_rejected[golden_results_sent_to_provider-false]",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_golden_transfer_is_a_failure_and_unknown_fields_never_escape",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      },
+      {
+        "name": "test_successful_regression_comparison_requires_complete_valid_metrics",
+        "classname": "tests.evals.test_tier_contracts",
+        "outcome": "PASS"
+      }
+    ]
+  }
+]

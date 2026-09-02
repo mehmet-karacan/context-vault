@@ -1492,6 +1492,50 @@ notes + reviewer + version
   remote push/PR/merge/release.
 
 
+### 16.10 A9 benchmark admission ek çalışma kaydı — 2026-09-02
+
+Başlangıç SHA: `c25bebcdeb92d70ba0d6ba8d4fd05a06c247d944`.
+Durum: **yerel admission regression PASS; A9 gerçek benchmark hâlâ BLOCKED**.
+
+- Salt-okunur inceleme: `_real_benchmark` manifestte yalnız dört alanın varlığını
+  kontrol ediyor; şema sürümü/tarih/hash ve boş reviewer geçerli sayılabiliyor.
+  Dört sıfır güvenlik sayacı olan eksik rapor `release_gate_eligible=true` alabiliyor;
+  wrapper ölçmediği golden-data aktarımı sonucunu sabit `false` yazıyor.
+- Yerel çalışma kapsamı/claim: yalnız `scripts/run_eval.py`, tier regression
+  testleri, benchmark runbook'u, bu kayıt ve yeni immutable kanıt eki. Mevcut lock'taki
+  jsonschema validator doğrudan dev bağımlılığı olarak pyproject/lock'ta kaydedildi;
+  offline lock kontrolü 122 paketle geçti, paket sürümü değiştirilmedi.
+  Aynı kapsamda başka çalışma gözlenmedi. Yeni mimari veya sonraki aşama başlatılmadı.
+- Plan: sentetik/stub runner ile negatif test → fail-closed manifest/report
+  validation → kanıtı olmayan release/golden-data iddiasını kaldırma → unit/CLI
+  kontrolleri ve receipt. Onaysız provider/process dispatch durmalı.
+- Veri etkisi: yalnız geçici sentetik test dosyaları; kullanıcı DB/MinIO/vektör
+  verisi ve gerçek provider kullanılmadı. Tam backend suite mevcut isolated test
+  DB/Redis/MinIO üzerinde koştu; kaynak veri sıfırlanmadı. Rollback yalnız bu verifier patch'i;
+  önceden üretilmiş receipt'ler değiştirilmez.
+- Yeniden üretim: yeni 17 negatif test eski kodda FAIL, mevcut 4 test PASS.
+  Düzeltme sonrası genişletilmiş **41 tier testi PASS**; tam backend **657 PASS,
+  2 skip**, 1 Starlette/httpx uyarısı. Ruff, MyPy strict (14 dosya), deterministic
+  OpenAPI drift ve locked dependency check PASS. Bir ara eval koşusu eksik test
+  bağlantı ayarları nedeniyle 2 FAIL/75 PASS verdi; doğru isolated environment ile
+  yapılan tam koşu bu iki testi de geçti. Başarısız koşu gizlenmedi.
+- Manifest şeması format/required/additional-field/review kontrolleri artık provider
+  dispatch'ten önce çalışır. Boş onay veya eksik manifest/runner fail-closed kalır.
+  Gerçek CLI admission probe exit **3**, provider çağrısı yok.
+- Rapor provenance hash'leri ve zorunlu kalite/güvenlik metrikleri typed/finite
+  doğrulanır; eksik comparator alanı sessiz PASS üretmez. Arbitrary runner alanları
+  envelope SHA/tier veya raw prompt olarak dışarı taşınmaz. Dataset hash'i private
+  manifestten gelir; public dataset hash'i gerçek pack kanıtı gibi etiketlenmez.
+- Wrapper artık rapor şeklini actual provider execution veya insan baseline seal'i
+  saymaz: `quality_claim=runner-reported-unverified`, `baseline_review_required=true`,
+  `release_gate_eligible=false`. Golden transfer gözlenmemişse `null`; bildirilen
+  `true` başarısızdır. Bu düzeltme §16.9'daki önceki release-gate uygulaması iddiasını
+  daraltır; insan seal/final admission henüz uygulanmış veya geçilmiş sayılmaz.
+- Yeni kanıt: `artifacts/evals/2026-09-02-a9-admission/`. A9 owner review,
+  provider/model/private-pack/bütçe onayı ve gerçek baseline; A11–A13 açık kalır.
+
+---
+
 ## 17. AŞAMA 10 — Frontend ve ürün sözleşmesi
 
 ### 17.1 Amaç
