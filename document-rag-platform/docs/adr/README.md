@@ -15,6 +15,7 @@ kod, test veya receipt kaynağını gösterir.
 | [ADR-007](ADR-007-migration-lineage-recovery-or-reset.md) | Accepted | Mehmet KARACAN | legacy `b2f1c0a10001..5` operations | migration receipts |
 | [ADR-008](ADR-008-schema-time-scope-and-retention.md) | Accepted | Mehmet KARACAN | none | `cv3_00000003`, invariant and query-plan tests |
 | [ADR-009](ADR-009-durable-ingestion-content-policy-and-gc.md) | Accepted | Mehmet KARACAN | ADR-003 reindex section | `cv3_00000004`, A6 integration/fault tests |
+| [ADR-010](ADR-010-typed-scoped-retrieval-context-bundle.md) | Accepted | Mehmet KARACAN | ADR-004 untyped/legacy-vector transition | `cv3_00000005`, A7 retrieval receipt |
 
 Last inventory verification: 2026-09-02. `scripts/generate_verified_status.py`
 checks that every `ADR-*.md` file is represented here.

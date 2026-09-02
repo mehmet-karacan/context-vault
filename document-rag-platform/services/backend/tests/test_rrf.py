@@ -11,6 +11,7 @@ import pytest
 
 from src.infrastructure.retrieval.rrf import reciprocal_rank_fusion, fuse, dedupe
 from src.infrastructure.retrieval.base import RetrievalCandidate
+from dataclasses import FrozenInstanceError
 
 
 # --- core function ------------------------------------------------------------
@@ -48,8 +49,10 @@ def test_duplicates_across_lists_accumulate_score():
 
 def test_duplicate_within_single_list_collapses():
     lists = [["a", "a", "b"]]
-    keys = [k for k, _ in reciprocal_rank_fusion(lists, k=60)]
+    result = reciprocal_rank_fusion(lists, k=60)
+    keys = [k for k, _ in result]
     assert keys == ["a", "b"]
+    assert dict(result)["a"] == 1.0 / 61
 
 
 def test_k_effect_damps_high_rank_advantage():
@@ -106,7 +109,10 @@ def test_fuse_returns_candidates_with_accumulated_scores():
     assert keys == ["b", "a"]
     by_id = {c.chunk_id: c for c in fused}
     assert by_id["b"].score > by_id["a"].score
-    assert by_id["b"].metadata["sources"] == ["dense", "lexical"]
+    assert by_id["b"].metadata["sources"] == ("dense", "lexical")
+    assert set(by_id["b"].per_retriever_contributions) == {"dense", "lexical"}
+    with pytest.raises(FrozenInstanceError):
+        by_id["b"].fusion_rank = 99
 
 
 def test_dedupe_keeps_first_content_copy():

@@ -193,6 +193,10 @@ class Settings(BaseSettings):
     FUSION_CANDIDATE_K: int = 20
     RRF_K: int = 60
     RERANK_TOP_K: int = 8
+    RERANK_MAX_CANDIDATES: int = 20
+    RERANK_MAX_TOKENS: int = 6000
+    RETRIEVAL_SLOW_QUERY_MS: int = 500
+    RETRIEVAL_TRACE_QUERY_PLANS: bool = True
 
     # --- Retrieval context expansion (Aşama 5.5) ------------------------------
     # Final RAG context budget. CONTEXT_MAX_CHUNKS caps how many distinct chunks

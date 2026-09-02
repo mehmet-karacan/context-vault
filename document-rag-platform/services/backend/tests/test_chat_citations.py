@@ -110,9 +110,8 @@ def cand(chunk_id, rank, score, source="dense", meta=None, rerank=None):
         score=score,
         source=source,
         metadata=dict(meta or {}),
+        rerank_score=rerank,
     )
-    if rerank is not None:
-        c.rerank_score = rerank  # type: ignore[attr-defined]
     return c
 
 
@@ -299,8 +298,12 @@ def test_retrieval_debug_stages_shape_matches_frontend_contract():
 
     dense = [cand("A", 1, 0.9, "dense")]
     rerank = [cand("A", 1, 0.9, "dense", rerank=0.95)]
-    rerank[0].chunk = chunk_obj(
-        "A", "body", metadata={"document_name": "rules.docx", "source_type": "document"}
+    rerank[0] = rerank[0].with_chunk(
+        chunk_obj(
+            "A",
+            "body",
+            metadata={"document_name": "rules.docx", "source_type": "document"},
+        )
     )
 
     result = RetrievalResult(

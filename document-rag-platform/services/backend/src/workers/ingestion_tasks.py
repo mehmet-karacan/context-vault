@@ -833,7 +833,6 @@ def run_ingestion_job(
                 sequence_no=index,
                 chunk_type=getattr(candidate, "chunk_type", "text"),
                 content=content,
-                embedding=embedding,
                 identifiers=chunk_identifiers(content),
                 content_hash=getattr(candidate, "content_hash", None)
                 or hashlib.sha256(content.encode("utf-8")).hexdigest(),
@@ -845,8 +844,14 @@ def run_ingestion_job(
                 bbox=locator.get("bbox"),
                 symbol_name=locator.get("symbol_name"),
                 symbol_type=locator.get("symbol_type"),
+                symbol_qualified_name=locator.get("symbol_qualified_name"),
+                package_name=locator.get("package_name"),
+                schema_name=locator.get("schema_name"),
+                table_name=locator.get("table_name"),
+                column_name=locator.get("column_name"),
                 token_count=getattr(candidate, "token_count", None),
                 metadata_json=getattr(candidate, "metadata", None),
+                search_profile="simple-websearch-v1",
                 created_at=clock.now(),
             )
             db.add(chunk)

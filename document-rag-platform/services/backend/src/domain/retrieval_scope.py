@@ -21,11 +21,11 @@ class RetrievalScope(BaseModel):
     workspace_id: UUID
     project_id: UUID
     allowed_document_ids: tuple[UUID, ...] | None = None
-    active_versions_only: bool = True
+    active_versions_only: Literal[True] = True
     allowed_source_types: tuple[SourceType, ...] = Field(
         default=("document", "image", "repository", "directory", "archive")
     )
-    embedding_profile_id: UUID | None = None
+    embedding_profile_id: UUID
     data_policy: DataPolicy = "internal"
 
     def retrieval_filters(self) -> dict[str, object]:
@@ -36,12 +36,23 @@ class RetrievalScope(BaseModel):
         """
 
         filters: dict[str, object] = {
+            "workspace_id": self.workspace_id,
             "project_id": self.project_id,
             "source_types": list(self.allowed_source_types),
             "active_versions_only": self.active_versions_only,
+            "data_classifications": {
+                "public": ["public"],
+                "internal": ["public", "internal"],
+                "confidential": ["public", "internal", "confidential"],
+                "restricted": [
+                    "public",
+                    "internal",
+                    "confidential",
+                    "restricted",
+                ],
+            }[self.data_policy],
+            "embedding_profile_id": self.embedding_profile_id,
         }
         if self.allowed_document_ids is not None:
             filters["document_ids"] = list(self.allowed_document_ids)
-        if self.embedding_profile_id is not None:
-            filters["embedding_profile_id"] = self.embedding_profile_id
         return filters

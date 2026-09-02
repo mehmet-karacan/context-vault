@@ -236,13 +236,18 @@ class Chunk(Base):
             name="fk_chunks_version_same_document",
             ondelete="CASCADE",
         ),
-        Index(
-            "chunks_embedding_idx",
-            "embedding",
-            postgresql_using="hnsw",
-            postgresql_ops={"embedding": "vector_cosine_ops"},
-        ),
         Index("ix_chunks_document_version", "document_id", "version_id"),
+        Index(
+            "ix_chunks_search_vector_gin",
+            "search_vector",
+            postgresql_using="gin",
+        ),
+        Index(
+            "ix_chunks_symbol_name_trgm",
+            sa_text("lower(symbol_name)"),
+            postgresql_using="gin",
+            postgresql_ops={"lower(symbol_name)": "gin_trgm_ops"},
+        ),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -253,8 +258,6 @@ class Chunk(Base):
     )
     chunk_index = Column(Integer, nullable=False)
     content = Column(Text, nullable=False)
-    embedding = Column(Vector(EMBEDDING_DIMENSION), nullable=True)
-
     # --- Aşama 2 additive fields (nullable; see AKTIF_GOREV.md Bölüm 8.7) --
     version_id = Column(
         UUID(as_uuid=True),
@@ -277,6 +280,11 @@ class Chunk(Base):
     bbox = Column(JSONB, nullable=True)
     symbol_name = Column(String, nullable=True)
     symbol_type = Column(String, nullable=True)
+    symbol_qualified_name = Column(Text, nullable=True)
+    package_name = Column(Text, nullable=True)
+    schema_name = Column(Text, nullable=True)
+    table_name = Column(Text, nullable=True)
+    column_name = Column(Text, nullable=True)
     token_count = Column(Integer, nullable=True)
     content_hash = Column(String, nullable=True)
     parent_chunk_id = Column(
@@ -287,6 +295,7 @@ class Chunk(Base):
     )
     metadata_json = Column(JSONB, nullable=True)
     search_vector = Column(TSVECTOR, nullable=True)
+    search_profile = Column(String, nullable=False, default="simple-websearch-v1")
     identifiers = Column(ARRAY(Text), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
@@ -411,6 +420,12 @@ class SourceFile(Base):
     __table_args__ = (
         UniqueConstraint(
             "version_id", "relative_path", name="uq_source_files_version_path"
+        ),
+        Index(
+            "ix_source_files_relative_path_trgm",
+            sa_text("lower(relative_path)"),
+            postgresql_using="gin",
+            postgresql_ops={"lower(relative_path)": "gin_trgm_ops"},
         ),
     )
 
@@ -827,8 +842,8 @@ class EmbeddingProfile(Base):
     """A versioned dense-embedding configuration (Bölüm 8.8).
 
     Only one profile is the initial active 1024-dim profile; differently
-    sized embeddings are never mixed into the same indexed column (see
-    chunks.embedding / chunk_embeddings.embedding, both Vector(1024)).
+    sized embeddings are never mixed into the canonical profile-bound
+    ``chunk_embeddings.embedding`` Vector(1024) column.
     """
 
     __tablename__ = "embedding_profiles"
@@ -872,6 +887,14 @@ class ChunkEmbedding(Base):
     """
 
     __tablename__ = "chunk_embeddings"
+    __table_args__ = (
+        Index(
+            "ix_chunk_embeddings_embedding_hnsw",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+    )
 
     chunk_id = Column(
         UUID(as_uuid=True),
@@ -920,6 +943,52 @@ class Conversation(Base):
     messages = relationship(
         "Message", back_populates="conversation", cascade="all, delete-orphan"
     )
+
+
+class RetrievalRun(Base):
+    """Content-free durable provenance for one scoped retrieval request."""
+
+    __tablename__ = "retrieval_runs"
+    __table_args__ = (
+        CheckConstraint(
+            "candidate_count >= 0 AND selected_count >= 0",
+            name="ck_retrieval_runs_counts",
+        ),
+        Index("ix_retrieval_runs_project_created", "project_id", "created_at"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    principal_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("principals.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    workspace_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    project_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    embedding_profile_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("embedding_profiles.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    query_hash = Column(String(64), nullable=False)
+    retriever_versions = Column(JSONB, nullable=False, default=dict)
+    config_json = Column(JSONB, nullable=False, default=dict)
+    candidate_count = Column(Integer, nullable=False, default=0)
+    selected_count = Column(Integer, nullable=False, default=0)
+    stage_latency_ms = Column(JSONB, nullable=False, default=dict)
+    no_answer_reason = Column(String, nullable=True)
+    fallback_reason = Column(String, nullable=True)
+    bundle_hash = Column(String(64), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class Message(Base):

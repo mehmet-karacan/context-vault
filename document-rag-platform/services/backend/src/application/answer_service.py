@@ -59,10 +59,11 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from src.config import settings
 from src.infrastructure.retrieval.base import RetrievalCandidate
+from src.infrastructure.retrieval.context_builder import ContextBuilder
 from src.infrastructure.retrieval.no_answer import (
     INTENT_SMALLTALK,
     AnswerPolicy,
@@ -209,7 +210,7 @@ def _locator(chunk: Any) -> Dict[str, Any]:
     """
     loc: Dict[str, Any] = {}
     raw = _get(chunk, "locator")
-    if isinstance(raw, dict):
+    if isinstance(raw, Mapping):
         loc.update(raw)
         raw = None
     elif raw is not None:
@@ -242,7 +243,7 @@ def _locator(chunk: Any) -> Dict[str, Any]:
 def _metadata(chunk: Any) -> Dict[str, Any]:
     """Best-effort metadata dict from a chunk (dict / dataclass / ORM)."""
     meta = _get(chunk, "metadata")
-    if isinstance(meta, dict):
+    if isinstance(meta, Mapping):
         return dict(meta)
     if meta is not None:
         return dict(meta)
@@ -251,7 +252,7 @@ def _metadata(chunk: Any) -> Dict[str, Any]:
 
 
 def _candidate_meta(candidate: RetrievalCandidate) -> Dict[str, Any]:
-    return dict(candidate.metadata or {})
+    return dict(_get(candidate, "metadata") or {})
 
 
 def pack_evidence(
@@ -277,6 +278,8 @@ def pack_evidence(
         meta = _candidate_meta(candidate)
 
         chunk = chunk_resolver(chunk_id) if chunk_resolver is not None else None
+        if chunk is None and _get(candidate, "content") is not None:
+            chunk = candidate
         chunk_meta = _metadata(chunk) if chunk is not None else {}
         loc = _locator(chunk) if chunk is not None else {}
 
@@ -535,7 +538,37 @@ def generate_answer(
         feature_new_citations = settings.FEATURE_NEW_CITATIONS
 
     candidates = list(getattr(retrieval_result, "ranked_candidates", None) or [])
-    evidence = pack_evidence(candidates, chunk_resolver)
+    bundle = getattr(retrieval_result, "context", None)
+    if bundle is None and chunk_resolver is not None:
+        # Compatibility adapter for older application callers: immediately
+        # normalize their ranked list into the same canonical bundle before
+        # any content can reach the prompt.
+        resolved = [
+            chunk
+            for candidate in candidates
+            if (chunk := chunk_resolver(str(candidate.chunk_id))) is not None
+        ]
+        bundle = ContextBuilder(include_parents=False, include_adjacent=False).build(
+            resolved,
+            query_id="compatibility-adapter",
+            retrieval_run_id=str(
+                getattr(retrieval_result, "retrieval_run_id", "") or ""
+            ),
+        )
+    selected_items = list(getattr(bundle, "selected_items", None) or [])
+    # The model-facing evidence has exactly one authority: ContextBundle.
+    # Ranked candidates remain useful only for policy signals and score lookup.
+    selected_by_id = {str(item.chunk_id): item for item in selected_items}
+    evidence = pack_evidence(
+        selected_items,
+        lambda chunk_id: selected_by_id.get(str(chunk_id)),
+    )
+    scores = {str(candidate.chunk_id): candidate for candidate in candidates}
+    for item in evidence:
+        candidate = scores.get(str(item.chunk_id))
+        if candidate is not None:
+            item.retrieval_score = getattr(candidate, "score", None)
+            item.reranker_score = getattr(candidate, "rerank_score", None)
     decision = _decision(query, retrieval_result, policy)
 
     retrieval_debug = None

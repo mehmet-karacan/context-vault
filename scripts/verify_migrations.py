@@ -14,8 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-TOOL_VERSION = "1.0.0"
-EXPECTED_HEAD = "cv3_00000004"
+TOOL_VERSION = "1.1.0"
+EXPECTED_HEAD = "cv3_00000005"
 VERSIONS_RELATIVE = Path("document-rag-platform/services/backend/alembic/versions_v3")
 BACKEND_RELATIVE = Path("document-rag-platform/services/backend")
 
@@ -187,18 +187,27 @@ def database_snapshot(database_url: str) -> dict[str, Any]:
             WHERE activated_at IS NOT NULL
               AND status NOT IN ('ready', 'completed', 'superseded')
         """,
-        "legacy_embeddings_without_canonical_copy": """
-            SELECT count(*) FROM chunks c
-            WHERE c.embedding IS NOT NULL
-              AND NOT EXISTS (
-                SELECT 1 FROM chunk_embeddings ce WHERE ce.chunk_id = c.id
-              )
+        "deprecated_chunks_embedding_columns": """
+            SELECT count(*) FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'chunks'
+              AND column_name = 'embedding'
         """,
         "non_utc_timestamp_columns": """
             SELECT count(*)
             FROM information_schema.columns
             WHERE table_schema = 'public'
               AND data_type = 'timestamp without time zone'
+        """,
+        "chunks_without_search_profile": """
+            SELECT count(*) FROM chunks
+            WHERE search_profile IS NULL OR search_profile = ''
+        """,
+        "invalid_retrieval_runs": """
+            SELECT count(*) FROM retrieval_runs
+            WHERE candidate_count < 0 OR selected_count < 0
+               OR query_hash IS NULL OR length(query_hash) <> 64
+               OR principal_id IS NULL OR workspace_id IS NULL
+               OR project_id IS NULL OR embedding_profile_id IS NULL
         """,
     }
     try:

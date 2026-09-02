@@ -14,6 +14,14 @@ from src.infrastructure.retrieval.lexical import (
     significant_query_terms,
 )
 
+SCOPED_FILTERS = {
+    "workspace_id": "workspace",
+    "project_id": "project",
+    "embedding_profile_id": "profile",
+    "active_versions_only": True,
+    "data_classifications": ["internal"],
+}
+
 
 class _Row:
     def __init__(self, chunk_id, score):
@@ -68,6 +76,19 @@ def test_build_spec_strips_fillers_from_query_text():
     assert spec["query_text"] == "stp"
 
 
+def test_query_forms_distinguish_phrase_and_websearch_or():
+    assert LexicalRetriever().build_spec('"exact phrase"')["query_function"] == (
+        "phraseto_tsquery"
+    )
+    assert LexicalRetriever().build_spec("alpha OR beta")["query_function"] == (
+        "websearch_to_tsquery"
+    )
+    assert (
+        "plainto_tsquery"
+        not in lexical_sql_from_spec(LexicalRetriever().build_spec("alpha beta"))[0]
+    )
+
+
 def test_significant_query_terms_reconstruct_split_acronyms():
     # "ttnet sis" and "tt sis" are split acronyms; the content lexemes are the
     # contiguous "ttnetsis"/"ttsis". significant_query_terms yields both the
@@ -110,11 +131,11 @@ def test_sql_uses_simple_config_and_filters():
         "PAYMENT_FLAG", top_k=15, filters={"project_id": "proj-1"}
     )
     sql, params = lexical_sql_from_spec(spec)
-    assert "plainto_tsquery('simple', :query_text)" in sql
-    assert "query @@ chunks.search_vector" in sql
-    assert "ts_rank_cd(chunks.search_vector, query) AS score" in sql
+    assert "websearch_to_tsquery('simple', :query_text)" in sql
+    assert "q.query @@ c.search_vector" in sql
+    assert "ts_rank_cd(c.search_vector, q.query) AS score" in sql
     assert (
-        "WHERE query @@ chunks.search_vector AND d.deleted_at IS NULL "
+        "WHERE q.query @@ c.search_vector AND d.deleted_at IS NULL "
         "AND d.project_id = :fp0"
     ) in sql
     assert params["query_text"] == "PAYMENT_FLAG"
@@ -125,7 +146,7 @@ def test_sql_uses_simple_config_and_filters():
 def test_search_returns_candidate_shape_via_fake_session():
     session = FakeSession(rows=[_Row("chunk-a", 0.88), _Row("chunk-b", 0.6)])
     retriever = LexicalRetriever(session=session)
-    results = retriever.search("billing", top_k=5, filters={"project_id": "project"})
+    results = retriever.search("billing", top_k=5, filters=SCOPED_FILTERS)
     assert [c.chunk_id for c in results] == ["chunk-a", "chunk-b"]
     assert {c.source for c in results} == {"lexical"}
     assert results[0].rank == 1

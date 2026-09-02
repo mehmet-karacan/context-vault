@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from ...db import get_db
 from ...llm import QUERY_INSTRUCTION, embed_text
-from src.api.v1.chat import _build_resolvers
+from src.api.v1.chat import _active_embedding_profile, _build_resolvers
 from src.application.retrieval_service import RetrievalService
 from src.config import settings
 from src.domain.identity import PrincipalContext
@@ -91,6 +91,8 @@ def debug_retrieval(
         allowed_document_ids=(
             tuple(req.document_ids) if req.document_ids is not None else None
         ),
+        embedding_profile_id=_active_embedding_profile(db).id,
+        data_policy="restricted",
     )
 
     chunk_resolver, neighbor_resolver = _build_resolvers(db, scope)
@@ -102,6 +104,7 @@ def debug_retrieval(
         embedder=lambda q: embed_text(q, instruction=QUERY_INSTRUCTION),
         chunk_resolver=chunk_resolver,
         neighbor_resolver=neighbor_resolver,
+        session=db,
     )
 
     result = service.retrieve(req.query, scope, debug=True)

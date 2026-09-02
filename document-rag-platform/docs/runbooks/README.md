@@ -8,6 +8,7 @@
 | [OCR models](ocr-models.md) | Mehmet KARACAN | 2026-09-02 | provider/routing configuration |
 | [Re-index](reindex.md) | Mehmet KARACAN | 2026-09-02 | reindex service workflow |
 | [Repository scan limits](repository-scan-limits.md) | Mehmet KARACAN | 2026-09-02 | repository security policy |
+| [Scoped retrieval](retrieval.md) | Mehmet KARACAN | 2026-09-02 | typed scope, plans, benchmark, incident diagnosis |
 | [Upload and ingestion jobs](upload-and-ingestion-jobs.md) | Mehmet KARACAN | 2026-09-02 | job API and worker workflow |
 | [Migration/recovery](../../services/backend/MIGRATION_RUNBOOK.md) | Mehmet KARACAN | 2026-09-02 | V3 lineage receipts |
 

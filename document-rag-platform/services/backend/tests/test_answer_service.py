@@ -48,9 +48,8 @@ def cand(chunk_id, rank, score, source="dense", meta=None, rerank=None):
         score=score,
         source=source,
         metadata=dict(meta or {}),
+        rerank_score=rerank,
     )
-    if rerank is not None:
-        c.rerank_score = rerank  # type: ignore[attr-defined]
     return c
 
 

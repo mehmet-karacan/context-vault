@@ -16,37 +16,15 @@ PostgreSQL connection.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
+import logging
+import time
 from typing import Any, Dict, List, Optional
 
-VALID_SOURCES = ("dense", "lexical", "identifier")
-
-
-@dataclass
-class RetrievalCandidate:
-    """A single retrieval hit shared across dense/lexical/identifier + RRF.
-
-    Attributes
-    ----------
-    chunk_id: stable key RRF fuses on (a Chunk primary key string).
-    rank: 1-based position within its own retriever's result list.
-    score: raw retriever score (dense cosine, lexical rank, identifier match).
-        Not directly comparable across sources — RRF works on rank instead.
-    source: one of ``("dense", "lexical", "identifier")``.
-    metadata: free-form extras (document_id, version_id, symbol_name, ...).
-    """
-
-    chunk_id: str
-    rank: int
-    score: float
-    source: str = "dense"
-    metadata: Dict[str, Any] = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        if self.source not in VALID_SOURCES:
-            raise ValueError(
-                f"invalid source: {self.source!r} (expected one of {VALID_SOURCES})"
-            )
+from src.domain.retrieval import RetrievalCandidate, RetrieverHit
+from sqlalchemy import text
+from src.config import settings
+from src.infrastructure.observability import log_structured
 
 
 @dataclass(frozen=True)
@@ -78,15 +56,23 @@ DOCUMENT_FILTER_FIELDS: Dict[str, str] = {
     "source_type": "eq",
 }
 
+PROJECT_FILTER_FIELDS: Dict[str, str] = {"workspace_id": "eq"}
+
 # Aliases accepted on the input filters dict: {"document_ids" -> document_id IN}.
 ALIASES: Dict[str, Dict[str, Any]] = {
     "document_ids": {"field": "document_id", "op": "in_"},
     "source_types": {"field": "source_type", "op": "in_", "table": "document"},
+    "data_classifications": {
+        "field": "data_classification",
+        "op": "in_",
+        "table": "document",
+    },
 }
 
 ALLOWED_FILTER_KEYS = {
     *CHUNK_FILTER_FIELDS,
     *DOCUMENT_FILTER_FIELDS,
+    *PROJECT_FILTER_FIELDS,
     *ALIASES,
     "scope",
     "active_versions_only",
@@ -95,9 +81,21 @@ ALLOWED_FILTER_KEYS = {
 
 
 def require_scoped_filters(filters: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """Reject repository calls that do not carry a concrete project scope."""
-    if not filters or not filters.get("project_id"):
-        raise ValueError("retrieval repository requires project_id scope")
+    """Reject calls that lack any mandatory RetrievalScope predicate."""
+    required = (
+        "workspace_id",
+        "project_id",
+        "embedding_profile_id",
+        "data_classifications",
+    )
+    missing = [name for name in required if not filters or not filters.get(name)]
+    if not filters or filters.get("active_versions_only") is not True:
+        missing.append("active_versions_only")
+    if missing:
+        raise ValueError(
+            "retrieval repository requires complete RetrievalScope: "
+            + ", ".join(sorted(set(missing)))
+        )
     return filters
 
 
@@ -155,6 +153,9 @@ def normalize_filters(
                 explicit_source_type = value
             _push("document", key, DOCUMENT_FILTER_FIELDS[key], value)
             continue
+        if key in PROJECT_FILTER_FIELDS:
+            _push("project", key, PROJECT_FILTER_FIELDS[key], value)
+            continue
         if key == "active_versions_only":
             if value is True:
                 terms.append(
@@ -167,8 +168,7 @@ def normalize_filters(
                 )
             continue
         if key == "embedding_profile_id":
-            # Dense profile enforcement is applied in its repository adapter;
-            # non-dense retrievers still carry the same authorized scope.
+            _push("version", key, "eq", value)
             continue
 
     scope = filters.get(scope_key)
@@ -195,6 +195,8 @@ def render_where(
     prefix: str = "",
     chunk_alias: str = "c",
     document_alias: str = "d",
+    project_alias: str = "p",
+    version_alias: str = "v",
 ) -> "tuple[str, Dict[str, Any]]":
     """Render a FilterTerm list into a (sql_clause, params) fragment (pure).
 
@@ -207,7 +209,13 @@ def render_where(
     clauses: List[str] = []
     params: Dict[str, Any] = {}
     for i, term in enumerate(terms):
-        alias = chunk_alias if term.table == "chunk" else document_alias
+        aliases = {
+            "chunk": chunk_alias,
+            "document": document_alias,
+            "project": project_alias,
+            "version": version_alias,
+        }
+        alias = aliases[term.table]
         column = f"{alias}.{term.field}"
         pname = f"{prefix}p{i}"
         if term.op == "eq":
@@ -254,12 +262,47 @@ def to_candidates(rows, source: str = "dense") -> List[RetrievalCandidate]:
             score = float(getattr(row, "score"))
             meta = dict(getattr(row, "metadata", None) or {})
         out.append(
-            RetrievalCandidate(
+            RetrieverHit(
                 chunk_id=chunk_id,
                 rank=rank,
                 score=score,
                 source=source,
                 metadata=meta,
+                match_type=str(meta.get("match_type") or source),
+                matched_terms=tuple(meta.get("matched_terms") or ()),
+                locator=dict(meta.get("locator") or {}),
             )
         )
     return out
+
+
+def execute_retrieval_query(
+    session: Any,
+    sql: str,
+    params: Dict[str, Any],
+    *,
+    stage: str,
+    expected_index: str,
+):
+    """Execute and, only when slow, trace a content-free index-miss signal."""
+    started = time.perf_counter()
+    rows = session.execute(text(sql), params).fetchall()
+    latency_ms = (time.perf_counter() - started) * 1000
+    if (
+        settings.RETRIEVAL_TRACE_QUERY_PLANS
+        and latency_ms >= settings.RETRIEVAL_SLOW_QUERY_MS
+        and getattr(getattr(session, "bind", None), "dialect", None) is not None
+    ):
+        plan_rows = session.execute(
+            text("EXPLAIN (FORMAT JSON) " + sql), params
+        ).fetchall()
+        if expected_index not in str(plan_rows):
+            log_structured(
+                logging.WARNING,
+                "retrieval query index miss",
+                retrieval_stage=stage,
+                candidate_count=len(rows),
+                latency_ms=round(latency_ms, 3),
+                error_code="index_miss",
+            )
+    return rows

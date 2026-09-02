@@ -28,7 +28,14 @@ from ...llm import (
     chat_client,
     embed_text,
 )
-from ...models import Chunk, Document
+from ...models import (
+    Chunk,
+    ContentPolicyDecisionRecord,
+    Document,
+    DocumentVersion,
+    EmbeddingProfile,
+    Project,
+)
 from src.application.answer_service import (
     ConversationScopeError,
     ensure_conversation,
@@ -37,6 +44,7 @@ from src.application.answer_service import (
 from src.application.retrieval_service import RetrievalService
 from src.domain.identity import PrincipalContext
 from src.domain.retrieval_scope import RetrievalScope
+from src.domain.retrieval import ScopedNeighborKey
 from src.infrastructure.security.auth import (
     get_principal_context,
     require_project_access,
@@ -61,7 +69,9 @@ class ChatQuery(BaseModel):
     conversation_id: Optional[str] = None
 
 
-def _chunk_to_dict(chunk: Chunk, doc: Optional[Document]) -> Dict[str, Any]:
+def _chunk_to_dict(
+    chunk: Chunk, doc: Optional[Document], *, workspace_id: UUID
+) -> Dict[str, Any]:
     """Map an ORM Chunk (+ its Document) into the chunk shape ContextBuilder
     and AnswerService read (chunk_id / content / heading_path / locator /
     metadata)."""
@@ -77,13 +87,26 @@ def _chunk_to_dict(chunk: Chunk, doc: Optional[Document]) -> Dict[str, Any]:
         metadata["source_type"] = doc.source_type
     return {
         "chunk_id": str(chunk.id),
-        "source_id": str(chunk.document_id),
+        "source_id": ":".join(
+            (
+                str(workspace_id),
+                str(doc.project_id) if doc is not None else "",
+                str(chunk.document_id),
+                str(chunk.version_id),
+                str(chunk.source_file_id or "-"),
+            )
+        ),
         "chunk_type": chunk.chunk_type or "document",
         "content": chunk.content or "",
         "heading_path": list(chunk.heading_path or []),
         "locator": locator,
         "content_hash": chunk.content_hash or "",
         "sequence_no": chunk.sequence_no or 0,
+        "workspace_id": str(workspace_id),
+        "project_id": str(doc.project_id) if doc is not None else "",
+        "document_id": str(chunk.document_id),
+        "version_id": str(chunk.version_id),
+        "source_file_id": str(chunk.source_file_id) if chunk.source_file_id else None,
         "metadata": metadata,
     }
 
@@ -95,32 +118,90 @@ def _build_resolvers(db: Session, scope: RetrievalScope):
         row = (
             db.query(Chunk, Document)
             .join(Document, Chunk.document_id == Document.id)
-            .filter(Chunk.id == chunk_id)
-            .filter(Document.project_id == scope.project_id)
-            .first()
-        )
-        if row is None:
-            return None
-        chunk, doc = row
-        return _chunk_to_dict(chunk, doc)
-
-    def neighbor_resolver(source_id: str, sequence_no: int) -> Optional[Dict[str, Any]]:
-        row = (
-            db.query(Chunk, Document)
-            .join(Document, Chunk.document_id == Document.id)
+            .join(Project, Document.project_id == Project.id)
+            .join(DocumentVersion, Chunk.version_id == DocumentVersion.id)
+            .join(
+                ContentPolicyDecisionRecord,
+                DocumentVersion.content_policy_decision_id
+                == ContentPolicyDecisionRecord.id,
+            )
             .filter(
-                Chunk.document_id == source_id,
-                Chunk.sequence_no == sequence_no,
+                Chunk.id == chunk_id,
                 Document.project_id == scope.project_id,
+                Project.workspace_id == scope.workspace_id,
+                Document.deleted_at.is_(None),
+                Document.active_version_id == Chunk.version_id,
+                DocumentVersion.status.in_(("ready", "completed")),
+                DocumentVersion.embedding_profile_id == scope.embedding_profile_id,
+                ContentPolicyDecisionRecord.permit_local_generation.is_(True),
+                Document.source_type.in_(scope.allowed_source_types),
             )
             .first()
         )
         if row is None:
             return None
         chunk, doc = row
-        return _chunk_to_dict(chunk, doc)
+        if (
+            scope.allowed_document_ids is not None
+            and chunk.document_id not in scope.allowed_document_ids
+        ):
+            return None
+        return _chunk_to_dict(chunk, doc, workspace_id=scope.workspace_id)
+
+    def neighbor_resolver(
+        resolver_scope: RetrievalScope | None, key: ScopedNeighborKey
+    ) -> Optional[Dict[str, Any]]:
+        if resolver_scope != scope:
+            return None
+        if key.workspace_id != str(scope.workspace_id) or key.project_id != str(
+            scope.project_id
+        ):
+            return None
+        row = (
+            db.query(Chunk, Document)
+            .join(Document, Chunk.document_id == Document.id)
+            .join(Project, Document.project_id == Project.id)
+            .join(DocumentVersion, Chunk.version_id == DocumentVersion.id)
+            .join(
+                ContentPolicyDecisionRecord,
+                DocumentVersion.content_policy_decision_id
+                == ContentPolicyDecisionRecord.id,
+            )
+            .filter(
+                Chunk.document_id == key.document_id,
+                Chunk.version_id == key.version_id,
+                Chunk.sequence_no == key.sequence_no,
+                Document.project_id == scope.project_id,
+                Project.workspace_id == scope.workspace_id,
+                Document.deleted_at.is_(None),
+                Document.active_version_id == Chunk.version_id,
+                DocumentVersion.status.in_(("ready", "completed")),
+                DocumentVersion.embedding_profile_id == scope.embedding_profile_id,
+                ContentPolicyDecisionRecord.permit_local_generation.is_(True),
+            )
+        )
+        row = (
+            row.filter(Chunk.source_file_id.is_(None))
+            if key.source_file_id is None
+            else row.filter(Chunk.source_file_id == key.source_file_id)
+        ).first()
+        if row is None:
+            return None
+        chunk, doc = row
+        return _chunk_to_dict(chunk, doc, workspace_id=scope.workspace_id)
 
     return chunk_resolver, neighbor_resolver
+
+
+def _active_embedding_profile(db: Session) -> EmbeddingProfile:
+    profile = (
+        db.query(EmbeddingProfile)
+        .filter(EmbeddingProfile.is_active.is_(True))
+        .one_or_none()
+    )
+    if profile is None:
+        raise HTTPException(status_code=503, detail="Retrieval profile unavailable")
+    return profile
 
 
 @router.get("/chat/models")
@@ -163,6 +244,8 @@ def query_chat(
             else None
         ),
         allowed_source_types=source_types,
+        embedding_profile_id=_active_embedding_profile(db).id,
+        data_policy="restricted",
     )
     debug = bool(
         chat_query.debug and principal.is_admin and settings.retrieval_debug_enabled
@@ -177,6 +260,7 @@ def query_chat(
         embedder=lambda q: embed_text(q, instruction=QUERY_INSTRUCTION),
         chunk_resolver=chunk_resolver,
         neighbor_resolver=neighbor_resolver,
+        session=db,
     )
 
     retrieval_result = service.retrieve(chat_query.query, retrieval_scope, debug=debug)
