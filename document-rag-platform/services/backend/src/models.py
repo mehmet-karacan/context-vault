@@ -9,10 +9,12 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
+    text as sa_text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import relationship
@@ -56,6 +58,7 @@ class Document(Base):
         UUID(as_uuid=True),
         ForeignKey("document_versions.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     created_at = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, nullable=True)
@@ -81,6 +84,14 @@ class Document(Base):
 
 class Chunk(Base):
     __tablename__ = "chunks"
+    __table_args__ = (
+        Index(
+            "chunks_embedding_idx",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     document_id = Column(
@@ -95,9 +106,13 @@ class Chunk(Base):
         UUID(as_uuid=True),
         ForeignKey("document_versions.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     source_file_id = Column(
-        UUID(as_uuid=True), ForeignKey("source_files.id", ondelete="SET NULL"), nullable=True
+        UUID(as_uuid=True),
+        ForeignKey("source_files.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     sequence_no = Column(Integer, nullable=True)
     chunk_type = Column(String, nullable=True)
@@ -112,7 +127,10 @@ class Chunk(Base):
     token_count = Column(Integer, nullable=True)
     content_hash = Column(String, nullable=True)
     parent_chunk_id = Column(
-        UUID(as_uuid=True), ForeignKey("chunks.id", ondelete="SET NULL"), nullable=True
+        UUID(as_uuid=True),
+        ForeignKey("chunks.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     metadata_json = Column(JSONB, nullable=True)
     search_vector = Column(TSVECTOR, nullable=True)
@@ -143,7 +161,10 @@ class DocumentVersion(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     document_id = Column(
-        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     version_no = Column(Integer, nullable=False)
     source_revision = Column(String, nullable=True)
@@ -188,7 +209,10 @@ class SourceFile(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     version_id = Column(
-        UUID(as_uuid=True), ForeignKey("document_versions.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("document_versions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     relative_path = Column(Text, nullable=False)
     language = Column(String, nullable=True)
@@ -214,7 +238,10 @@ class DocumentArtifact(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     version_id = Column(
-        UUID(as_uuid=True), ForeignKey("document_versions.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("document_versions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     artifact_type = Column(String, nullable=False)
     storage_key = Column(Text, nullable=False)
@@ -240,7 +267,10 @@ class IngestionJob(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     version_id = Column(
-        UUID(as_uuid=True), ForeignKey("document_versions.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("document_versions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     status = Column(String, nullable=False, default="queued")
     stage = Column(String, nullable=True)
@@ -268,7 +298,10 @@ class IngestionEvent(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_id = Column(
-        UUID(as_uuid=True), ForeignKey("ingestion_jobs.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("ingestion_jobs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     stage = Column(String, nullable=True)
     status = Column(String, nullable=True)
@@ -288,6 +321,14 @@ class EmbeddingProfile(Base):
     """
 
     __tablename__ = "embedding_profiles"
+    __table_args__ = (
+        Index(
+            "uq_embedding_profiles_one_active",
+            "is_active",
+            unique=True,
+            postgresql_where=sa_text("is_active"),
+        ),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     provider = Column(String, nullable=False)
@@ -297,7 +338,7 @@ class EmbeddingProfile(Base):
     query_prefix = Column(Text, nullable=True)
     passage_prefix = Column(Text, nullable=True)
     profile_version = Column(Integer, nullable=False, default=1)
-    config_hash = Column(String, nullable=True)
+    config_hash = Column(String, nullable=False)
     is_active = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
@@ -322,6 +363,7 @@ class ChunkEmbedding(Base):
         UUID(as_uuid=True),
         ForeignKey("embedding_profiles.id", ondelete="CASCADE"),
         primary_key=True,
+        index=True,
     )
     embedding = Column(Vector(EMBEDDING_DIMENSION), nullable=False)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
@@ -337,7 +379,10 @@ class Conversation(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     project_id = Column(
-        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     title = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
@@ -355,7 +400,10 @@ class Message(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     conversation_id = Column(
-        UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     role = Column(String, nullable=False)
     content = Column(Text, nullable=False)
@@ -376,7 +424,10 @@ class MessageCitation(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     message_id = Column(
-        UUID(as_uuid=True), ForeignKey("messages.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("messages.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     chunk_id = Column(
         UUID(as_uuid=True), ForeignKey("chunks.id", ondelete="SET NULL"), nullable=True
