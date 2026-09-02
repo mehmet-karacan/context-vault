@@ -1,0 +1,104 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "verify",
+  "operation_id": "cv3-a8-structured-answer-20260902-001",
+  "work_item_id": "CV3-A8-STRUCTURED-ANSWER",
+  "actor": "codex-local-agent",
+  "observed_at_utc": "2026-09-02T18:05:24Z",
+  "baseline_revision": "0c86a9aa3f8867e1399dc79c2d0bb06baada52e8",
+  "result_revision": "24480ed0eed34cf0e9b87730f2fffce2b550beba",
+  "result": "PASS",
+  "tests": [
+    {
+      "name": "backend full pytest on isolated PostgreSQL and MinIO",
+      "result": "PASS",
+      "passed": 607,
+      "skipped": 2,
+      "warning_count": 1,
+      "skip_scope": ["Pillow unavailable", "Tesseract binary unavailable"],
+      "report": "PYTEST.xml"
+    },
+    {
+      "name": "structured answer and citation adversarial matrix",
+      "result": "PASS",
+      "passed": 8,
+      "verified": [
+        "unknown label bounded repair",
+        "only two used sources persisted from five candidates",
+        "source-less claim rejected",
+        "prompt injection remains untrusted data",
+        "whole-block context truncation",
+        "timeout and partial stream safe terminal state",
+        "remote data-policy denial before provider call"
+      ]
+    },
+    {
+      "name": "PostgreSQL citation snapshot lifecycle integration",
+      "result": "PASS",
+      "passed": 1,
+      "verified": [
+        "claim-source rows persisted",
+        "AES-GCM evidence snapshot retained after chunk removal",
+        "exact conversation scope enforced"
+      ]
+    },
+    {
+      "name": "frontend lint, typecheck and unit",
+      "result": "PASS",
+      "unit_tests": 2
+    },
+    {
+      "name": "Alembic fresh install and round-trip",
+      "result": "PASS",
+      "path": "blank -> cv3_00000006 -> cv3_00000005 -> cv3_00000006"
+    },
+    {
+      "name": "Alembic autogenerate drift check",
+      "result": "PASS",
+      "message": "No new upgrade operations detected"
+    },
+    {
+      "name": "strict migration verifier",
+      "result": "PASS",
+      "head": "cv3_00000006",
+      "columns": 310,
+      "constraints": 128,
+      "invariant_violations": 0,
+      "provider_credentials_loaded": false,
+      "schema_sha256": "c2e927fdcd5a90ef15770e97545fec77c53db3b0c44060f1219651a36061e00e",
+      "report": "MIGRATION_VERIFICATION.json"
+    }
+  ],
+  "verified_behaviors": [
+    "strict immutable AnswerEnvelope before response or persistence",
+    "claim text, dynamic label subset and used-label consistency validation",
+    "single bounded content-free repair followed by typed no-answer",
+    "only ContextBundle selected items enter the prompt",
+    "query, policy, history and evidence are distinctly delimited",
+    "remote generation requires immutable content-policy permission",
+    "ordered claim-citation many-to-many provenance",
+    "encrypted bounded evidence snapshot with retention deadline",
+    "principal/workspace/project/conversation exact-scope history",
+    "typed user-facing no-answer reasons and admin-only retrieval debug"
+  ],
+  "security_redactions": [
+    "database URL",
+    "provider credentials",
+    "raw prompt and provider body",
+    "full document/context content",
+    "encrypted evidence plaintext"
+  ],
+  "data_safety": {
+    "user_database_mutated": false,
+    "existing_user_objects_deleted": false,
+    "tests_used_isolated_postgresql": true,
+    "tests_used_isolated_minio": true
+  },
+  "remote_actions": {
+    "provider_call": false,
+    "push": false,
+    "pull_request": false,
+    "merge": false,
+    "release": false
+  }
+}

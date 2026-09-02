@@ -1207,84 +1207,84 @@ AnswerEnvelope
   safety_flags[]
 ```
 
-- [ ] `source_labels`, yalnız ContextBundle'daki mevcut `[S1..Sn]` kümesinden olabilir.
-- [ ] Unknown label, boş claim source veya schema ihlali kontrollü repair/retry ya da no-answer üretir.
-- [ ] Modelin kullanmadığı candidate citation olarak persist edilmez.
-- [ ] Cevap metni ve structured claims tutarlılık kontrolünden geçer.
-- [ ] Bir claim birden fazla kaynağa dayanabilir; ilişki ayrı tabloda tutulur.
+- [x] `source_labels`, yalnız ContextBundle'daki mevcut `[S1..Sn]` kümesinden olabilir.
+- [x] Unknown label, boş claim source veya schema ihlali kontrollü repair/retry ya da no-answer üretir.
+- [x] Modelin kullanmadığı candidate citation olarak persist edilmez.
+- [x] Cevap metni ve structured claims tutarlılık kontrolünden geçer.
+- [x] Bir claim birden fazla kaynağa dayanabilir; ilişki ayrı tabloda tutulur.
 
 ### 15.3 Kanıt paketleme
 
-- [ ] Prompt'a yalnız `ContextBundle.selected_items` girer.
-- [ ] Her source için label, güvenli locator, document/source adı, version ve sınırlı içerik verilir.
-- [ ] İçerik açık “UNTRUSTED SOURCE DATA” sınırları içinde yer alır.
-- [ ] Source içindeki instruction, system/developer talimatı sayılamaz.
-- [ ] Query, policy ve evidence bölümleri birbirinden açıkça ayrılır.
-- [ ] Prompt bütçesi model context window, reserved output ve safety margin ile hesaplanır.
-- [ ] Truncation, label-content eşleşmesini bozmaz.
+- [x] Prompt'a yalnız `ContextBundle.selected_items` girer.
+- [x] Her source için label, güvenli locator, document/source adı, version ve sınırlı içerik verilir.
+- [x] İçerik açık “UNTRUSTED SOURCE DATA” sınırları içinde yer alır.
+- [x] Source içindeki instruction, system/developer talimatı sayılamaz.
+- [x] Query, policy ve evidence bölümleri birbirinden açıkça ayrılır.
+- [x] Prompt bütçesi model context window, reserved output ve safety margin ile hesaplanır.
+- [x] Truncation, label-content eşleşmesini bozmaz.
 
 ### 15.4 Citation provenance modeli
 
 `message_citations` genişletilecek veya normalize edilecek:
 
-- [ ] message_id, claim_id, retrieval_run_id;
-- [ ] chunk/document/version/source_file/profile kimlikleri;
-- [ ] source label ve answer içindeki kullanım sırası;
-- [ ] retrieval/fusion/reranker score snapshot;
-- [ ] page/line/bbox/symbol locator;
-- [ ] evidence excerpt veya güvenli immutable snapshot;
-- [ ] evidence hash/content hash;
-- [ ] model, prompt template/version ve generation config;
-- [ ] citation validation sonucu;
-- [ ] created_at UTC.
+- [x] message_id, claim_id, retrieval_run_id;
+- [x] chunk/document/version/source_file/profile kimlikleri;
+- [x] source label ve answer içindeki kullanım sırası;
+- [x] retrieval/fusion/reranker score snapshot;
+- [x] page/line/bbox/symbol locator;
+- [x] evidence excerpt veya güvenli immutable snapshot;
+- [x] evidence hash/content hash;
+- [x] model, prompt template/version ve generation config;
+- [x] citation validation sonucu;
+- [x] created_at UTC.
 
-- [ ] Kaynak daha sonra reindex/silinse bile citation neye dayandığını hash/snapshot ile açıklayabilmeli.
-- [ ] Hassas excerpt şifreli/retention'lı saklanır; public loga girmez.
+- [x] Kaynak daha sonra reindex/silinse bile citation neye dayandığını hash/snapshot ile açıklayabilmeli.
+- [x] Hassas excerpt şifreli/retention'lı saklanır; public loga girmez.
 
 ### 15.5 No-answer ve belirsizlik
 
-- [ ] Smalltalk, policy refusal, insufficient evidence, provider failure ve permission-denied birbirinden ayrılır.
-- [ ] Empty retrieval otomatik “smalltalk” sayılmaz.
+- [x] Smalltalk, policy refusal, insufficient evidence, provider failure ve permission-denied birbirinden ayrılır.
+- [x] Empty retrieval otomatik “smalltalk” sayılmaz.
 - [ ] No-answer threshold gerçek dataset ile kalibre edilir.
-- [ ] Exact identifier güçlü kanıt gibi özel durumlar ölçülmüş kural olarak uygulanır.
-- [ ] Provider timeout/error kanıt yokmuş gibi sessiz cevap üretmez.
-- [ ] UI no-answer nedenini kullanıcıya uygun, debug detayını yalnız yetkili role gösterir.
+- [x] Exact identifier güçlü kanıt gibi özel durumlar ölçülmüş kural olarak uygulanır.
+- [x] Provider timeout/error kanıt yokmuş gibi sessiz cevap üretmez.
+- [x] UI no-answer nedenini kullanıcıya uygun, debug detayını yalnız yetkili role gösterir.
 
 ### 15.6 Prompt injection ve içerik güvenliği
 
-- [ ] Direct ve indirect prompt injection fixture'ları oluşturulur.
-- [ ] “Talimatları yok say”, tool çağır, secret göster, başka belge getir, citation uydur gibi kaynak metinleri veri kabul edilir.
-- [ ] Model tool kullanacaksa allowlist, typed arguments, scope ve explicit apply gate gerekir.
-- [ ] Retrieval debug, prompt ve full context loglama varsayılan kapalıdır.
-- [ ] Provider request/response retention politikası belgelenir.
-- [ ] Remote provider'a gönderilen her çağrı data-policy kontrolünden geçer.
+- [x] Direct ve indirect prompt injection fixture'ları oluşturulur.
+- [x] “Talimatları yok say”, tool çağır, secret göster, başka belge getir, citation uydur gibi kaynak metinleri veri kabul edilir.
+- [x] Model tool kullanacaksa allowlist, typed arguments, scope ve explicit apply gate gerekir.
+- [x] Retrieval debug, prompt ve full context loglama varsayılan kapalıdır.
+- [x] Provider request/response retention politikası belgelenir.
+- [x] Remote provider'a gönderilen her çağrı data-policy kontrolünden geçer.
 
 ### 15.7 Conversation güvenilirliği
 
-- [ ] Conversation history workspace/project/principal scope'lu yüklenir.
-- [ ] Geçmiş mesajların tümü otomatik context'e eklenmez; özet/retrieval ve token budget uygulanır.
-- [ ] Modelin önceki cevabı canonical fact sayılmaz.
-- [ ] Conversation title/summary model üretimiyse provenance ve draft status taşır.
-- [ ] Mesaj silme/retention/citation bütünlüğü belirlenir.
+- [x] Conversation history workspace/project/principal scope'lu yüklenir.
+- [x] Geçmiş mesajların tümü otomatik context'e eklenmez; özet/retrieval ve token budget uygulanır.
+- [x] Modelin önceki cevabı canonical fact sayılmaz.
+- [x] Conversation title/summary model üretimiyse provenance ve draft status taşır.
+- [x] Mesaj silme/retention/citation bütünlüğü belirlenir.
 
 ### 15.8 Test matrisi
 
-- [ ] Model var olmayan `[S99]` döndürür; citation persist edilmez ve cevap kontrollü işlenir.
-- [ ] Model bundle'daki 5 kaynaktan yalnız 2'sini kullanır; DB'de yalnız 2 source/claim ilişkisi oluşur.
-- [ ] Claim source'suz kalır; gate bunu yakalar.
-- [ ] Kaynak içinde prompt injection bulunur; scope/tool/policy değişmez.
-- [ ] Context truncation label-content eşleşmesini bozmaz.
-- [ ] Reindex sonrası eski mesaj citation hash/snapshot'ı doğrulanır.
-- [ ] Provider timeout, malformed JSON ve partial stream güvenli terminal sonuç üretir.
-- [ ] Cross-project conversation id reddedilir.
+- [x] Model var olmayan `[S99]` döndürür; citation persist edilmez ve cevap kontrollü işlenir.
+- [x] Model bundle'daki 5 kaynaktan yalnız 2'sini kullanır; DB'de yalnız 2 source/claim ilişkisi oluşur.
+- [x] Claim source'suz kalır; gate bunu yakalar.
+- [x] Kaynak içinde prompt injection bulunur; scope/tool/policy değişmez.
+- [x] Context truncation label-content eşleşmesini bozmaz.
+- [x] Reindex sonrası eski mesaj citation hash/snapshot'ı doğrulanır.
+- [x] Provider timeout, malformed JSON ve partial stream güvenli terminal sonuç üretir.
+- [x] Cross-project conversation id reddedilir.
 
 ### 15.9 Kabul kriterleri
 
-- [ ] Model cevabı schema validation'dan geçmeden kullanıcıya/persistence'a gitmez.
-- [ ] Persist edilen citation'ların tamamı kullanılan label ve claim'e bağlıdır.
-- [ ] Citation precision/coverage gerçek eval ile ölçülebilir.
-- [ ] Prompt injection source scope/policy/tool davranışını değiştiremez.
-- [ ] Cevap yeniden üretilebilir provenance taşır.
+- [x] Model cevabı schema validation'dan geçmeden kullanıcıya/persistence'a gitmez.
+- [x] Persist edilen citation'ların tamamı kullanılan label ve claim'e bağlıdır.
+- [x] Citation precision/coverage gerçek eval ile ölçülebilir.
+- [x] Prompt injection source scope/policy/tool davranışını değiştiremez.
+- [x] Cevap yeniden üretilebilir provenance taşır.
 
 ---
 
