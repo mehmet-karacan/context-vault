@@ -7,6 +7,23 @@ import {
 } from "./client";
 import { matchesContract } from "./validate";
 describe("fail-closed API boundary", () => {
+  it.each([null, "denied", [], {}].map((body) => ({ body })))(
+    "preserves HTTP denial even with a non-problem response body: %s",
+    async ({ body }) => {
+      setAuthorization({ workspaceId: "w", apiKey: "test-memory-only-key" });
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValue(
+            new Response(JSON.stringify(body), { status: 403 }),
+          ),
+      );
+      await expect(apiRequest("/documents")).rejects.toMatchObject({
+        status: 403,
+      });
+    },
+  );
   beforeEach(() => setAuthorization(null));
   afterEach(() => vi.unstubAllGlobals());
   it("does not send a request before workspace/auth admission", async () => {

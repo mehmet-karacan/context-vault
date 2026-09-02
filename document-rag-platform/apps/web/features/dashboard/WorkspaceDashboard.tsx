@@ -3,6 +3,7 @@ import Nav from "../../components/Nav";
 import ChatWidget from "../../components/ChatWidget";
 import { DocumentGrid } from "../documents/DocumentGrid";
 import { useDocuments } from "../documents/useDocuments";
+import { ResourceNotice } from "../documents/ResourceNotice";
 import { UploadPanel } from "../ingestion/UploadPanel";
 import { useIngestion } from "../ingestion/useIngestion";
 import { ProjectSelector } from "../projects/ProjectSelector";
@@ -37,8 +38,8 @@ function ProjectWorkspace({
         <div className="grid gap-8 2xl:grid-cols-[20rem_minmax(0,1fr)]">
           <div>
             <UploadPanel
-              projectId={projectId}
-              jobs={ingestion.jobs}
+              projectId={documents.denied ? "" : projectId}
+              jobs={documents.denied ? [] : ingestion.jobs}
               busy={ingestion.busy}
               onUpload={ingestion.upload}
               onDismiss={ingestion.dismiss}
@@ -57,26 +58,37 @@ function ProjectWorkspace({
             >
               Proje kaynakları
             </h2>
-            {documents.error ? (
-              <p role="alert" className="mb-4 text-rust">
-                {documents.error}
-              </p>
-            ) : projectId ? (
+            <button
+              disabled={!projectId || documents.updating}
+              onClick={() => void documents.refresh()}
+              className="mb-4 text-sm underline"
+            >
+              Kaynakları yenile
+            </button>
+            <ResourceNotice
+              error={documents.error}
+              partial={documents.partial}
+              updating={documents.updating && documents.documents !== null}
+            />
+            {projectId && (!documents.error || documents.partial) ? (
               <DocumentGrid
                 documents={documents.documents}
                 onDelete={documents.remove}
+                stale={documents.partial}
+                disabled={documents.updating || documents.partial}
               />
-            ) : (
+            ) : !projectId ? (
               <p className="text-ink-soft">
                 Kaynakları görmek için bir proje seçin.
               </p>
-            )}
+            ) : null}
           </section>
         </div>
       )}
       {(view === "all" || view === "chat") && (
         <ChatWidget
-          projectId={projectId}
+          key={documents.denied ? "access-denied" : "admitted"}
+          projectId={documents.denied ? "" : projectId}
           projectName={projectName}
           activeVersions={versions}
         />
@@ -122,10 +134,27 @@ export default function WorkspaceDashboard({ view = "all" }: { view?: View }) {
             />
           </div>
         </header>
+        <ResourceNotice
+          error={projects.error}
+          partial={projects.partial}
+          updating={projects.updating}
+        />
+        {!projects.error &&
+          !projects.updating &&
+          projects.projects?.length === 0 && (
+            <p className="mb-4 text-sm text-ink-soft">
+              Bu workspace içinde henüz proje yok. Yeni proje
+              oluşturabilirsiniz.
+            </p>
+          )}
         {projects.error && (
-          <p role="alert" className="mb-4 text-rust">
-            {projects.error}
-          </p>
+          <button
+            className="mb-4 text-sm underline"
+            disabled={projects.updating}
+            onClick={() => void projects.refresh()}
+          >
+            Projeleri yeniden yükle
+          </button>
         )}
         <ProjectWorkspace
           key={projects.selectedProjectId || "unscoped"}

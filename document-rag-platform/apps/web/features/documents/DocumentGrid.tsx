@@ -9,9 +9,13 @@ import type { DocumentItem } from "./useDocuments";
 export function DocumentGrid({
   documents,
   onDelete,
+  stale = false,
+  disabled = false,
 }: {
   documents: DocumentItem[] | null;
   onDelete: (id: string) => Promise<void>;
+  stale?: boolean;
+  disabled?: boolean;
 }) {
   if (documents === null)
     return (
@@ -22,7 +26,9 @@ export function DocumentGrid({
   if (!documents.length)
     return (
       <p className="text-ink-soft">
-        Bu projede henüz kaynak yok. İlk kaynağı yukarıdan ekleyin.
+        {stale
+          ? "Son doğrulanmış listede kaynak bulunmuyordu."
+          : "Bu projede henüz kaynak yok. İlk kaynağı yukarıdan ekleyin."}
       </p>
     );
   return (
@@ -50,6 +56,7 @@ export function DocumentGrid({
               {doc.status}
             </span>
             <button
+              disabled={disabled}
               aria-label={`${doc.name} kaynağını sil`}
               onClick={() => void onDelete(doc.id)}
               className="text-ink-soft hover:text-rust focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass"

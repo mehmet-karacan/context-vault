@@ -452,3 +452,224 @@ test("production diagnostics route has no interactive admin surface", async ({
     page.getByRole("button", { name: "Tanıyı çalıştır" }),
   ).toHaveCount(0);
 });
+
+test("job refresh outage retains a labeled stale snapshot, not an empty project", async ({
+  page,
+}) => {
+  await setup(page);
+  await login(page);
+  await selectProject(page);
+  await upload(page);
+  await expect(
+    page.getByText("completed · completed · ilerleme bildirilmedi"),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "İşler", exact: true }).click();
+  await expect(page).toHaveURL(/\/jobs$/);
+  await selectProject(page);
+  const board = page.getByRole("region", { name: "Kalıcı iş kayıtları" });
+  await expect(
+    board.getByRole("heading", { name: "Evidence.txt" }),
+  ).toBeVisible();
+  await page.route("**/api/v1/documents?**", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "SECRET internal failure" }),
+    }),
+  );
+  await board.getByRole("button", { name: "Durumu yenile" }).click();
+  await expect(
+    board.getByText("Son doğrulanmış liste gösteriliyor; güncel olmayabilir."),
+  ).toBeVisible();
+  await expect(
+    board.getByRole("heading", { name: "Evidence.txt" }),
+  ).toBeVisible();
+  await expect(board.getByText("Bu projede iş kaydı bulunamadı.")).toHaveCount(
+    0,
+  );
+  await expect(page.getByText("SECRET", { exact: false })).toHaveCount(0);
+});
+
+test("job refresh permission loss clears snapshot without claiming an empty project", async ({
+  page,
+}) => {
+  await setup(page);
+  await login(page);
+  await selectProject(page);
+  await upload(page);
+  await expect(
+    page.getByText("completed · completed · ilerleme bildirilmedi"),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "İşler", exact: true }).click();
+  await expect(page).toHaveURL(/\/jobs$/);
+  await selectProject(page);
+  const board = page.getByRole("region", { name: "Kalıcı iş kayıtları" });
+  await expect(
+    board.getByRole("heading", { name: "Evidence.txt" }),
+  ).toBeVisible();
+  await page.route("**/api/v1/documents?**", (route) =>
+    route.fulfill({
+      status: 403,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "denied" }),
+    }),
+  );
+  await board.getByRole("button", { name: "Durumu yenile" }).click();
+  await expect(board.getByText("Bu işlem için yetkiniz yok.")).toBeVisible();
+  await expect(
+    board.getByRole("heading", { name: "Evidence.txt" }),
+  ).toHaveCount(0);
+  await expect(board.getByText("Bu projede iş kaydı bulunamadı.")).toHaveCount(
+    0,
+  );
+});
+
+test("source snapshot survives outage with disabled deletion and recovers", async ({
+  page,
+}) => {
+  await setup(page);
+  await login(page);
+  await selectProject(page);
+  await upload(page);
+  const remove = page.getByRole("button", {
+    name: "Evidence.txt kaynağını sil",
+  });
+  await expect(remove).toBeEnabled();
+  await page.route("**/api/v1/documents?**", (route) =>
+    route.fulfill({ status: 503, json: null }),
+  );
+  await page.getByRole("button", { name: "Kaynakları yenile" }).click();
+  await expect(
+    page.getByText("Son doğrulanmış liste gösteriliyor; güncel olmayabilir."),
+  ).toBeVisible();
+  await expect(remove).toBeVisible();
+  await expect(remove).toBeDisabled();
+  expect(
+    (
+      await new AxeBuilder({ page })
+        .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+        .analyze()
+    ).violations,
+  ).toEqual([]);
+  await page.screenshot({
+    path: "reports/source-partial-state.png",
+    fullPage: true,
+  });
+  await page.unroute("**/api/v1/documents?**");
+  await page.getByRole("button", { name: "Kaynakları yenile" }).click();
+  await expect(remove).toBeEnabled();
+  await expect(
+    page.getByText("Son doğrulanmış liste gösteriliyor; güncel olmayabilir."),
+  ).toHaveCount(0);
+});
+
+for (const status of [401, 403, 404]) {
+  test(`HTTP ${status} clears sources and citation context and blocks upload/chat`, async ({
+    page,
+  }) => {
+    await setup(page);
+    await login(page);
+    await selectProject(page);
+    await upload(page);
+    await expect(
+      page.getByRole("button", { name: "Evidence.txt kaynağını sil" }),
+    ).toBeEnabled();
+    await page.getByLabel("Belgen hakkında sor").fill("Kanıt?");
+    await page.getByRole("button", { name: "Gönder" }).click();
+    await expect(page.getByText("Kanıtlı yanıt [S1]")).toBeVisible();
+    await page.route("**/api/v1/documents?**", (route) =>
+      route.fulfill({ status, json: null }),
+    );
+    await page.getByRole("button", { name: "Kaynakları yenile" }).click();
+    await expect(
+      page.getByRole("button", { name: "Evidence.txt kaynağını sil" }),
+    ).toHaveCount(0);
+    await expect(page.getByText("Kanıtlı yanıt [S1]")).toHaveCount(0);
+    await expect(page.getByLabel("Belge dosyaları")).toBeDisabled();
+    await expect(page.getByLabel("Belgen hakkında sor")).toBeDisabled();
+    await expect(
+      page.getByText("Bu projede henüz kaynak yok.", { exact: false }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByText("Son doğrulanmış liste gösteriliyor; güncel olmayabilir."),
+    ).toHaveCount(0);
+  });
+}
+
+test("first source load failure is neither an empty result nor a stale snapshot", async ({
+  page,
+}) => {
+  await setup(page);
+  await login(page);
+  await page.route("**/api/v1/documents?**", (route) =>
+    route.fulfill({ status: 503, json: null }),
+  );
+  await selectProject(page);
+  await expect(
+    page.getByText("Sunucu isteği tamamlayamadı. Daha sonra tekrar deneyin."),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Bu projede henüz kaynak yok.", { exact: false }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Son doğrulanmış liste gösteriliyor; güncel olmayabilir."),
+  ).toHaveCount(0);
+});
+
+test("successful deletion followed by failed refresh never resurrects the source", async ({
+  page,
+}) => {
+  await setup(page);
+  await login(page);
+  await selectProject(page);
+  await upload(page);
+  const remove = page.getByRole("button", {
+    name: "Evidence.txt kaynağını sil",
+  });
+  await expect(remove).toBeEnabled();
+  await page.route("**/api/v1/documents?**", (route) =>
+    route.fulfill({ status: 503, json: null }),
+  );
+  await remove.click();
+  await expect(
+    page.getByText("Son doğrulanmış liste gösteriliyor; güncel olmayabilir."),
+  ).toBeVisible();
+  await expect(remove).toHaveCount(0);
+  await expect(
+    page.getByText("Son doğrulanmış listede kaynak bulunmuyordu."),
+  ).toBeVisible();
+});
+
+test("project refresh outage retains scope, then permission loss clears it", async ({
+  page,
+}) => {
+  await setup(page);
+  await login(page);
+  await selectProject(page);
+  await page.route("**/api/v1/projects", (route) =>
+    route.fulfill({ status: 503, json: null }),
+  );
+  await upload(page);
+  await expect(
+    page.getByText("Son doğrulanmış liste gösteriliyor; güncel olmayabilir."),
+  ).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Aktif proje" })).toHaveValue(
+    projectId,
+  );
+  await expect(
+    page.getByRole("button", { name: "Evidence.txt kaynağını sil" }),
+  ).toBeVisible();
+  await page.route("**/api/v1/projects", (route) =>
+    route.fulfill({ status: 403, json: null }),
+  );
+  await page.getByRole("button", { name: "Projeleri yeniden yükle" }).click();
+  await expect(page.getByText("Bu işlem için yetkiniz yok.")).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Aktif proje" })).toHaveValue(
+    "",
+  );
+  await expect(
+    page.getByRole("button", { name: "Evidence.txt kaynağını sil" }),
+  ).toHaveCount(0);
+  await expect(page.getByLabel("Belge dosyaları")).toBeDisabled();
+  await expect(page.getByLabel("Belgen hakkında sor")).toBeDisabled();
+});

@@ -14,6 +14,10 @@ export class ApiProblem extends Error {
     super(message);
   }
 }
+export const isAccessFailure = (cause: unknown) =>
+  cause instanceof ApiProblem && [401, 403, 404].includes(cause.status);
+export const isTransientFailure = (cause: unknown) =>
+  !(cause instanceof ApiProblem) || cause.status === 429 || cause.status >= 500;
 export async function apiRequest<T>(
   path: string,
   init?: RequestInit,
@@ -57,11 +61,17 @@ export async function apiRequest<T>(
     clearTimeout(timeout);
   }
   if (!response.ok) {
+    const problem =
+      body && typeof body === "object" && !Array.isArray(body) ? body : {};
     const detail =
-      typeof body.detail === "string" ? body.detail : "İstek tamamlanamadı";
+      typeof problem.detail === "string"
+        ? problem.detail
+        : "İstek tamamlanamadı";
     throw new ApiProblem(
       response.status,
-      body.error_code ?? `http_${response.status}`,
+      typeof problem.error_code === "string"
+        ? problem.error_code
+        : `http_${response.status}`,
       detail,
     );
   }

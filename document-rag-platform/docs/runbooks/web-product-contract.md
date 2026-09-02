@@ -2,6 +2,7 @@
 
 Owner: Mehmet KARACAN. Last verified date: 2026-09-02.
 Last verified SHA: see `artifacts/product/2026-09-02-a10/PRODUCT_RECEIPT.json`.
+Partial-state supplement: `artifacts/product/2026-09-02-a10-partial-state/`.
 Scope: local synthetic verification; remote CI and release are not asserted.
 
 ## Prerequisites and admission
@@ -79,6 +80,17 @@ mandatory: a citation visible in the browser alone does not prove persistence.
 The CI RAG workflow encodes the whole connected setup with public test-only values.
 
 ## Stop, recovery, rollback and evidence
+
+Source/job/project list failures are not empty results. On transient network,
+429 or 5xx failure, an existing validated snapshot is labeled potentially stale.
+Source deletion is disabled until refresh succeeds. With no previous snapshot,
+only the error is shown. HTTP 401/403/404 clears the affected source/job snapshot;
+the source workspace also discards chat/citation context and disables upload/chat.
+Project-list denial clears the selected project. Only successful revalidation
+removes this denial. A successful delete stays removed even when its subsequent
+refresh fails. Switching scope or issuing a newer refresh invalidates older reads.
+Use the explicit refresh controls; do not interpret stale content as current
+authorization or backend job progress.
 
 Stop if scope, schema, auth, persistence or object retention differs from expected.
 Do not delete/reset the database, regenerate vectors, retry under a new upload key

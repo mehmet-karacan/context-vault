@@ -1526,7 +1526,7 @@ apps/web/
 - [x] Route/page bileşenleri orchestration dışında iş mantığı taşımayacak.
 - [x] Server state için tek veri erişim katmanı; ad-hoc `fetch` tekrarları olmayacak.
 - [x] Form/schema validation backend contract'ıyla uyumlu olacak.
-- [ ] Loading/error/empty/partial/permission-denied durumları ayrı gösterilecek.
+- [x] Loading/error/empty/partial/permission-denied durumları ayrı gösterilecek. (Yerel reducer ve tarayıcı hata matrisi; §17.10.)
 - [x] Development debug görünümü production bundle'da yetkisiz erişilebilir olmayacak.
 
 ### 17.3 Typed API sözleşmesi
@@ -1624,6 +1624,41 @@ production-ready veya release iddiası yapılmaz. Remote CI çalışması/push y
   ve yerelde parse edildi; remote koşu doğrulanmadığı için ilgili kutular açık kaldı.
 - Detay/komut/kanıt: ADR-012, `docs/runbooks/web-product-contract.md`,
   `artifacts/product/2026-09-02-a10/PRODUCT_RECEIPT.json`.
+
+---
+
+### 17.10 A10 kısmi hata ve scope invalidation ek doğrulaması — 2026-09-02
+
+Başlangıç SHA: `02a7227f6cbed2db5b1d5887012031dbc67977c1`.
+Durum: **yerel hata matrisi PASS; aşama/global kapanış değildir**.
+
+- Geçici job-list hatasının doğrulanmış snapshot'ı kaybedip boş liste gösterdiği,
+  permission hatasında yanıltıcı empty-state üretildiği iki tarayıcı testiyle
+  yeniden üretildi. JSON `null` gövdeli HTTP 403'ün `TypeError` olarak kaybolduğu
+  API unit testi de düzeltmeden önce başarısız oldu.
+- Scope/request kimlikli document reducer, abort ve eski response reddi eklendi.
+  Ağ/429/5xx hatasında yalnız son doğrulanmış snapshot uyarıyla korunur; silme
+  düğmesi kapanır. İlk yükleme hatası empty veya doğrulanmış snapshot sayılmaz.
+- 401/403/404 kaynak/citation snapshot'ını temizler, upload/chat'i kapatır;
+  yeniden erişim yalnız başarılı revalidation sonrası açılır. Proje listesi
+  permission hatası seçili scope'u da kaldırır. Başarılı delete sonrasındaki
+  refresh hatası silinen satırı geri getirmez.
+- **26 unit/component + 20 browser-contract + 1 connected browser PASS**.
+  Lint/typecheck/generated client/build/15-chunk bounded bundle scan PASS.
+  Partial-state ekranı ve mobil workspace otomatik WCAG taramasından geçti.
+  `frontend-design` mevcut palette/typography'yi koruyup semantik uyarıların
+  ayrıştırılmasına rehberlik etti; ayrı görsel tasarım değişikliği yapılmadı.
+- Connected koşu mevcut isolated DB/bucket üzerinde yeni sentetik kayıtlarla
+  tekrarlandı. Fresh connection: **2 message, 1 claim, 1 encrypted citation,
+  1 soft-deleted source, 3 retained encrypted object**. İlk verifier komutu eksik
+  dummy provider config nedeniyle durdu; config açık test değeriyle tamamlanınca
+  salt-okunur kontrol geçti. Gerçek provider çağrısı yapılmadı.
+- Bu tur backend full suite yeniden koşulmadı; önceki 620 PASS/2 skip yalnız
+  §17.9 SHA'sının kanıtıdır. Uygulama DB şeması/backend kodu değiştirilmedi.
+- Komutlar, source manifest ve redakte edilmiş raporlar:
+  `artifacts/product/2026-09-02-a10-partial-state/`.
+  Eski receipt'ler değiştirilmedi. Remote CI, A9 gerçek baseline/owner onayı,
+  A11–A13 ve bağımsız kapanış doğrulaması açık kalır; push yapılmadı.
 
 ---
 

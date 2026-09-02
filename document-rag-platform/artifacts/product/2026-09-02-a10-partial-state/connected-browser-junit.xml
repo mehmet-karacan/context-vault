@@ -1,0 +1,6 @@
+<testsuites id="" name="" tests="1" failures="0" skipped="0" errors="0" time="2.9012029999999998">
+<testsuite name="live.spec.ts" timestamp="2026-09-02T19:24:54.292Z" hostname="redacted-local" tests="1" failures="0" skipped="0" time="1.894" errors="0">
+<testcase name="real HTTP auth → create/select → encrypted upload/worker → retrieval/citation → soft delete" classname="live.spec.ts" time="1.894">
+</testcase>
+</testsuite>
+</testsuites>

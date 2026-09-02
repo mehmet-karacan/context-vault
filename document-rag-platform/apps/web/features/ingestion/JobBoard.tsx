@@ -1,6 +1,7 @@
 "use client";
 import { useEffect } from "react";
 import { useDocuments } from "../documents/useDocuments";
+import { ResourceNotice } from "../documents/ResourceNotice";
 export function JobBoard({ projectId }: { projectId: string }) {
   const documents = useDocuments(projectId);
   const refresh = documents.refresh;
@@ -37,22 +38,27 @@ export function JobBoard({ projectId }: { projectId: string }) {
       </p>
       <button
         className="mb-4 underline"
-        disabled={!projectId}
+        disabled={!projectId || documents.updating}
         onClick={() => void documents.refresh()}
       >
         Durumu yenile
       </button>
-      {documents.error && (
-        <p role="alert" className="text-rust">
-          {documents.error}
-        </p>
-      )}
+      <ResourceNotice
+        error={documents.error}
+        partial={documents.partial}
+        updating={documents.updating && documents.documents !== null}
+      />
       {!projectId ? (
         <p>Önce bir proje seçin.</p>
-      ) : documents.documents === null ? (
+      ) : documents.error && !documents.partial ? null : documents.documents ===
+        null ? (
         <p role="status">İş kayıtları yükleniyor…</p>
       ) : documents.documents.filter((item) => item.job_id).length === 0 ? (
-        <p>Bu projede iş kaydı bulunamadı.</p>
+        <p>
+          {documents.partial
+            ? "Son doğrulanmış listede iş kaydı bulunmuyordu."
+            : "Bu projede iş kaydı bulunamadı."}
+        </p>
       ) : (
         <ul className="space-y-3">
           {documents.documents

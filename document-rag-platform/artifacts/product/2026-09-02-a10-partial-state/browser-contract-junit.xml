@@ -1,0 +1,44 @@
+<testsuites id="" name="" tests="20" failures="0" skipped="0" errors="0" time="10.174017">
+<testsuite name="home.spec.ts" timestamp="2026-09-02T19:24:31.706Z" hostname="redacted-local" tests="20" failures="0" skipped="0" time="8.81" errors="0">
+<testcase name="auth/project/upload/job/chat/citation/delete contract flow and keyboard access" classname="home.spec.ts" time="0.76">
+</testcase>
+<testcase name="same-project follow-up keeps conversation; switching project resets it" classname="home.spec.ts" time="0.477">
+</testcase>
+<testcase name="quarantine remains visible with no raw error or fake progress" classname="home.spec.ts" time="0.303">
+</testcase>
+<testcase name="transport retry reuses upload idempotency key" classname="home.spec.ts" time="0.334">
+</testcase>
+<testcase name="provider outage is distinct from insufficient evidence and has no citation" classname="home.spec.ts" time="0.32">
+</testcase>
+<testcase name="expired credential does not open the workspace" classname="home.spec.ts" time="0.239">
+</testcase>
+<testcase name="login and selected workspace pass automated WCAG scan on mobile" classname="home.spec.ts" time="0.842">
+</testcase>
+<testcase name="project create is explicit and a URL cannot inject another project scope" classname="home.spec.ts" time="0.449">
+</testcase>
+<testcase name="permission failure is visible without server detail" classname="home.spec.ts" time="0.256">
+</testcase>
+<testcase name="local mode still requires explicit workspace selection and server confirmation" classname="home.spec.ts" time="0.278">
+</testcase>
+<testcase name="production diagnostics route has no interactive admin surface" classname="home.spec.ts" time="0.358">
+</testcase>
+<testcase name="job refresh outage retains a labeled stale snapshot, not an empty project" classname="home.spec.ts" time="0.463">
+</testcase>
+<testcase name="job refresh permission loss clears snapshot without claiming an empty project" classname="home.spec.ts" time="0.426">
+</testcase>
+<testcase name="source snapshot survives outage with disabled deletion and recovers" classname="home.spec.ts" time="0.844">
+</testcase>
+<testcase name="HTTP 401 clears sources and citation context and blocks upload/chat" classname="home.spec.ts" time="0.436">
+</testcase>
+<testcase name="HTTP 403 clears sources and citation context and blocks upload/chat" classname="home.spec.ts" time="0.43">
+</testcase>
+<testcase name="HTTP 404 clears sources and citation context and blocks upload/chat" classname="home.spec.ts" time="0.463">
+</testcase>
+<testcase name="first source load failure is neither an empty result nor a stale snapshot" classname="home.spec.ts" time="0.293">
+</testcase>
+<testcase name="successful deletion followed by failed refresh never resurrects the source" classname="home.spec.ts" time="0.439">
+</testcase>
+<testcase name="project refresh outage retains scope, then permission loss clears it" classname="home.spec.ts" time="0.4">
+</testcase>
+</testsuite>
+</testsuites>
