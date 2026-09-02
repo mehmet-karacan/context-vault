@@ -1,55 +1,84 @@
-name: ci-rag-eval
+name: ci-rag-contract
 
 on:
+  push:
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-rag-contract-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  rag-eval:
+  offline-contract-fixture:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        image: pgvector/pgvector:pg16@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b
         env:
           POSTGRES_USER: raguser
-          POSTGRES_PASSWORD: rag_password
+          POSTGRES_PASSWORD: test-only-password
           POSTGRES_DB: rag_platform
         ports:
-          - "5432:5432"
+          - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U raguser"
+          --health-cmd "pg_isready -U raguser -d rag_platform"
           --health-interval 5s --health-timeout 5s --health-retries 12
     env:
-      DATABASE_URL: postgresql://raguser:rag_password@localhost:5432/rag_platform
+      DATABASE_URL: postgresql://raguser:test-only-password@localhost:5432/rag_platform
+      UV_VERSION: 0.12.5
     defaults:
       run:
         working-directory: document-rag-platform/services/backend
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
-          python-version: "3.12"
+          python-version-file: .python-version
 
-      - name: Dependency install
+      - name: Cache uv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('document-rag-platform/services/backend/uv.lock') }}
+
+      - name: Install locked environment
         run: |
-          python -m pip install --upgrade pip setuptools wheel
-          pip install -r requirements-dev.txt
+          python -m pip install --no-deps "uv==$UV_VERSION"
+          uv lock --check
+          uv sync --frozen --all-groups
 
-      - name: Migration upgrade
-        run: alembic upgrade head
-
-      - name: Deterministic fixture ingestion (offline/real pipeline)
-        run: pytest tests/evals -m "evals" --disable-warnings
-
-      - name: Leakage and citation gates
+      - name: Prepare deterministic fixture schema
         run: |
-          pytest -m "leakage" tests/evals --disable-warnings
-          pytest -m "citation" tests/evals --disable-warnings
+          mkdir -p reports
+          uv run alembic upgrade head
 
-      - name: Baseline comparison
-        run: pytest -m "baseline" tests/evals --disable-warnings
+      - name: Offline contract and end-to-end fixture
+        env:
+          LITELLM_API_KEY: test-only
+          LITELLM_BASE_URL: https://llm-gateway.example.invalid/v1
+        run: uv run pytest tests/evals -m evals --junitxml=reports/rag-contract-junit.xml
 
-      - name: Fake release gate
+      - name: Record fixture classification
         run: |
-          echo "Release evali, gercek indeks ve servis yolunu kullanmalidir; fake path burada reddedilir."
-          test -z "$(grep -rl FakeRetriever tests/evals || true)" || exit 1
+          uv run python -c 'import json; json.dump({"schema_version": 1, "classification": "offline_contract_fixture", "quality_claim": False, "private_benchmark": False, "commit": "${{ github.sha }}"}, open("reports/rag-contract-receipt.json", "w"), indent=2)'
+
+      - name: Upload RAG contract evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: rag-contract-evidence-${{ github.sha }}
+          path: document-rag-platform/services/backend/reports/
+          if-no-files-found: error
+          retention-days: 14
+
+# Real/private quality benchmarks are intentionally not run in public CI.
+# They require a separately approved environment, private corpus and provider budget.

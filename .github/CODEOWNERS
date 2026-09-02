@@ -1,0 +1,12 @@
+# Default ownership
+* @mehmet-karacan
+
+# Security, governance and migration changes always request owner review.
+/.github/ @mehmet-karacan
+/SECURITY.md @mehmet-karacan
+/CONTRIBUTING.md @mehmet-karacan
+/AKTIF_GOREV.md @mehmet-karacan
+/scripts/ @mehmet-karacan
+/document-rag-platform/services/backend/alembic/ @mehmet-karacan
+/document-rag-platform/docs/adr/ @mehmet-karacan
+/document-rag-platform/docs/runbooks/ @mehmet-karacan

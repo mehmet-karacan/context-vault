@@ -1,31 +1,73 @@
 name: ci-frontend
 
 on:
+  push:
+  pull_request:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-frontend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: document-rag-platform/apps/web
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-node@v4
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: "20"
+          node-version-file: document-rag-platform/apps/web/.nvmrc
           cache: npm
           cache-dependency-path: document-rag-platform/apps/web/package-lock.json
 
-      - name: Locked install
-        run: npm ci
+      - name: Cache Next build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: document-rag-platform/apps/web/.next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('document-rag-platform/apps/web/package-lock.json') }}-${{ hashFiles('document-rag-platform/apps/web/**/*.ts', 'document-rag-platform/apps/web/**/*.tsx') }}
+          restore-keys: next-${{ runner.os }}-${{ hashFiles('document-rag-platform/apps/web/package-lock.json') }}-
 
-      - name: Lint
-        run: npm run lint
+      - name: Locked install and audit
+        run: |
+          npm ci --ignore-scripts
+          npm audit --audit-level=high
 
-      - name: TypeScript typecheck
-        run: npx tsc --noEmit
+      - name: Lint and typecheck
+        run: |
+          npm run lint
+          npm run typecheck
+
+      - name: Unit and API contract tests
+        run: |
+          npm run unit
+          npm run api-client-check
 
       - name: Production build
         run: npm run build
+
+      - name: Browser smoke
+        run: |
+          npx playwright install --with-deps chromium
+          npm run e2e-smoke
+
+      - name: Upload frontend evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: frontend-evidence-${{ github.sha }}
+          path: |
+            document-rag-platform/apps/web/reports/
+            document-rag-platform/apps/web/test-results/
+          if-no-files-found: error
+          retention-days: 14
