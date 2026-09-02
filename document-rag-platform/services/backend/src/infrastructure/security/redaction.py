@@ -17,7 +17,7 @@ benign Turkish text is never flagged.
 from __future__ import annotations
 
 import re
-from typing import Any, Optional, Tuple
+from typing import Any, Tuple
 
 from ...config import settings
 from ..repositories.ignore_rules import is_sensitive_path as _is_sensitive_path

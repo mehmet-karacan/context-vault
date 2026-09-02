@@ -17,7 +17,7 @@ No Redis is required — the default backing store is in-memory (AKTIF_GOREV.md
 import threading
 import time
 from collections import defaultdict, deque
-from typing import Any, Callable, Deque, Dict, Optional
+from typing import Callable, Deque, Dict, Optional
 
 from fastapi import HTTPException, Request
 

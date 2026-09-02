@@ -5,7 +5,6 @@ import pytest
 
 from src.infrastructure.repositories.ignore_rules import (
     DEFAULT_IGNORE_PATTERNS,
-    IgnoreRules,
     build_ignore_rules,
     is_sensitive_path,
 )

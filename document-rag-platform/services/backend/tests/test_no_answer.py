@@ -6,8 +6,6 @@ lexical/identifier evidence can rescue a low dense score, and that the policy
 relies on configurable thresholds rather than a single hardcoded 0.55.
 """
 
-import pytest
-
 from src.infrastructure.retrieval.no_answer import (
     INTENT_DOCUMENT,
     INTENT_SMALLTALK,

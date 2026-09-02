@@ -19,7 +19,7 @@ from src.infrastructure.repositories.archive_source import (
     ArchiveLimitError,
     ArchiveSourceScanner,
 )
-from src.infrastructure.repositories.scan_result import ScanResult, ScannedFile
+from src.infrastructure.repositories.scan_result import ScannedFile
 
 
 def _make_zip(entries: dict) -> bytes:

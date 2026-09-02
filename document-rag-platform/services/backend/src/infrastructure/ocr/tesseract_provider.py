@@ -160,7 +160,6 @@ class TesseractOcrProvider:
     ) -> List[OcrBlock]:
         """Groups tesseract tokens into blocks by ``block_num`` (reading order)."""
         grouped: dict = {}
-        order_by_block: dict = {}
         for i, text in enumerate(text_data):
             cleaned = (text or "").strip()
             if not cleaned:

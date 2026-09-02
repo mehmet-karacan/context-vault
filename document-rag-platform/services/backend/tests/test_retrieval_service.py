@@ -21,7 +21,6 @@ from src.application.retrieval_service import (
 from src.infrastructure.retrieval.base import RetrievalCandidate
 from src.infrastructure.retrieval.context_builder import ContextBuilder
 from src.infrastructure.retrieval.no_answer import INTENT_DOCUMENT, INTENT_SMALLTALK
-from src.infrastructure.rerankers.noop import NoopReranker
 
 
 class FakeRetriever:

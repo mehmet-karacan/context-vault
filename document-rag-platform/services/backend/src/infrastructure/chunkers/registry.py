@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, List, Optional, Sequence
 
 from ...config import settings
 from ...domain.normalized_content import NormalizedSource, UnitType

@@ -16,8 +16,6 @@ from __future__ import annotations
 
 from typing import Any, List, Optional
 
-from ...domain.ports import Reranker
-
 
 class RemoteReranker:
     """Re-scores candidates through a remote OpenAI-compatible /rerank gate."""

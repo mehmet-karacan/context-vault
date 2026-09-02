@@ -25,7 +25,6 @@ initial quality gate (Recall@5 >= 0.85, MRR@10 >= 0.75).
 from __future__ import annotations
 
 import math
-import statistics
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 

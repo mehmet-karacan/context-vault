@@ -98,7 +98,6 @@ class DocumentChunker:
                 buffer = []
                 buffer_tokens = 0
 
-        in_flight = False
         for unit in units:
             txt = self._render(unit)
             tokens = self.token_counter.count(txt)

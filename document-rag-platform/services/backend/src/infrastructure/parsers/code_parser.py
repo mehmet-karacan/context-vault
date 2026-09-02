@@ -36,8 +36,7 @@ from ...domain.normalized_content import (
     SourceLocator,
     UnitType,
 )
-from ...domain.ports import DocumentParser
-from ..repositories.language_detection import EXTENSION_TO_LANGUAGE, detect_language
+from ..repositories.language_detection import EXTENSION_TO_LANGUAGE
 from ..chunkers.plsql_chunker import strip_plsql_lines
 
 __all__ = ["CodeParser"]

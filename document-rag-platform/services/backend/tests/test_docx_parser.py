@@ -15,7 +15,6 @@ a list, and a table interleaved to prove true body order) and asserts:
 import io
 import json
 
-import pytest
 
 from src.domain.normalized_content import NormalizedSource, UnitType
 from src.infrastructure.parsers.docx_parser import DocxParser
@@ -25,14 +24,13 @@ def _build_fixture_bytes() -> bytes:
     """Builds a .docx in memory with a deliberate body order:
     H1 -> paragraph -> H2 -> list item -> table."""
     import docx
-    from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 
     document = docx.Document()
 
-    h1 = document.add_heading("Bölüm 1", level=1)
+    document.add_heading("Bölüm 1", level=1)
     document.add_paragraph("Paragraf 1")
 
-    h2 = document.add_heading("Alt Konu", level=2)
+    document.add_heading("Alt Konu", level=2)
     document.add_paragraph("Liste Paragrafı örneği", style="List Bullet")
 
     table = document.add_table(rows=2, cols=2)

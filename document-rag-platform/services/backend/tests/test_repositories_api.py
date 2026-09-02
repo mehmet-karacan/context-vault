@@ -13,7 +13,6 @@ dependency overridden by an in-memory fake (pattern from
 
 from __future__ import annotations
 
-import os
 import uuid
 from contextlib import contextmanager
 

@@ -64,7 +64,8 @@ def test_python_parses_to_code_normalized_source(tmp_path):
 
 
 def test_python_symbol_units_have_names_and_line_ranges():
-    import tempfile, os
+    import tempfile
+    import os
 
     with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as fh:
         fh.write(PY)

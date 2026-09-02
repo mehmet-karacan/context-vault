@@ -17,7 +17,6 @@ in-memory ``ObjectStorage`` (DB-free).
 from __future__ import annotations
 
 import json
-from typing import Optional
 
 from src.infrastructure.parsers.image_parser import OcrBlock, OcrResult
 from src.infrastructure.parsers.ocr_artifact import (

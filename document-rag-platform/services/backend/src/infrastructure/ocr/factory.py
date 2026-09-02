@@ -14,7 +14,7 @@ as an extension point (8.2) without touching this module.
 
 from __future__ import annotations
 
-from typing import Callable, Dict, Optional, Type
+from typing import Callable, Dict, Optional
 
 from .base import (
     OcrConfigurationError,

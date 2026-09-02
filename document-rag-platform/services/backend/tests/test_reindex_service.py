@@ -20,7 +20,6 @@ from src.application.reindex_service import ReindexService
 from src.infrastructure.repositories.scan_result import ScannedFile, ScanResult
 from src.models import (
     Chunk,
-    ChunkEmbedding,
     Document,
     DocumentVersion,
     EmbeddingProfile,

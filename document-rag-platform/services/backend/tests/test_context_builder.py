@@ -83,7 +83,9 @@ def test_adjacent_expansion_adds_controlled_neighbours():
         4: _chunk("c4", "content four", seq=4),
     }
     selected = chunks[2]
-    resolver = lambda source, seq: chunks.get(seq)
+
+    def resolver(source, seq):
+        return chunks.get(seq)
 
     result = ContextBuilder(token_counter=_counter(), adjacent_window=1).build(
         [selected], neighbor_resolver=resolver
@@ -209,7 +211,9 @@ def test_deterministic_output():
         _chunk("c2", "second content", seq=2, parent="par"),
     ]
     pool = {"par": _chunk("par", "parent for second", seq=1)}
-    resolver = lambda source, seq: None
+
+    def resolver(source, seq):
+        return None
 
     builder = ContextBuilder(token_counter=_counter())
     r1 = builder.build(chunks, chunk_pool=pool, neighbor_resolver=resolver)

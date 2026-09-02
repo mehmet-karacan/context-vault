@@ -33,7 +33,6 @@ from __future__ import annotations
 
 import codecs
 import concurrent.futures
-import mimetypes
 import os
 import re
 import uuid

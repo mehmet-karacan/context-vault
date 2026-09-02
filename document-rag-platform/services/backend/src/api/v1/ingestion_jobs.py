@@ -5,8 +5,6 @@ written by ``workers.ingestion_tasks.run_ingestion_job``. Nothing here
 mutates job state — jobs are only ever advanced by the worker.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 

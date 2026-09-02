@@ -44,7 +44,6 @@ keeping the pipeline forward-compatible.
 from __future__ import annotations
 
 import mimetypes
-import os
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional

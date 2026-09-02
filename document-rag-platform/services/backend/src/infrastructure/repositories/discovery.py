@@ -24,7 +24,7 @@ import mimetypes
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterator, List, Optional, Sequence, Tuple
+from typing import Callable, Iterator, List, Optional, Tuple
 
 from ...config import Settings, settings as default_settings
 from .ignore_rules import (

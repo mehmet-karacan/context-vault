@@ -39,7 +39,6 @@ from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from golden_spec import load_golden
 from metrics import compute_retrieval_metrics, evaluate_quality_gate
-from generation_metrics import compute_generation_metrics
 
 #: Output files produced by the runner (relative to the runner's parent).
 RESULTS_DIR = Path(__file__).resolve().parent / "results"

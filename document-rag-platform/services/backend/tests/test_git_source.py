@@ -12,9 +12,6 @@ Uses an injected fake ``git`` runner — no real network clone happens. Verifies
 
 from __future__ import annotations
 
-import os
-
-import pytest
 
 from src.infrastructure.repositories.git_source import GitRepositorySource, GitRunner
 from src.infrastructure.repositories.scan_result import ScannedFile

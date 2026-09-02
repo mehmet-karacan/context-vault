@@ -28,7 +28,7 @@ from ...llm import (
     chat_client,
     embed_text,
 )
-from ...models import Chunk, Conversation, Document, Project
+from ...models import Chunk, Document, Project
 from src.application.answer_service import ensure_conversation, generate_answer
 from src.application.retrieval_service import RetrievalService
 from src.infrastructure.rate_limiter import rate_limiter

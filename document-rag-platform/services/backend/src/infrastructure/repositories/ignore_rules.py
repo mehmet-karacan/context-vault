@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Iterable, List, Optional, Sequence
+from typing import List, Optional, Sequence
 
 # --- Default system ignore list (AKTIF_GOREV.md §7.3) -----------------------
 DEFAULT_IGNORE_PATTERNS: tuple[str, ...] = (
