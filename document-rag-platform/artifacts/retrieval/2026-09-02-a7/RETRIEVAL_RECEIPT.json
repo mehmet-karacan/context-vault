@@ -1,0 +1,106 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "verify",
+  "operation_id": "cv3-a7-typed-retrieval-20260902-001",
+  "work_item_id": "CV3-A7-TYPED-RETRIEVAL",
+  "actor": "codex-local-agent",
+  "observed_at_utc": "2026-09-02T17:43:22Z",
+  "baseline_revision": "5e356cdce8f822d8380758bef4f130d57d8633e0",
+  "result_revision": "bffcf45b94c9702ddac43a30171e9d489591efdb",
+  "result": "PASS",
+  "tests": [
+    {
+      "name": "backend full pytest on isolated PostgreSQL",
+      "result": "PASS",
+      "passed": 591,
+      "skipped": 9,
+      "warning_count": 1,
+      "report": "PYTEST.xml"
+    },
+    {
+      "name": "typed retrieval PostgreSQL integration",
+      "result": "PASS",
+      "passed": 3,
+      "verified": [
+        "inactive/cross-project/cross-version leakage zero",
+        "empty document scope returns zero for all retrievers",
+        "HNSW/FTS/trigram index plan eligibility",
+        "durable content-free retrieval run"
+      ]
+    },
+    {
+      "name": "Ruff lint and format check",
+      "result": "PASS",
+      "formatted_files_checked": 167
+    },
+    {
+      "name": "Alembic disposable round-trip",
+      "result": "PASS",
+      "path": "cv3_00000004 -> cv3_00000005 -> cv3_00000004 -> cv3_00000005"
+    },
+    {
+      "name": "Alembic legacy-vector fail-closed gate",
+      "result": "PASS",
+      "observation": "upgrade rejected a legacy vector without a canonical copy and database remained at cv3_00000004"
+    },
+    {
+      "name": "Alembic autogenerate drift check",
+      "result": "PASS",
+      "message": "No new upgrade operations detected"
+    },
+    {
+      "name": "strict migration verifier",
+      "result": "PASS",
+      "head": "cv3_00000005",
+      "columns": 276,
+      "constraints": 116,
+      "invariant_violations": 0,
+      "provider_credentials_loaded": false,
+      "schema_sha256": "1f5d88e9ab3bfea7b344c14f3ace80faa5f048f9cc2eaa3fc32cc94f1fe6603",
+      "report": "MIGRATION_VERIFICATION.json"
+    },
+    {
+      "name": "bounded synthetic retrieval benchmark",
+      "result": "PASS",
+      "hnsw_recall_at_10": 1.0,
+      "chosen_hnsw_ef_search": 20,
+      "vector_index_used": true,
+      "fts_index_used": true,
+      "provider_credentials_loaded": false,
+      "transaction_rolled_back": true,
+      "report": "RETRIEVAL_BENCHMARK.json"
+    }
+  ],
+  "verified_behaviors": [
+    "immutable typed RetrieverHit, FusedHit, RerankedHit, ContextItem and ContextBundle",
+    "complete fail-closed workspace/project/version/profile/classification scope",
+    "canonical chunk_embeddings-only dense retrieval and legacy column removal gate",
+    "transaction-local HNSW tuning and query vector dimension validation",
+    "websearch/phrase FTS with versioned search profile and matched-term provenance",
+    "exact/normalized/qualified/prefix/trigram and opt-in substring identifier matching",
+    "one RRF contribution per retriever and preserved reranker score/model/fallback",
+    "scoped parent/neighbor resolution without cross-version traversal",
+    "deterministic context budgets with selected and rejected reason provenance",
+    "AnswerService prompt content sourced only from ContextBundle.selected_items",
+    "content-free retrieval_runs and fixed-cardinality stage metrics"
+  ],
+  "security_redactions": [
+    "database URL",
+    "provider credentials",
+    "raw query",
+    "full document/context content",
+    "user object keys"
+  ],
+  "data_safety": {
+    "user_database_mutated": false,
+    "existing_user_objects_deleted": false,
+    "tests_used_isolated_postgresql": true,
+    "migration_gate_used_disposable_postgresql": true
+  },
+  "remote_actions": {
+    "push": false,
+    "pull_request": false,
+    "merge": false,
+    "release": false
+  }
+}

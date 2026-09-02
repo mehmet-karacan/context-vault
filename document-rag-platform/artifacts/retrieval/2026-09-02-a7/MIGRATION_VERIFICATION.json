@@ -1,0 +1,83 @@
+{
+  "database": {
+    "active_profiles": 1,
+    "column_count": 276,
+    "constraint_count": 116,
+    "invariants": {
+      "active_profiles_missing_config_hash": 0,
+      "chunks_without_search_profile": 0,
+      "cross_document_version_chunks": 0,
+      "deprecated_chunks_embedding_columns": 0,
+      "document_errors_without_details": 0,
+      "indexed_documents_without_active_version": 0,
+      "invalid_activated_versions": 0,
+      "invalid_active_document_versions": 0,
+      "invalid_ingestion_events": 0,
+      "invalid_ingestion_jobs": 0,
+      "invalid_job_leases": 0,
+      "invalid_retrieval_runs": 0,
+      "non_utc_timestamp_columns": 0,
+      "profileless_embeddings": 0,
+      "terminal_jobs_without_receipts": 0,
+      "unsafe_remote_policy_decisions": 0,
+      "unversioned_chunks": 0,
+      "version_failures_without_details": 0,
+      "versions_without_immutable_profiles_or_policy": 0
+    },
+    "revision": "cv3_00000005",
+    "schema_sha256": "1f5d88e9ab3bfea7b344c14f3ace80faa5f048f9cc2eaa3fc32cc94f1fe6603c"
+  },
+  "expected_head": "cv3_00000005",
+  "findings": [],
+  "migration_graph": {
+    "heads": [
+      "cv3_00000005"
+    ],
+    "revisions": [
+      {
+        "down_revision": [],
+        "path": "document-rag-platform/services/backend/alembic/versions_v3/20260902_0000_cv3_00000001_v3_baseline.py",
+        "revision": "cv3_00000001",
+        "sha256": "69c87ea9dc1d548f6be4515e84cf82969f5675bab5c57da5a4cf1ffb36964710"
+      },
+      {
+        "down_revision": [
+          "cv3_00000001"
+        ],
+        "path": "document-rag-platform/services/backend/alembic/versions_v3/20260902_0100_cv3_00000002_identity_scope.py",
+        "revision": "cv3_00000002",
+        "sha256": "27452e058ee752d5009891f7866b03191cd0d87c9b79a11471a69f16bdd27b9e"
+      },
+      {
+        "down_revision": [
+          "cv3_00000002"
+        ],
+        "path": "document-rag-platform/services/backend/alembic/versions_v3/20260902_0200_cv3_00000003_schema_invariants.py",
+        "revision": "cv3_00000003",
+        "sha256": "fa212db11598147b5673fdfa94e71406622d9426c8d35dee283c539ee7a50f50"
+      },
+      {
+        "down_revision": [
+          "cv3_00000003"
+        ],
+        "path": "document-rag-platform/services/backend/alembic/versions_v3/20260902_0300_cv3_00000004_ingestion_control_plane.py",
+        "revision": "cv3_00000004",
+        "sha256": "7919dbadd48940f9c02b85266e6b2163918830b6ec60f5b10047a52139b0ebb5"
+      },
+      {
+        "down_revision": [
+          "cv3_00000004"
+        ],
+        "path": "document-rag-platform/services/backend/alembic/versions_v3/20260902_0400_cv3_00000005_typed_retrieval.py",
+        "revision": "cv3_00000005",
+        "sha256": "8b71e73920abb6162c6126535e5024ec14664a70b3dc86de94ffb1805830e97e"
+      }
+    ]
+  },
+  "observed_at_utc": "2026-09-02T17:43:09.568255Z",
+  "provider_credentials_loaded": false,
+  "repository_head": "bffcf45b94c9702ddac43a30171e9d489591efdb",
+  "result": "PASS",
+  "schema": "context-vault-migration-verification/v1",
+  "tool_version": "1.1.0"
+}

@@ -1066,63 +1066,63 @@ ContextBundle
   token/chunk budget, truncation summary, provenance
 ```
 
-- [ ] Rank ataması nesneyi yeniden kurup stage score kaybetmeyecek.
-- [ ] Her stage input/output'u typed ve testlenebilir olacak.
-- [ ] Debug serialization full object yerine güvenli projection kullanacak.
+- [x] Rank ataması nesneyi yeniden kurup stage score kaybetmeyecek.
+- [x] Her stage input/output'u typed ve testlenebilir olacak.
+- [x] Debug serialization full object yerine güvenli projection kullanacak.
 
 ### 14.3 Dense retrieval
 
-- [ ] Yalnız `chunk_embeddings` ve seçili aktif embedding profile kullanılacak.
-- [ ] `chunks.embedding` legacy fallback backfill doğrulandıktan sonra kaldırılacak.
-- [ ] Query vector dimension/profile doğrulanmadan SQL çalışmayacak.
-- [ ] Active document version, completed status, workspace/project ve policy predicates zorunlu.
-- [ ] HNSW/IVFFlat tuning transaction-local ayarlarla ve benchmark kanıtıyla yapılacak.
-- [ ] Vector index'in gerçekten kullanıldığı query planıyla doğrulanacak.
-- [ ] Empty query embedding veya provider failure “boş vector ile devam” değil typed error/no-answer nedeni üretir.
+- [x] Yalnız `chunk_embeddings` ve seçili aktif embedding profile kullanılacak.
+- [x] `chunks.embedding` legacy fallback backfill doğrulandıktan sonra kaldırılacak.
+- [x] Query vector dimension/profile doğrulanmadan SQL çalışmayacak.
+- [x] Active document version, completed status, workspace/project ve policy predicates zorunlu.
+- [x] HNSW/IVFFlat tuning transaction-local ayarlarla ve benchmark kanıtıyla yapılacak.
+- [x] Vector index'in gerçekten kullanıldığı query planıyla doğrulanacak.
+- [x] Empty query embedding veya provider failure “boş vector ile devam” değil typed error/no-answer nedeni üretir.
 
 ### 14.4 Lexical retrieval
 
-- [ ] Dil/identifier doğasına uygun FTS strategy benchmark ile seçilecek.
-- [ ] `plainto_tsquery(simple)` tek zorunlu yol olmayacak; phrase, OR/websearch ve identifier sorguları ayrılacak.
-- [ ] Hardcoded stopword/substring rescue false-positive etkisi ölçülecek.
-- [ ] Search vector'ın üretildiği parser/profile sürümü izlenecek.
-- [ ] Active version/scope/policy predicates dense ile aynı olacak.
-- [ ] Rank açıklaması matched terms ve query formunu taşıyacak.
+- [x] Dil/identifier doğasına uygun FTS strategy benchmark ile seçilecek.
+- [x] `plainto_tsquery(simple)` tek zorunlu yol olmayacak; phrase, OR/websearch ve identifier sorguları ayrılacak.
+- [x] Hardcoded stopword/substring rescue false-positive etkisi ölçülecek.
+- [x] Search vector'ın üretildiği parser/profile sürümü izlenecek.
+- [x] Active version/scope/policy predicates dense ile aynı olacak.
+- [x] Rank açıklaması matched terms ve query formunu taşıyacak.
 
 ### 14.5 Identifier retrieval
 
-- [ ] Exact, normalized exact, prefix, trigram/fuzzy ve substring ayrı match type olacak.
-- [ ] `%`, `_`, escape ve case normalization güvenli uygulanacak.
-- [ ] Leading wildcard varsayılan olmayacak.
-- [ ] `pg_trgm` gerçekten kullanılıyorsa uygun index/operator ve query planı kanıtlanacak; kullanılmıyorsa “trigram” adı kaldırılacak.
-- [ ] Arbitrary sabit skor yerine match type/rank kalibrasyonu benchmark ile yapılacak.
-- [ ] PL/SQL/package/schema/table/column/symbol metadata ayrı alanlarda aranabilecek.
+- [x] Exact, normalized exact, prefix, trigram/fuzzy ve substring ayrı match type olacak.
+- [x] `%`, `_`, escape ve case normalization güvenli uygulanacak.
+- [x] Leading wildcard varsayılan olmayacak.
+- [x] `pg_trgm` gerçekten kullanılıyorsa uygun index/operator ve query planı kanıtlanacak; kullanılmıyorsa “trigram” adı kaldırılacak.
+- [x] Arbitrary sabit skor yerine match type/rank kalibrasyonu benchmark ile yapılacak.
+- [x] PL/SQL/package/schema/table/column/symbol metadata ayrı alanlarda aranabilecek.
 
 ### 14.6 RRF, dedupe ve reranking
 
-- [ ] Bir retriever listesinde aynı chunk bir kez katkı verir.
-- [ ] RRF contribution map kaydedilir; ham skorlar toplanmaz.
-- [ ] Dedupe, content_hash/source/version metadata bağlandıktan sonra yapılır.
-- [ ] Aynı içerik farklı version'daysa yalnız aktif/scope uygun olan kalır.
-- [ ] Reranker input'u maksimum aday/token bütçesine uyar.
-- [ ] Reranker kapalı/başarısızsa açıkça `noop/fallback_reason` yazar; score uydurmaz.
-- [ ] Reranker sonucu `reranker_score` ve model/profile ile korunur.
-- [ ] Reranker fallback güvenlik scope'unu değiştirmez.
+- [x] Bir retriever listesinde aynı chunk bir kez katkı verir.
+- [x] RRF contribution map kaydedilir; ham skorlar toplanmaz.
+- [x] Dedupe, content_hash/source/version metadata bağlandıktan sonra yapılır.
+- [x] Aynı içerik farklı version'daysa yalnız aktif/scope uygun olan kalır.
+- [x] Reranker input'u maksimum aday/token bütçesine uyar.
+- [x] Reranker kapalı/başarısızsa açıkça `noop/fallback_reason` yazar; score uydurmaz.
+- [x] Reranker sonucu `reranker_score` ve model/profile ile korunur.
+- [x] Reranker fallback güvenlik scope'unu değiştirmez.
 
 ### 14.7 Parent/neighbor ve ContextBundle
 
-- [ ] Neighbor anahtarı yalnız `source_id + sequence_no` olmayacak; workspace, project, document, version, source_file ve sequence birlikte sınırlar.
-- [ ] Parent/neighbor resolver aynı `RetrievalScope` ile çağrılır.
-- [ ] Parent pool yalnız son seçilmiş adaylarla sınırlı değil; scope'lu resolver üzerinden gerektiğinde alınır.
-- [ ] Duplicate content/token budget optimizasyonu deterministic olur.
-- [ ] Context budget model tokenizer/profile ile hesaplanır; kaba kelime sayımı yalnız açık fallback olabilir.
-- [ ] Bundle seçilmeyen adaylar ve ret nedenlerini debug için tutar, modele göndermez.
-- [ ] Full content loglanmaz; evidence hash ve redacted snippet kullanılır.
-- [ ] AnswerService yalnız `ContextBundle.selected_items` üzerinden prompt kurabilir.
+- [x] Neighbor anahtarı yalnız `source_id + sequence_no` olmayacak; workspace, project, document, version, source_file ve sequence birlikte sınırlar.
+- [x] Parent/neighbor resolver aynı `RetrievalScope` ile çağrılır.
+- [x] Parent pool yalnız son seçilmiş adaylarla sınırlı değil; scope'lu resolver üzerinden gerektiğinde alınır.
+- [x] Duplicate content/token budget optimizasyonu deterministic olur.
+- [x] Context budget model tokenizer/profile ile hesaplanır; kaba kelime sayımı yalnız açık fallback olabilir.
+- [x] Bundle seçilmeyen adaylar ve ret nedenlerini debug için tutar, modele göndermez.
+- [x] Full content loglanmaz; evidence hash ve redacted snippet kullanılır.
+- [x] AnswerService yalnız `ContextBundle.selected_items` üzerinden prompt kurabilir.
 
 ### 14.8 Retrieval run kaydı ve observability
 
-- [ ] Her sorgu için `retrieval_runs` kaydı:
+- [x] Her sorgu için `retrieval_runs` kaydı:
   - principal/workspace/project;
   - normalized query hash, gerekiyorsa şifreli/retention'lı raw query;
   - retriever/profile/config sürümleri;
@@ -1131,30 +1131,56 @@ ContextBundle
   - no-answer reason;
   - error/fallback reason;
   - bundle hash.
-- [ ] Metric cardinality kontrolü yapılır; raw document/chunk id metric label olmaz.
-- [ ] Slow query ve index miss trace edilir.
+- [x] Metric cardinality kontrolü yapılır; raw document/chunk id metric label olmaz.
+- [x] Slow query ve index miss trace edilir.
 
 ### 14.9 Test matrisi
 
-- [ ] Same-retriever duplicate RRF katkısını artırmaz.
-- [ ] Rank yeniden ataması reranker ve stage skorlarını korur.
-- [ ] Legacy/canonical embedding karışmaz.
-- [ ] Inactive/cross-project/cross-version chunk hiçbir retriever'da dönmez.
-- [ ] Empty document list sonuç döndürmez.
-- [ ] Unknown filter ve signature mismatch fail-closed.
-- [ ] Neighbor başka version/project'e geçemez.
-- [ ] Identifier wildcard/case/escape adversarial testleri.
-- [ ] Dense/FTS/trigram index usage plan testleri.
-- [ ] Bundle token bütçesi hiçbir koşulda aşılmaz.
+- [x] Same-retriever duplicate RRF katkısını artırmaz.
+- [x] Rank yeniden ataması reranker ve stage skorlarını korur.
+- [x] Legacy/canonical embedding karışmaz.
+- [x] Inactive/cross-project/cross-version chunk hiçbir retriever'da dönmez.
+- [x] Empty document list sonuç döndürmez.
+- [x] Unknown filter ve signature mismatch fail-closed.
+- [x] Neighbor başka version/project'e geçemez.
+- [x] Identifier wildcard/case/escape adversarial testleri.
+- [x] Dense/FTS/trigram index usage plan testleri.
+- [x] Bundle token bütçesi hiçbir koşulda aşılmaz.
 
 ### 14.10 Kabul kriterleri
 
-- [ ] Retrieval pipeline uçtan uca typed ve immutable stage provenance taşır.
-- [ ] Tüm retriever'larda scope, active version ve profile predicates zorunlu.
-- [ ] Legacy embedding fallback üretim sorgusundan kaldırılmış.
-- [ ] RRF duplicate, rerank score loss ve cross-version neighbor hataları testlerle kapanmış.
-- [ ] Modele giden tek bağlam nesnesi `ContextBundle`.
-- [ ] Permission/version leakage `0`.
+- [x] Retrieval pipeline uçtan uca typed ve immutable stage provenance taşır.
+- [x] Tüm retriever'larda scope, active version ve profile predicates zorunlu.
+- [x] Legacy embedding fallback üretim sorgusundan kaldırılmış.
+- [x] RRF duplicate, rerank score loss ve cross-version neighbor hataları testlerle kapanmış.
+- [x] Modele giden tek bağlam nesnesi `ContextBundle`.
+- [x] Permission/version leakage `0`.
+
+### 14.11 Aşama 7 uygulama kaydı — 2026-09-02
+
+- Durum: `PASS`; uygulama commit'i
+  `bffcf45b94c9702ddac43a30171e9d489591efdb`.
+- İzole PostgreSQL üzerinde backend tam regresyonu `591 passed, 9 skipped`
+  sonucu verdi; üç zorunlu typed retrieval entegrasyon testi ayrıca geçti.
+- `cv3_00000004 → cv3_00000005 → cv3_00000004 → cv3_00000005`
+  migration çevrimi ve `alembic check` geçti. Legacy-only vector bulunan ayrı
+  fail-gate DB'sinde upgrade veri silmeden reddedildi ve DB `cv3_00000004`
+  seviyesinde kaldı.
+- Strict verifier 276 kolon, 116 constraint ve 19 invariant'ın tamamını `0`
+  buldu; schema hash
+  `1f5d88e9ab3bfea7b344c14f3ace80faa5f048f9cc2eaa3fc32cc94f1fe6603`.
+- Bounded benchmark'ta HNSW `ef_search=20/40/80` için recall@10 `1.0`;
+  seçilen değer `20`. Vector, FTS ve trigram plan uygunluğu doğrulandı;
+  benchmark transaction'ı geri alındı ve provider credential yüklenmedi.
+- Scope/active-version/profile leakage entegrasyon fixture'ında `0`; empty
+  document scope üç retriever'da da sıfır sonuç verdi. RRF duplicate,
+  reranker provenance, neighbor boundary, wildcard/escape ve ContextBundle
+  bütçe regresyonları geçti.
+- Public-safe kanıt:
+  `artifacts/retrieval/2026-09-02-a7/RETRIEVAL_RECEIPT.json`; hash manifesti
+  aynı dizindeki `SHA256SUMS` dosyasındadır.
+- Yapılmayanlar: kullanıcı/verili DB migration'ı, mevcut object silme, remote
+  push/PR/merge/release ve history rewrite.
 
 ---
 
