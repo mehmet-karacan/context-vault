@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "verify",
+  "operation_id": "cv3-data-import-20260902-001",
+  "work_item_id": "CV3-PHASE-1-DATA-IMPORT",
+  "attempt_id": "cv3-data-import-attempt-001",
+  "actor": "codex-local-agent",
+  "tool_adapter": "codex-desktop-local-shell",
+  "started_at": "2026-09-02T12:17:00Z",
+  "finished_at": "2026-09-02T12:25:04Z",
+  "baseline_revision": "73003964367a314fe880ef9dc21c5dde9237610d",
+  "result_revision": "8c7db03ba21d9f9a98161cc1538ad990819f42bc",
+  "scope_hash": "sha256:e2885d66f23ac9ae843d4600aff81db529af78549b436ec40a44ca06ac429ff4",
+  "context_manifest_hash": "sha256:320643427c25e5c194ab6e1ff5247317c979b3227a7ccd2d2e434bcc00cc3cb9",
+  "idempotency_key_hash": "sha256:d2507d11d5da4c2b935864439155779eaa64564f5572fc5dbdf0c63beed70877",
+  "commands": [
+    "read-only source dry run",
+    "apply with controlled stop after documents",
+    "resume apply",
+    "idempotent second apply",
+    "target migration and invariant verification",
+    "V3 target startup smoke",
+    "offline eval tests"
+  ],
+  "exit_status": 0,
+  "tests": [
+    {"name": "dry run", "result": "PASS"},
+    {"name": "controlled interruption", "result": "RECOVERY_REQUIRED", "exit_code": 1},
+    {"name": "resume", "result": "PASS"},
+    {"name": "idempotent re-run", "result": "PASS"},
+    {"name": "target invariants", "result": "PASS", "violations": 0},
+    {"name": "target startup smoke", "result": "PASS", "http_status": 200},
+    {"name": "offline eval", "result": "PASS", "passed": 33}
+  ],
+  "artifacts": [
+    {"reference": "private-evidence:cv3-v3-lineage-20260902/import-dry", "classification": "private-json", "sha256": "40f4270843dc2f691d37c95491c5b73f88b618c3c755c8bc15bb2a751ac42ff8"},
+    {"reference": "private-evidence:cv3-v3-lineage-20260902/import-partial", "classification": "private-json", "sha256": "453196ac6ef1bcbf8bc30403bde21d2bf5bf1b1f3305a970fac88cbed8725d3a"},
+    {"reference": "private-evidence:cv3-v3-lineage-20260902/import-complete", "classification": "private-json", "sha256": "5adafc040723906aef83a1c12566c288de8700471bd8f81f5b761ca52a0371e6"},
+    {"reference": "private-evidence:cv3-v3-lineage-20260902/import-rerun", "classification": "private-json", "sha256": "7ab87978bd9bfde672da1d1492cfd6055afcef9974f7dc074a1c514d615858f0"}
+  ],
+  "security_redactions": ["database URLs", "credentials", "row content"],
+  "rollback": {
+    "strategy": "discard isolated target or restore target pre-import backup",
+    "source_read_only": true,
+    "source_mutated": false
+  },
+  "result": "PASS"
+}

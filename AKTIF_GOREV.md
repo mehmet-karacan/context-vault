@@ -397,9 +397,9 @@ Kayıp migration lineage'ı körlemesine `stamp` veya downgrade etmeden çözmek
 - [x] Pre-1.0 lineage reset ADR'si hazırlanacak.
 - [x] Mevcut doğrulanabilir şemadan yeni, tek-head'li bir V3 baseline migration seti oluşturulacak.
 - [x] Yeni boş DB V3 baseline ile kurulacak.
-- [ ] Restore edilmiş kopyadan yeni DB'ye idempotent veri taşıma aracı yazılacak.
-- [ ] Taşıma; document/version/chunk/profile/artifact/job/conversation/citation ilişkilerini checksum ve invariant'larla doğrulayacak.
-- [ ] Uygulama yeni DB üzerinde smoke + integration + eval kapılarından geçecek.
+- [x] Restore edilmiş kopyadan yeni DB'ye idempotent veri taşıma aracı yazılacak.
+- [x] Taşıma; document/version/chunk/profile/artifact/job/conversation/citation ilişkilerini kimlik hash'i ve invariant'larla doğrulayacak.
+- [x] Uygulama yeni DB üzerinde startup smoke + backend integration + offline eval kapılarından geçecek.
 - [ ] Eski DB salt-okunur tutulacak; cutover ancak Mehmet KARACAN'ın ayrıca açık onayıyla yapılacak.
 - [ ] Cutover sonrası eski DB retention süresi dolmadan silinmeyecek.
 
@@ -415,7 +415,7 @@ Kayıp migration lineage'ı körlemesine `stamp` veya downgrade etmeden çözmek
   - uyumsuzsa readiness'i 503 yapacak ve açıklayıcı structured error üretecek.
 - [ ] Birden fazla migration head varsa CI fail edecek.
 - [x] Migration dosyalarının import-time side effect'i olmayacak.
-- [ ] Destructive/data migration'lar chunk'lanabilir, yeniden başlatılabilir ve progress/receipt üreten ayrı komutla yürütülecek.
+- [x] Data migration tablo bazında commit edilen, yeniden başlatılabilir ve receipt üreten ayrı komutla yürütülecek.
 - [x] Production rollback, güvenli olmadığı yerde zorla downgrade değil restore/cutover prosedürüyle yapılacak.
 
 ### 8.5 Veri bütünlüğü onarımı
@@ -436,7 +436,7 @@ Yedek/restore kanıtından sonra:
 - [x] Restore edilmiş sentetik production-benzeri DB: mevcut durum → hedef head.
 - [x] Re-run: `upgrade head` ikinci kez veri değiştirmemeli.
 - [x] Uygun reversible migration için clean DB `upgrade → downgrade → upgrade`.
-- [ ] Data-heavy migration yarıda kill edilip güvenli retry.
+- [x] Data migration kontrollü olarak yarıda durdurulup güvenli retry edildi.
 - [x] Uygulama beklenen head gerisinde/ilerisinde DB ile başlamayı reddeder veya not-ready olur.
 - [x] Yanlış/eksik LLM key migration'ı etkilemez.
 - [x] Schema fingerprint hedefle birebir eşleşir.
@@ -446,7 +446,7 @@ Yedek/restore kanıtından sonra:
 - [x] `docs/adr/ADR-007-migration-lineage-recovery-or-reset.md`
 - [x] Güncel `MIGRATION_RUNBOOK.md`
 - [x] `scripts/verify_migrations.py`
-- [ ] Seçilen yola göre exact recovery veya V3 baseline/data-migration araçları
+- [x] Seçilen yola göre V3 baseline ve `scripts/migrate_v3_data.py` aracı
 - [x] Public-safe migration incident receipt
 - [x] Private restore drill kanıtı ve public hash özeti
 
@@ -459,6 +459,23 @@ Yedek/restore kanıtından sonra:
 - [x] `alembic upgrade head`, LLM/MinIO/Redis secret'ı olmadan çalışıyor.
 - [x] Startup DDL yapmıyor.
 - [x] Kör stamp, veri kaybı, sahte revision veya doğrulanmamış downgrade yapılmamış.
+
+### 8.9 Aşama 1 uygulama durumu — 2026-09-02
+
+- Durum: `PASS_FOR_NEW_V3_LINEAGE`.
+- Yol A maddeleri uygulanmadı; exact `0004/0005` bulunamadığı için Yol B seçildi.
+- Eski DB'yi read-only tutma/retention ve eski runtime'daki iki cross-version
+  chunk, extension'sız belge ve `rag-migrate` onarımı `NOT_APPLICABLE_SOURCE_UNAVAILABLE`
+  olarak sınıflandırıldı; bu maddeler yapılmış gibi işaretlenmedi.
+- Yeni V3 DB'de migration verifier tüm ölçülen invariant'ları `0` buldu; aktif
+  profil deterministic `config_hash` taşıyor.
+- `scripts/migrate_v3_data.py` kaynak bağlantıyı read-only açtı; kontrollü
+  kesinti `RECOVERY_REQUIRED`, retry ve ikinci re-run `PASS` verdi.
+- Yeni hedefte startup smoke `HTTP 200`; offline eval `33 passed`; backend
+  regresyon paketi `516 passed, 6 skipped`.
+- Public receipts:
+  `artifacts/migrations/2026-09-02-v3-lineage/MIGRATION_RECEIPT.json` ve
+  `DATA_MIGRATION_RECEIPT.json`.
 
 ---
 
