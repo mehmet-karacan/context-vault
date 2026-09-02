@@ -17,7 +17,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import relationship
 
-from .db import Base
+from .persistence import Base
 
 EMBEDDING_DIMENSION = 1024  # BAAI/bge-m3 output size
 

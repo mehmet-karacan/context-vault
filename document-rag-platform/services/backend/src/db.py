@@ -1,8 +1,9 @@
 from pgvector.psycopg2 import register_vector
 from sqlalchemy import create_engine, event, text
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 from .config import settings
+from .migration_settings import EXPECTED_ALEMBIC_HEAD
 
 DATABASE_URL = settings.DATABASE_URL
 
@@ -14,14 +15,13 @@ def _register_vector_type(dbapi_connection, connection_record):
     try:
         register_vector(dbapi_connection)
     except Exception:
-        # First-ever connection may run before `CREATE EXTENSION vector`
-        # (see init_db below); later connections register fine. Roll back
-        # so the failed lookup doesn't leave the transaction aborted.
+        # A database that has not reached the migration head may not expose
+        # the vector type yet. Roll back the failed type lookup; the startup
+        # revision admission check below will then fail closed.
         dbapi_connection.rollback()
 
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-Base = declarative_base()
 
 
 def get_db():
@@ -33,31 +33,20 @@ def get_db():
 
 
 def init_db():
-    with engine.connect() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        conn.commit()
-
-    from . import models  # noqa: F401  (kept so Base.metadata is fully populated
-    # for anything that still inspects it, e.g. tests)
-
-    # Schema creation is Alembic's job now (see alembic/versions/ and
-    # MIGRATION_RUNBOOK.md), not app startup's. This function used to call
-    # Base.metadata.create_all(bind=engine) here unconditionally, which
-    # silently created tables Alembic didn't know about and collided with
-    # `alembic upgrade` ("relation ... already exists"). Run
-    # `alembic upgrade head` before starting the app against a fresh
-    # database; startup no longer creates or alters tables.
-
+    """Verify schema admission without creating or repairing database objects."""
     with engine.connect() as conn:
         try:
-            conn.execute(
-                text(
-                    "CREATE INDEX IF NOT EXISTS chunks_embedding_idx "
-                    "ON chunks USING hnsw (embedding vector_cosine_ops)"
-                )
-            )
-            conn.commit()
-        except Exception:
-            # HNSW requires pgvector >= 0.5.0; harmless to skip on older images,
-            # search still works without the index at this data volume.
-            conn.rollback()
+            current = conn.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar_one()
+        except Exception as exc:
+            raise RuntimeError(
+                "Database schema is unavailable or not managed by Alembic; "
+                "run the documented migration command before application startup"
+            ) from exc
+
+    if current != EXPECTED_ALEMBIC_HEAD:
+        raise RuntimeError(
+            "Database migration revision mismatch: "
+            f"expected {EXPECTED_ALEMBIC_HEAD}, observed {current}"
+        )
