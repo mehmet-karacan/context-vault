@@ -112,6 +112,7 @@ def test_api_key_cannot_enumerate_another_workspace() -> None:
             "X-Workspace-ID": str(own_workspace_id),
         }
         with TestClient(app) as client:
+            identity = client.get("/api/v1/session", headers=headers)
             listed = client.get("/api/v1/projects", headers=headers)
             cross_project = client.get(
                 f"/api/v1/documents/{other_document_id}",
@@ -140,6 +141,10 @@ def test_api_key_cannot_enumerate_another_workspace() -> None:
             )
 
         assert listed.status_code == 200
+        assert identity.status_code == 200
+        assert identity.json()["workspace_id"] == str(own_workspace_id)
+        assert identity.json()["roles"] == ["member"]
+        assert raw_key not in identity.text
         assert [row["id"] for row in listed.json()] == [str(own_project_id)]
         assert cross_project.status_code == 404
         assert absent.status_code == 404

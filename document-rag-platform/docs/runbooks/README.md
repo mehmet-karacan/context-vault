@@ -10,6 +10,7 @@
 | [Repository scan limits](repository-scan-limits.md) | Mehmet KARACAN | 2026-09-02 | repository security policy |
 | [Scoped retrieval](retrieval.md) | Mehmet KARACAN | 2026-09-02 | typed scope, plans, benchmark, incident diagnosis |
 | [Structured answers](structured-answers.md) | Mehmet KARACAN | 2026-09-02 | schema gate, claim citation, provider failure/retention |
+| [Web product contract](web-product-contract.md) | Mehmet KARACAN | 2026-09-02 | generated schema, scoped auth/browser and fresh-connection durability |
 | [Upload and ingestion jobs](upload-and-ingestion-jobs.md) | Mehmet KARACAN | 2026-09-02 | job API and worker workflow |
 | [Migration/recovery](../../services/backend/MIGRATION_RUNBOOK.md) | Mehmet KARACAN | 2026-09-02 | V3 lineage receipts |
 

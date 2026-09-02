@@ -5,6 +5,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from src.domain.clock import Clock, SYSTEM_CLOCK
 
@@ -14,7 +15,7 @@ class ConcurrentActivationError(RuntimeError):
 
 
 def activate_document_version(
-    session,
+    session: Session,
     *,
     document_id: UUID,
     version_id: UUID,

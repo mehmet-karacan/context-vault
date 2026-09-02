@@ -201,6 +201,33 @@ class RetrievalResult:
             "context": _redacted_debug_context(self.context),
         }
 
+    def public_diagnostics(
+        self, *, timings_ms: Dict[str, float] | None = None
+    ) -> Dict[str, Any]:
+        """Allowlisted external view: never query, content, metadata or matched terms."""
+        return {
+            "retrieval_run_id": self.retrieval_run_id,
+            "bundle_hash": self.bundle_hash,
+            "stages": {
+                stage: [
+                    {
+                        "chunk_id": str(hit.chunk_id),
+                        "rank": hit.rank,
+                        "score": hit.score,
+                    }
+                    for hit in hits
+                ]
+                for stage, hits in self.stage_candidates.items()
+                if stage in {"dense", "lexical", "identifier", "fusion", "rerank"}
+            },
+            "fallback_reason": "reranker_fallback"
+            if any(
+                getattr(hit, "fallback_reason", None) for hit in self.ranked_candidates
+            )
+            else None,
+            "timings_ms": timings_ms or {},
+        }
+
 
 def _redacted_debug_context(
     context: Optional[ContextBuildResult],

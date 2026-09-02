@@ -54,7 +54,9 @@ jobs:
           npm run api-client-check
 
       - name: Production build
-        run: npm run build
+        run: |
+          npm run build
+          npm run bundle-check
 
       - name: Browser smoke
         run: |

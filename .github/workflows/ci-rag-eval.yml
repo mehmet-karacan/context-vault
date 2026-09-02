@@ -16,7 +16,7 @@ concurrency:
 jobs:
   offline-contract-fixture:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     services:
       postgres:
         image: pgvector/pgvector:pg16@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b
@@ -100,12 +100,53 @@ jobs:
           --json-output reports/offline-e2e.json
           --markdown-output reports/offline-e2e.md
 
+      - name: Set up Node for connected browser gate
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: document-rag-platform/apps/web/.nvmrc
+          cache: npm
+          cache-dependency-path: document-rag-platform/apps/web/package-lock.json
+
+      - name: Start isolated browser HTTP fixture
+        env:
+          LITELLM_API_KEY: test-only
+          CV3_BROWSER_TEST_MODE: "1"
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE cv3_a10_browser'
+          export DATABASE_URL='postgresql://raguser:test-only-password@localhost:5432/cv3_a10_browser'
+          uv run alembic upgrade head
+          uv run python tests/browser_fixture_server.py > reports/browser-server.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:44999/health/live; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:44999/health/live
+
+      - name: Connected browser product flow (local deterministic models)
+        working-directory: document-rag-platform/apps/web
+        env:
+          CV3_BROWSER_LIVE: "1"
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: reports/live-e2e-junit.xml
+        run: |
+          npm ci --ignore-scripts
+          npx playwright install --with-deps chromium
+          npm run build
+          npx playwright test live.spec.ts
+
+      - name: Fresh-connection citation durability and retention gate
+        env:
+          LITELLM_API_KEY: test-only
+          DATABASE_URL: postgresql://raguser:test-only-password@localhost:5432/cv3_a10_browser
+        run: uv run python tests/verify_browser_fixture.py
+
       - name: Upload RAG contract evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: rag-contract-evidence-${{ github.sha }}
-          path: document-rag-platform/services/backend/reports/
+          path: |
+            document-rag-platform/services/backend/reports/
+            document-rag-platform/apps/web/reports/
           if-no-files-found: error
           retention-days: 14
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Protocol
 
 
 class DocumentStatus(StrEnum):
@@ -43,7 +44,7 @@ class JobStage(StrEnum):
     ACTIVATING = "activating"
 
 
-_JOB_TRANSITIONS = {
+_JOB_TRANSITIONS: dict[JobStatus, set[JobStatus]] = {
     JobStatus.QUEUED: {JobStatus.RUNNING, JobStatus.CANCELLED, JobStatus.FAILED},
     JobStatus.RUNNING: {
         JobStatus.RETRYING,
@@ -58,7 +59,11 @@ _JOB_TRANSITIONS = {
 }
 
 
-def transition_job(job, target: JobStatus | str) -> None:
+class JobState(Protocol):
+    status: str
+
+
+def transition_job(job: JobState, target: JobStatus | str) -> None:
     current = JobStatus(job.status)
     target_status = JobStatus(target)
     if target_status == current:

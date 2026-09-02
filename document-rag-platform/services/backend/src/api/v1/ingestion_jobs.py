@@ -8,6 +8,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from uuid import UUID
+from .contracts import IngestionEventResponse, IngestionJobResponse
 
 from ...db import get_db
 from ...domain.clock import utc_now
@@ -36,7 +37,9 @@ def _serialize_job(job: IngestionJob) -> dict:
         "document_id": str(job.version.document_id) if job.version else None,
         "status": job.status,
         "stage": job.stage,
-        "progress": job.progress,
+        # No measured sub-stage percentage exists yet. Terminal completion is
+        # authoritative; a default/stale database zero is not progress evidence.
+        "progress": 100 if job.status == "completed" else None,
         "attempt": job.attempt,
         "error_code": job.error_code,
         "error_message": job.error_message,
@@ -70,7 +73,7 @@ def _scoped_job(db: Session, project_id: UUID, job_id: UUID) -> IngestionJob:
     return job
 
 
-@router.get("/{job_id}")
+@router.get("/{job_id}", response_model=IngestionJobResponse)
 def get_ingestion_job(
     job_id: UUID,
     project_id: UUID,
@@ -82,7 +85,7 @@ def get_ingestion_job(
     return _serialize_job(job)
 
 
-@router.get("/{job_id}/events")
+@router.get("/{job_id}/events", response_model=list[IngestionEventResponse])
 def list_ingestion_job_events(
     job_id: UUID,
     project_id: UUID,
@@ -100,7 +103,7 @@ def list_ingestion_job_events(
     return [_serialize_event(e) for e in events]
 
 
-@router.post("/{job_id}/cancel")
+@router.post("/{job_id}/cancel", response_model=IngestionJobResponse)
 def cancel_ingestion_job(
     job_id: UUID,
     project_id: UUID,

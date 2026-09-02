@@ -17,6 +17,7 @@ kod, test veya receipt kaynağını gösterir.
 | [ADR-009](ADR-009-durable-ingestion-content-policy-and-gc.md) | Accepted | Mehmet KARACAN | ADR-003 reindex section | `cv3_00000004`, A6 integration/fault tests |
 | [ADR-010](ADR-010-typed-scoped-retrieval-context-bundle.md) | Accepted | Mehmet KARACAN | ADR-004 untyped/legacy-vector transition | `cv3_00000005`, A7 retrieval receipt |
 | [ADR-011](ADR-011-structured-answer-citation-provenance.md) | Accepted | Mehmet KARACAN | Free-text answer/candidate-wide citation persistence | `cv3_00000006`, A8 answer receipt |
+| [ADR-012](ADR-012-scoped-web-product-contract.md) | Accepted locally | Mehmet KARACAN | Handwritten web contracts and implicit project scope | A10 product/browser/durability gates |
 
 Last inventory verification: 2026-09-02. `scripts/generate_verified_status.py`
 checks that every `ADR-*.md` file is represented here.

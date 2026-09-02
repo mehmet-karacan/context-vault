@@ -8,7 +8,8 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
+from .contracts import ProjectResponse
 from sqlalchemy.orm import Session
 
 from ...db import get_db
@@ -24,7 +25,8 @@ router = APIRouter(tags=["projects"])
 
 
 class ProjectCreate(BaseModel):
-    name: str
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    name: str = Field(min_length=1, max_length=200)
 
 
 def serialize_project(project: Project, document_count: Optional[int] = None) -> dict:
@@ -38,7 +40,7 @@ def serialize_project(project: Project, document_count: Optional[int] = None) ->
     }
 
 
-@router.get("/projects")
+@router.get("/projects", response_model=list[ProjectResponse])
 def list_projects(
     db: Session = Depends(get_db),
     principal: PrincipalContext = Depends(get_principal_context),
@@ -55,7 +57,7 @@ def list_projects(
     return [serialize_project(p) for p in projects]
 
 
-@router.post("/projects")
+@router.post("/projects", response_model=ProjectResponse)
 def create_project(
     payload: ProjectCreate,
     db: Session = Depends(get_db),

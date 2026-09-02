@@ -15,6 +15,8 @@ skorlarını gösterebilir".
 from __future__ import annotations
 
 import hashlib
+import logging
+from time import perf_counter
 import uuid
 from typing import List, Optional
 from uuid import UUID
@@ -37,6 +39,7 @@ from src.infrastructure.retrieval.identifier import IdentifierRetriever
 from src.infrastructure.retrieval.lexical import LexicalRetriever
 from src.infrastructure.security.auth import require_admin, require_project_access
 from src.models import AuditEvent
+from .contracts import DiagnosticsResponse
 
 router = APIRouter(tags=["debug"])
 
@@ -49,7 +52,7 @@ class RetrievalDebugRequest(BaseModel):
     document_ids: Optional[List[UUID]] = None
 
 
-@router.post("/debug/retrieval")
+@router.post("/debug/retrieval", response_model=DiagnosticsResponse)
 def debug_retrieval(
     req: RetrievalDebugRequest,
     _: None = Depends(rate_limiter),
@@ -61,6 +64,7 @@ def debug_retrieval(
         raise HTTPException(status_code=404, detail="Not found")
     require_project_access(db, principal, req.project_id)
     log_structured(
+        logging.INFO,
         "retrieval_debug_access",
         project_id=str(req.project_id),
         query_id=hashlib.sha256(req.query.encode("utf-8")).hexdigest()[:16],
@@ -107,5 +111,8 @@ def debug_retrieval(
         session=db,
     )
 
+    started = perf_counter()
     result = service.retrieve(req.query, scope, debug=True)
-    return result.to_dict(debug=True)
+    return result.public_diagnostics(
+        timings_ms={"total": (perf_counter() - started) * 1000}
+    )

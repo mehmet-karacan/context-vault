@@ -7,14 +7,16 @@ describe("apiUrl", () => {
     vi.unstubAllGlobals();
   });
 
-  it("uses localhost during server-side rendering", () => {
-    expect(apiUrl("/health/live")).toBe("http://localhost:8000/health/live");
+  it("uses same-origin during server-side rendering", () => {
+    expect(apiUrl("/health/live")).toBe("/health/live");
   });
 
-  it("uses the browser hostname without trusting a caller-provided origin", () => {
-    vi.stubGlobal("window", { location: { hostname: "vault.example.test" } });
+  it("uses deployment runtime configuration", () => {
+    vi.stubGlobal("window", {
+      __CONTEXT_VAULT_CONFIG__: { apiBaseUrl: "https://api.example.test" },
+    });
     expect(apiUrl("/api/v1/projects")).toBe(
-      "http://vault.example.test:8000/api/v1/projects",
+      "https://api.example.test/api/v1/projects",
     );
   });
 });

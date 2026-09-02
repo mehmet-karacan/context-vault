@@ -16,7 +16,8 @@ from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+from .contracts import ChatModelsResponse, ChatResponse
 from sqlalchemy.orm import Session
 
 from ...config import settings
@@ -61,7 +62,7 @@ router = APIRouter(tags=["chat"])
 class ChatQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    query: str
+    query: str = Field(min_length=1, max_length=8000)
     project_id: UUID
     document_ids: Optional[List[UUID]] = None
     scope: Literal["all", "documents", "images", "code"] = "all"
@@ -220,12 +221,12 @@ def _active_embedding_profile(db: Session) -> EmbeddingProfile:
     return profile
 
 
-@router.get("/chat/models")
+@router.get("/chat/models", response_model=ChatModelsResponse)
 def list_chat_models():
     return {"models": AVAILABLE_CHAT_MODELS, "default": CHAT_MODEL}
 
 
-@router.post("/chat/query")
+@router.post("/chat/query", response_model=ChatResponse)
 def query_chat(
     chat_query: ChatQuery,
     _: None = Depends(rate_limiter),
@@ -300,5 +301,13 @@ def query_chat(
         model=chat_query.model,
         debug=debug,
         conversation_history=conversation_history,
+        feature_new_citations=True,
     )
-    return response
+    # The service flushes to keep transaction ownership at the HTTP boundary.
+    # Closing get_db without this commit silently discards the entire answer.
+    db.commit()
+    return {
+        **response,
+        "conversation_id": conversation_id,
+        "retrieval_debug": retrieval_result.public_diagnostics() if debug else None,
+    }

@@ -4,6 +4,8 @@ import hashlib
 from datetime import timedelta
 from typing import Optional
 from uuid import UUID
+from .contracts import DocumentResponse, UploadResponse
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from sqlalchemy.orm import Session
@@ -81,6 +83,9 @@ def serialize_document(
         "chunks_count": chunks_count if chunks_count is not None else len(doc.chunks),
         "error_message": doc.error_message,
         "project_id": str(doc.project_id),
+        "active_version_id": str(doc.active_version_id)
+        if doc.active_version_id
+        else None,
         "project_name": doc.project.name if doc.project else None,
         # --- Aşama 2.4 additive fields: only populated when this document
         # has an associated IngestionJob (async pipeline). None for
@@ -168,11 +173,13 @@ def _upload_document_async(
     }
 
 
-@router.post("/documents/upload")
+@router.post("/documents/upload", response_model=UploadResponse)
 def upload_document(
     file: UploadFile = File(...),
     project_id: UUID = Form(...),
-    data_classification: str = Form("internal"),
+    data_classification: Literal[
+        "public", "internal", "confidential", "restricted"
+    ] = Form("internal"),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     _: None = Depends(rate_limiter),
     db: Session = Depends(get_db),
@@ -190,7 +197,7 @@ def upload_document(
     )
 
 
-@router.get("/documents")
+@router.get("/documents", response_model=list[DocumentResponse])
 def list_documents(
     project_id: UUID,
     db: Session = Depends(get_db),
@@ -223,7 +230,7 @@ def _scoped_document(db: Session, project_id: UUID, doc_id: UUID) -> Document:
     return document
 
 
-@router.get("/documents/{doc_id}")
+@router.get("/documents/{doc_id}", response_model=DocumentResponse)
 def get_document(
     doc_id: UUID,
     project_id: UUID,
@@ -244,12 +251,11 @@ def get_document_status(
 ):
     require_project_access(db, principal, project_id)
     document = _scoped_document(db, project_id, doc_id)
-    progress = {"uploaded": 20, "processing": 60, "indexed": 100, "error": 0}
     return {
         "id": str(document.id),
         "status": document.status,
         "chunks_count": len(document.chunks),
-        "progress": progress.get(document.status, 0),
+        "progress": 100 if document.status == "indexed" else None,
     }
 
 
