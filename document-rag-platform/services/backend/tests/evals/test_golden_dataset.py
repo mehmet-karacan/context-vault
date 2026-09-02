@@ -1,3 +1,5 @@
+import pytest
+
 from golden_spec import (
     DEFAULT_DATASET_PATH,
     REQUIRED_CATEGORIES,
@@ -6,6 +8,8 @@ from golden_spec import (
     missing_categories,
     validate_dataset,
 )
+
+pytestmark = pytest.mark.evals
 
 
 def test_dataset_exists():

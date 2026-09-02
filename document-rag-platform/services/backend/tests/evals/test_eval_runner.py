@@ -1,8 +1,12 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from golden_spec import load_golden
-from run_eval import FakeRetriever, run_eval
+from run_eval import FakeAnswerer, FakeRetriever, run_eval
+
+pytestmark = pytest.mark.evals
 
 GOLDEN = Path(__file__).parent / "datasets" / "golden.jsonl"
 
@@ -17,7 +21,10 @@ def test_runner_produces_report_dict(tmp_path):
 
     assert report["n_records"] == len(subset)
     assert report["retrieval"]["recall@5"] is not None
-    assert "quality_gate" in report
+    assert report["classification"] == "offline_contract_fixture"
+    assert report["quality_claim"] is False
+    assert "quality_gate" not in report
+    assert "contract_check" in report
     assert "generation" in report
 
 
@@ -32,7 +39,8 @@ def test_runner_writes_loggable_json(tmp_path):
     assert out_json.is_file()
     data = json.loads(out_json.read_text(encoding="utf-8"))
     assert data["retrieval"]["mrr@10"] == report["retrieval"]["mrr@10"]
-    assert data["quality_gate"]["pass"] is True
+    assert data["quality_claim"] is False
+    assert data["contract_check"]["pass"] is True
 
 
 def test_fake_retriever_is_deterministic_and_relevant():
@@ -49,8 +57,23 @@ def test_fake_retriever_returns_nothing_for_no_answer():
     assert fake("merhaba", scope="none", expected_sources=[]) == []
 
 
-def test_full_fake_run_passes_quality_gate(tmp_path):
+def test_full_fake_run_is_never_a_quality_claim(tmp_path):
     golden = load_golden(GOLDEN)
     out_json = tmp_path / "metrics-report.json"
     report = run_eval(golden, output_json=out_json, output_md=tmp_path / "r.md")
-    assert report["quality_gate"]["pass"] is True
+    assert report["classification"] == "offline_contract_fixture"
+    assert report["quality_claim"] is False
+    assert "quality_gate" not in report
+
+
+def test_explicit_fake_components_are_never_a_quality_claim(tmp_path):
+    report = run_eval(
+        load_golden(GOLDEN),
+        retriever=FakeRetriever(),
+        answerer=FakeAnswerer(),
+        output_json=tmp_path / "metrics-report.json",
+        output_md=tmp_path / "metrics-report.md",
+    )
+
+    assert report["quality_claim"] is False
+    assert "quality_gate" not in report

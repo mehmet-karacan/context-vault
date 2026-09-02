@@ -1,6 +1,8 @@
 # Aşama 9 Evaluation Report
 
 - runner: `tests/evals/run_eval.py`
+- classification: `offline_contract_fixture`
+- quality claim: `false`
 - degerlendirilen soru sayisi: 66
 
 ## Retrieval
@@ -18,9 +20,9 @@
 
 ### Latency
 
-- {'p50_ms': 0.002349999704165384, 'p95_ms': 0.004050001734867692}
+- {'p50_ms': 0.0019165163394063711, 'p95_ms': 0.0031042436603456736}
 
-## Quality gate
+## Contract check
 
 - True
 - no-answer hata orani raporlandi: fp=0, fn=0, overall=0.0

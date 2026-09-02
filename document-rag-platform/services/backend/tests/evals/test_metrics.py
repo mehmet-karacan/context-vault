@@ -12,6 +12,8 @@ from metrics import (
     recall_at_k,
 )
 
+pytestmark = pytest.mark.evals
+
 
 def test_recall_at_k():
     ranked = ["a", "b", "c"]

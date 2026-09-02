@@ -1,6 +1,8 @@
 {
   "schema_version": "1.0",
   "runner": "tests/evals/run_eval.py",
+  "classification": "offline_contract_fixture",
+  "quality_claim": false,
   "n_records": 66,
   "retrieval": {
     "n_queries": 66,
@@ -22,16 +24,9 @@
       "overall_error": 0.0
     },
     "latency": {
-      "p50_ms": 0.002349999704165384,
-      "p95_ms": 0.004050001734867692
+      "p50_ms": 0.0019165163394063711,
+      "p95_ms": 0.0031042436603456736
     }
-  },
-  "quality_gate": {
-    "pass": true,
-    "reasons": [
-      "no-answer hata orani raporlandi: fp=0, fn=0, overall=0.0",
-      "generation raporlandi: n_samples=57"
-    ]
   },
   "generation": {
     "n_samples": 57,
@@ -1840,5 +1835,12 @@
       "n_relevant": 1,
       "first_relevant_rank": 1
     }
-  ]
+  ],
+  "contract_check": {
+    "pass": true,
+    "reasons": [
+      "no-answer hata orani raporlandi: fp=0, fn=0, overall=0.0",
+      "generation raporlandi: n_samples=57"
+    ]
+  }
 }

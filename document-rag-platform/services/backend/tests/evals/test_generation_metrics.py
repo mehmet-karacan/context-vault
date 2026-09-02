@@ -9,6 +9,8 @@ from generation_metrics import (
     unsourced_claim_rate,
 )
 
+pytestmark = pytest.mark.evals
+
 
 def test_citation_coverage():
     claims = [
