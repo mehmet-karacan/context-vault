@@ -44,7 +44,9 @@ class RetrievalCandidate:
 
     def __post_init__(self) -> None:
         if self.source not in VALID_SOURCES:
-            raise ValueError(f"invalid source: {self.source!r} (expected one of {VALID_SOURCES})")
+            raise ValueError(
+                f"invalid source: {self.source!r} (expected one of {VALID_SOURCES})"
+            )
 
 
 @dataclass(frozen=True)
@@ -147,7 +149,9 @@ def normalize_filters(
     return terms
 
 
-def filter_spec(filters: Optional[Dict[str, Any]], scope_key: str = "scope") -> List[Dict[str, Any]]:
+def filter_spec(
+    filters: Optional[Dict[str, Any]], scope_key: str = "scope"
+) -> List[Dict[str, Any]]:
     """Serializable form of ``normalize_filters`` (for embedding in a spec)."""
     return [asdict(t) for t in normalize_filters(filters, scope_key=scope_key)]
 

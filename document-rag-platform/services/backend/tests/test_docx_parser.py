@@ -58,8 +58,13 @@ def _parse(tmp_path) -> NormalizedSource:
 
 def test_supports_docx_extension_and_mime():
     parser = DocxParser()
-    assert parser.supports("application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".docx")
-    assert parser.supports("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "")
+    assert parser.supports(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".docx",
+    )
+    assert parser.supports(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document", ""
+    )
     assert parser.supports("", ".DOCX")
     assert not parser.supports("application/pdf", ".pdf")
     assert not parser.supports("text/plain", ".txt")

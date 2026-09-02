@@ -64,7 +64,9 @@ def unsourced_claim_rate(claims: Sequence[Mapping[str, Any]]) -> float:
     return 1.0 - citation_coverage(claims)
 
 
-def citation_accuracy(citations: Sequence[Any], expected_sources: Sequence[Any]) -> float:
+def citation_accuracy(
+    citations: Sequence[Any], expected_sources: Sequence[Any]
+) -> float:
     """Fraction of cited sources that belong to the expected (golden) set."""
     cited = _cited_sources(citations)
     if not cited:
@@ -125,7 +127,9 @@ def compute_generation_metrics(sample: Mapping[str, Any]) -> Dict[str, Any]:
     unsourced = unsourced_claim_rate(claims)
     accuracy = citation_accuracy(citations, expected_sources)
     sufficiency = answer_sufficiency(answer, required_aspects)
-    contradiction = contradictory_source_behavior(citations, contradictory_pairs, hedged=hedged)
+    contradiction = contradictory_source_behavior(
+        citations, contradictory_pairs, hedged=hedged
+    )
 
     return {
         "citation_coverage": coverage,

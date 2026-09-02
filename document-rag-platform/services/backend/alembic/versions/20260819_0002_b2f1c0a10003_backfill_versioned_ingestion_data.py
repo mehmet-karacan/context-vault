@@ -29,6 +29,7 @@ Every statement below is idempotent (guarded with ``WHERE NOT EXISTS`` /
 ``IS NULL`` / ``ON CONFLICT DO NOTHING``), so re-running ``alembic upgrade
 head`` after a partial failure is safe and will not create duplicates.
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -120,7 +121,10 @@ def upgrade() -> None:
             )
             """
         ),
-        {"parser_profile": _LEGACY_PARSER_PROFILE, "chunker_profile": _LEGACY_CHUNKER_PROFILE},
+        {
+            "parser_profile": _LEGACY_PARSER_PROFILE,
+            "chunker_profile": _LEGACY_CHUNKER_PROFILE,
+        },
     )
 
     # 3. Point documents.active_version_id at the version just created.
@@ -213,7 +217,10 @@ def downgrade() -> None:
             )
             """
         ),
-        {"parser_profile": _LEGACY_PARSER_PROFILE, "chunker_profile": _LEGACY_CHUNKER_PROFILE},
+        {
+            "parser_profile": _LEGACY_PARSER_PROFILE,
+            "chunker_profile": _LEGACY_CHUNKER_PROFILE,
+        },
     )
 
     bind.execute(
@@ -227,7 +234,10 @@ def downgrade() -> None:
             )
             """
         ),
-        {"parser_profile": _LEGACY_PARSER_PROFILE, "chunker_profile": _LEGACY_CHUNKER_PROFILE},
+        {
+            "parser_profile": _LEGACY_PARSER_PROFILE,
+            "chunker_profile": _LEGACY_CHUNKER_PROFILE,
+        },
     )
 
     bind.execute(
@@ -237,7 +247,10 @@ def downgrade() -> None:
             WHERE parser_profile = :parser_profile AND chunker_profile = :chunker_profile
             """
         ),
-        {"parser_profile": _LEGACY_PARSER_PROFILE, "chunker_profile": _LEGACY_CHUNKER_PROFILE},
+        {
+            "parser_profile": _LEGACY_PARSER_PROFILE,
+            "chunker_profile": _LEGACY_CHUNKER_PROFILE,
+        },
     )
 
     bind.execute(

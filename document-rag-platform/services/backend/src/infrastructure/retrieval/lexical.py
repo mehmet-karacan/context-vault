@@ -39,16 +39,65 @@ DEFAULT_TEXT_SEARCH_CONFIG: str = "simple"
 #: appear in Turkish content, so the meaningful term "stp" never matches even
 #: though it is present in the corpus. Dropping the fillers keeps the remaining
 #: significant terms (here just "stp") as the FTS query.
-LEXICAL_STOPWORDS: frozenset = frozenset({
-    # English function / question / auxiliary filler words.
-    "a", "an", "and", "are", "as", "at", "be", "by", "did", "do", "does",
-    "for", "from", "how", "in", "into", "is", "it", "its", "of", "on", "or",
-    "that", "the", "this", "to", "was", "were", "what", "when", "where",
-    "which", "who", "why", "with",
-    # Turkish question / connector / filler words.
-    "nedir", "nasil", "nasıl", "neler", "nelerdir", "neden", "hangi", "kac", "kaç",
-    "icin", "için", "ile", "ve", "bir", "bu", "su", "şu", "ne",
-})
+LEXICAL_STOPWORDS: frozenset = frozenset(
+    {
+        # English function / question / auxiliary filler words.
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "by",
+        "did",
+        "do",
+        "does",
+        "for",
+        "from",
+        "how",
+        "in",
+        "into",
+        "is",
+        "it",
+        "its",
+        "of",
+        "on",
+        "or",
+        "that",
+        "the",
+        "this",
+        "to",
+        "was",
+        "were",
+        "what",
+        "when",
+        "where",
+        "which",
+        "who",
+        "why",
+        "with",
+        # Turkish question / connector / filler words.
+        "nedir",
+        "nasil",
+        "nasıl",
+        "neler",
+        "nelerdir",
+        "neden",
+        "hangi",
+        "kac",
+        "kaç",
+        "icin",
+        "için",
+        "ile",
+        "ve",
+        "bir",
+        "bu",
+        "su",
+        "şu",
+        "ne",
+    }
+)
 
 
 def filter_query_terms(query_text: str) -> str:
@@ -63,7 +112,8 @@ def filter_query_terms(query_text: str) -> str:
     if not query_text:
         return query_text
     tokens = [
-        t for t in re.findall(r"\w+", query_text)
+        t
+        for t in re.findall(r"\w+", query_text)
         if len(t) > 1 and t.lower() not in LEXICAL_STOPWORDS
     ]
     if not tokens:
@@ -84,7 +134,8 @@ def significant_query_terms(query_text: str) -> "List[str]":
     if not query_text:
         return []
     tokens = [
-        t for t in re.findall(r"\w+", query_text.lower())
+        t
+        for t in re.findall(r"\w+", query_text.lower())
         if len(t) > 1 and t not in LEXICAL_STOPWORDS
     ]
     if not tokens:
@@ -131,7 +182,9 @@ class LexicalRetriever:
         session: Any = None,
         scope_key: str = "scope",
     ):
-        self.candidate_k = candidate_k if candidate_k is not None else settings.LEXICAL_CANDIDATE_K
+        self.candidate_k = (
+            candidate_k if candidate_k is not None else settings.LEXICAL_CANDIDATE_K
+        )
         self.ts_config = ts_config
         self.session = session
         self.scope_key = scope_key

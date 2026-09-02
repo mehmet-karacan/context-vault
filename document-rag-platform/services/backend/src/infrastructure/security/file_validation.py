@@ -133,9 +133,8 @@ def _mime_category(mime_type: Optional[str]) -> Optional[str]:
     mime = mime_type.split(";", 1)[0].strip().lower()
     if mime == "application/pdf":
         return "pdf"
-    if (
-        "openxmlformats-officedocument" in mime
-        and any(t in mime for t in ("wordprocessingml", "spreadsheetml", "presentationml"))
+    if "openxmlformats-officedocument" in mime and any(
+        t in mime for t in ("wordprocessingml", "spreadsheetml", "presentationml")
     ):
         return "office"
     if mime.startswith("image/"):
@@ -148,6 +147,7 @@ def _mime_category(mime_type: Optional[str]) -> Optional[str]:
 
 
 # --- Magic-byte sniffer ------------------------------------------------------
+
 
 def detect_magic_type(file_bytes: bytes) -> Optional[str]:
     """Return the detected content category from magic bytes, else ``None``.
@@ -163,7 +163,11 @@ def detect_magic_type(file_bytes: bytes) -> Optional[str]:
         return "pdf"
     if head.startswith(b"PK\x03\x04"):
         return "office"  # ZIP container (DOCX/XLSX/PPTX)
-    if head.startswith(b"\x89PNG") or head.startswith(b"\xff\xd8\xff") or head.startswith(b"GIF8"):
+    if (
+        head.startswith(b"\x89PNG")
+        or head.startswith(b"\xff\xd8\xff")
+        or head.startswith(b"GIF8")
+    ):
         return "image"
     if head.startswith(b"II*\x00") or head.startswith(b"MM\x00*"):
         return "image"  # TIFF

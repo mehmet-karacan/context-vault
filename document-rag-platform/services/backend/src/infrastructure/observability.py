@@ -180,7 +180,9 @@ class MetricsCollector:
                 name: {
                     "count": len(values),
                     "total_ms": round(sum(values) * 1000, 3),
-                    "mean_ms": round((sum(values) / len(values)) * 1000, 3) if values else 0.0,
+                    "mean_ms": round((sum(values) / len(values)) * 1000, 3)
+                    if values
+                    else 0.0,
                 }
                 for name, values in self._durations.items()
             }

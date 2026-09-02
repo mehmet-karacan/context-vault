@@ -130,7 +130,11 @@ def _build_storage() -> MinioObjectStorage:
 
 
 def _emit_event(
-    db: Session, job: IngestionJob, stage: str, status: str, message: Optional[str] = None
+    db: Session,
+    job: IngestionJob,
+    stage: str,
+    status: str,
+    message: Optional[str] = None,
 ) -> None:
     db.add(
         IngestionEvent(
@@ -231,7 +235,9 @@ def _clear_existing_chunks_for_version(db: Session, version_id) -> None:
     version (Aşama 2 kabul kriteri: "Aynı job tekrar alınırsa duplicate
     chunk/embedding oluşmaz").
     """
-    db.query(Chunk).filter(Chunk.version_id == version_id).delete(synchronize_session=False)
+    db.query(Chunk).filter(Chunk.version_id == version_id).delete(
+        synchronize_session=False
+    )
     db.commit()
 
 
@@ -269,7 +275,9 @@ def run_ingestion_job(
         job.error_code = "version_not_found"
         job.error_message = f"DocumentVersion {job.version_id} not found"
         job.finished_at = datetime.utcnow()
-        _emit_event(db, job, stage="validating", status="failed", message=job.error_message)
+        _emit_event(
+            db, job, stage="validating", status="failed", message=job.error_message
+        )
         db.commit()
         raise IngestionJobError(job.error_message)
 
@@ -279,7 +287,9 @@ def run_ingestion_job(
         job.error_code = "document_not_found"
         job.error_message = f"Document {version.document_id} not found"
         job.finished_at = datetime.utcnow()
-        _emit_event(db, job, stage="validating", status="failed", message=job.error_message)
+        _emit_event(
+            db, job, stage="validating", status="failed", message=job.error_message
+        )
         db.commit()
         raise IngestionJobError(job.error_message)
 
@@ -457,7 +467,9 @@ def run_ingestion_job(
             job.error_code = type(exc).__name__
             job.error_message = str(exc)
             job.finished_at = datetime.utcnow()
-            _emit_event(db, job, stage=job.stage or "unknown", status="failed", message=str(exc))
+            _emit_event(
+                db, job, stage=job.stage or "unknown", status="failed", message=str(exc)
+            )
             # Best-effort: also surface the failure on documents.status (same
             # re-fetch-after-rollback pattern as ``job`` above). Never lets a
             # failure to resolve version/document mask the real job failure.

@@ -65,7 +65,9 @@ def _plsrc(text, *, language="plsql", source_id="plsrc-1", file_path="emp.pks"):
         text=text,
         order=1,
         hierarchy=Hierarchy(heading_path=["emp.pks"]),
-        locator=SourceLocator(file_path=file_path, line_start=1, line_end=len(text.splitlines())),
+        locator=SourceLocator(
+            file_path=file_path, line_start=1, line_end=len(text.splitlines())
+        ),
         metadata={"language": language},
     )
     return NormalizedSource(
@@ -168,7 +170,9 @@ def test_oversized_procedure_splits_at_inner_blocks_and_keeps_context():
         assert child.parent_chunk_id == parent_id
         assert child.token_count <= 25
         # signature + enclosing symbol context re-added to every inner chunk
-        assert "Signature: CREATE OR REPLACE PROCEDURE big_proc IS" in child.embedding_text
+        assert (
+            "Signature: CREATE OR REPLACE PROCEDURE big_proc IS" in child.embedding_text
+        )
         assert "Symbol: BIG_PROC" in child.embedding_text
         # inner chunks only ever start at inner-block boundaries
         first_line = child.content.splitlines()[0].strip()
@@ -182,7 +186,9 @@ def test_oversized_procedure_splits_at_inner_blocks_and_keeps_context():
 
 
 def test_empty_or_no_code_unit_returns_empty():
-    empty = NormalizedSource(source_id="x", source_type="code", language="plsql", units=[])
+    empty = NormalizedSource(
+        source_id="x", source_type="code", language="plsql", units=[]
+    )
     assert _chunker().chunk_source(empty) == []
 
 
@@ -214,7 +220,9 @@ def test_registry_generic_python_code_routes_with_symbol_header(tmp_path):
         encoding="utf-8",
     )
     source = CodeParser().parse(str(path), "sample.py")
-    chunks = ChunkerRegistry(token_counter=FakeTokenCounter(), max_tokens=900).chunk(source)
+    chunks = ChunkerRegistry(token_counter=FakeTokenCounter(), max_tokens=900).chunk(
+        source
+    )
 
     assert all(c.chunk_type == "code" for c in chunks)
     assert any("Language: python" in c.embedding_text for c in chunks)

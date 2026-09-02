@@ -53,9 +53,7 @@ class RemoteReranker:
 
     # -- Reranker port ------------------------------------------------------
 
-    def rerank(
-        self, query: str, candidates: List[Any], top_k: int
-    ) -> List[Any]:
+    def rerank(self, query: str, candidates: List[Any], top_k: int) -> List[Any]:
         if not candidates:
             return list(candidates)
 
@@ -116,9 +114,7 @@ def _extract_results(response: Any) -> List[Any]:
     return results or []
 
 
-def _reorder(
-    candidates: List[Any], results: List[Any], top_k: int
-) -> List[Any]:
+def _reorder(candidates: List[Any], results: List[Any], top_k: int) -> List[Any]:
     """Maps gateway results back to the original candidates, re-ordered.
 
     Handles both dict-style and object-style candidate/result shapes. Each

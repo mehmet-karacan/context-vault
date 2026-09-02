@@ -32,8 +32,17 @@ class _FixedCounter:
         return max(1, len(text or "") // self.divisor)
 
 
-def _chunk(chunk_id, content, *, seq=0, source="src-1", ctype="document",
-           parent=None, metadata=None, heading=()):
+def _chunk(
+    chunk_id,
+    content,
+    *,
+    seq=0,
+    source="src-1",
+    ctype="document",
+    parent=None,
+    metadata=None,
+    heading=(),
+):
     return ChunkCandidate(
         chunk_id=chunk_id,
         source_id=source,
@@ -76,9 +85,9 @@ def test_adjacent_expansion_adds_controlled_neighbours():
     selected = chunks[2]
     resolver = lambda source, seq: chunks.get(seq)
 
-    result = ContextBuilder(
-        token_counter=_counter(), adjacent_window=1
-    ).build([selected], neighbor_resolver=resolver)
+    result = ContextBuilder(token_counter=_counter(), adjacent_window=1).build(
+        [selected], neighbor_resolver=resolver
+    )
 
     rel = {i.chunk_id: i.relation for i in result.items}
     assert rel["c1"] == "adjacent"
@@ -107,7 +116,9 @@ def test_dedup_expansion_not_repeated():
     parent = _chunk("par", "parent text that equals selected")
     child = _chunk("child", "parent text that equals selected", parent="par")
 
-    result = ContextBuilder(token_counter=_counter()).build([child], chunk_pool={"par": parent})
+    result = ContextBuilder(token_counter=_counter()).build(
+        [child], chunk_pool={"par": parent}
+    )
 
     assert len(result.items) == 1
     assert result.items[0].relation == "selected"

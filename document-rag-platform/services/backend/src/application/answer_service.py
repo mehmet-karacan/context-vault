@@ -213,11 +213,25 @@ def _locator(chunk: Any) -> Dict[str, Any]:
         loc.update(raw)
         raw = None
     elif raw is not None:
-        for key in ("page_start", "page_end", "line_start", "line_end", "file_path", "symbol_name"):
+        for key in (
+            "page_start",
+            "page_end",
+            "line_start",
+            "line_end",
+            "file_path",
+            "symbol_name",
+        ):
             val = _get(raw, key)
             if val is not None:
                 loc[key] = val
-    for key in ("page_start", "page_end", "line_start", "line_end", "file_path", "symbol_name"):
+    for key in (
+        "page_start",
+        "page_end",
+        "line_start",
+        "line_end",
+        "file_path",
+        "symbol_name",
+    ):
         if key not in loc:
             val = _get(chunk, key)
             if val is not None:
@@ -304,7 +318,9 @@ def pack_evidence(
                 chunk_id=str(chunk_id) if chunk_id is not None else None,
                 document_id=str(document_id) if document_id is not None else None,
                 version_id=str(version_id) if version_id is not None else None,
-                source_file_id=str(source_file_id) if source_file_id is not None else None,
+                source_file_id=str(source_file_id)
+                if source_file_id is not None
+                else None,
                 document_name=document_name,
                 source_type=source_type,
                 heading_path=heading_path,
@@ -339,10 +355,7 @@ def build_prompt(
     user/evidence section and out of the system instructions."""
     blocks = format_evidence(evidence)
     if evidence:
-        user = (
-            f"SORU:\n{query}\n\n"
-            f"{EVIDENCE_OPEN}\n{blocks}\n{EVIDENCE_CLOSE}"
-        )
+        user = f"SORU:\n{query}\n\n" f"{EVIDENCE_OPEN}\n{blocks}\n{EVIDENCE_CLOSE}"
     else:
         user = f"SORU:\n{query}"
     return {"system": system_prompt, "user": user}
@@ -394,7 +407,10 @@ def _persist_citations(
     evidence: List[Evidence],
 ) -> None:
     """Write the Message + MessageCitation rows for the used evidence (Aşama 6)."""
-    from src.models import Message, MessageCitation  # local import: keeps module DB-light
+    from src.models import (
+        Message,
+        MessageCitation,
+    )  # local import: keeps module DB-light
 
     def _uuid(value: Any) -> Any:
         if value is None:

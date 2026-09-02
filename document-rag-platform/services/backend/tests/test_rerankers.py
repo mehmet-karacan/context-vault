@@ -199,9 +199,7 @@ def test_remote_reranker_lazy_client_not_constructed_by_default():
 
 
 def test_remote_reranker_returns_empty_for_no_candidates():
-    rr = RemoteReranker(
-        base_url="http://g", api_key="k", model="m", client=object()
-    )
+    rr = RemoteReranker(base_url="http://g", api_key="k", model="m", client=object())
     assert rr.rerank("query", [], 8) == []
 
 
@@ -248,7 +246,9 @@ def test_factory_provider_none_never_constructs_client(monkeypatch):
 
 
 def test_factory_returns_safe_wrapping_remote_when_provider_remote():
-    rr = build_reranker(FakeSettings(feature=True, enabled=True, provider="remote", model="rerank/x"))
+    rr = build_reranker(
+        FakeSettings(feature=True, enabled=True, provider="remote", model="rerank/x")
+    )
     assert isinstance(rr, SafeReranker)
     assert isinstance(rr._inner, RemoteReranker)
     assert rr.provider == "remote"

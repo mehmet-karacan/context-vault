@@ -354,5 +354,4 @@ class Settings(BaseSettings):
         return []
 
 
-
 settings = Settings()

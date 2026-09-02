@@ -78,7 +78,9 @@ def _discover_directory(
         target_dir, include_patterns=include_patterns, exclude_patterns=exclude_patterns
     )
     manifest = hashlib.sha256(
-        "\n".join(sorted(f"{f.relative_path}:{f.content_hash}" for f in files)).encode("utf-8")
+        "\n".join(sorted(f"{f.relative_path}:{f.content_hash}" for f in files)).encode(
+            "utf-8"
+        )
     ).hexdigest()
     return ScanResult(
         source_type="directory",
@@ -108,7 +110,9 @@ def _parse_allowed_roots() -> dict:
             alias, path = entry.split("=", 1)
             roots[alias.strip().lower()] = os.path.realpath(path.strip())
         else:
-            roots[os.path.basename(entry.rstrip("/\\")).lower()] = os.path.realpath(entry)
+            roots[os.path.basename(entry.rstrip("/\\")).lower()] = os.path.realpath(
+                entry
+            )
     return roots
 
 
@@ -119,14 +123,20 @@ def resolve_allowed_scan_path(alias: str, relative_path: str) -> str:
         raise HTTPException(status_code=400, detail="relative_path is required")
     rp = relative_path.strip()
     if os.path.isabs(rp):
-        raise HTTPException(status_code=400, detail="Absolute paths are not allowed for directory scan")
+        raise HTTPException(
+            status_code=400, detail="Absolute paths are not allowed for directory scan"
+        )
     if re.match(r"^[a-zA-Z]:[\\/]", rp):
-        raise HTTPException(status_code=400, detail="Absolute paths are not allowed for directory scan")
+        raise HTTPException(
+            status_code=400, detail="Absolute paths are not allowed for directory scan"
+        )
 
     roots = _parse_allowed_roots()
     key = (alias or "").strip().lower()
     if key not in roots:
-        raise HTTPException(status_code=403, detail=f"Unknown allowed root alias: {alias!r}")
+        raise HTTPException(
+            status_code=403, detail=f"Unknown allowed root alias: {alias!r}"
+        )
 
     root = roots[key]
     rel = rp.replace("\\", "/").lstrip("/")
@@ -137,6 +147,7 @@ def resolve_allowed_scan_path(alias: str, relative_path: str) -> str:
     # escapes every allowed root (incl. via symlink / traversal).
     try:
         from ...infrastructure.repositories.path_security import is_allowed_scan_path
+
         _is_allowed = is_allowed_scan_path(target, settings.CODE_ALLOWED_ROOTS)
     except Exception:  # concurrent module absent -> local canonical check
         _is_allowed = target == root or target.startswith(root + os.sep)
@@ -201,7 +212,11 @@ def _store_scan_config(db: Session, version: DocumentVersion, metadata: dict) ->
 
 
 def _read_scan_config(db: Session, document: Document) -> dict:
-    active = db.get(DocumentVersion, document.active_version_id) if document.active_version_id else None
+    active = (
+        db.get(DocumentVersion, document.active_version_id)
+        if document.active_version_id
+        else None
+    )
     if active is None:
         return {}
     artifact = (
@@ -215,7 +230,13 @@ def _read_scan_config(db: Session, document: Document) -> dict:
     return dict(artifact.metadata_json or {}) if artifact else {}
 
 
-def _reindex(db: Session, project: Project, document: Document, scan: ScanResult, scan_config: dict) -> dict:
+def _reindex(
+    db: Session,
+    project: Project,
+    document: Document,
+    scan: ScanResult,
+    scan_config: dict,
+) -> dict:
     service = _build_reindex_service()
     result = service.run(db, document, scan)
     new_version = db.get(DocumentVersion, result["version_id"])
@@ -301,7 +322,10 @@ def ingest_repository(payload: RepoIngestRequest, db: Session = Depends(get_db))
         include_patterns=payload.include_patterns,
         exclude_patterns=payload.exclude_patterns,
     )
-    repo_name = os.path.basename(payload.repository_url.rstrip("/")).removesuffix(".git") or "repository"
+    repo_name = (
+        os.path.basename(payload.repository_url.rstrip("/")).removesuffix(".git")
+        or "repository"
+    )
     document = _get_or_create_source_document(
         db, project, "repository", payload.repository_url, repo_name
     )
@@ -322,7 +346,11 @@ def ingest_repository(payload: RepoIngestRequest, db: Session = Depends(get_db))
 
 
 @router.post("/archives/upload")
-def upload_archive(file: UploadFile = File(...), project_id: str = File(...), db: Session = Depends(get_db)):
+def upload_archive(
+    file: UploadFile = File(...),
+    project_id: str = File(...),
+    db: Session = Depends(get_db),
+):
     _feature_gate()
     project = db.get(Project, project_id)
     if not project:
@@ -359,7 +387,9 @@ def scan_directory(payload: DirectoryScanRequest, db: Session = Depends(get_db))
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    target = resolve_allowed_scan_path(payload.allowed_root_alias, payload.relative_path)
+    target = resolve_allowed_scan_path(
+        payload.allowed_root_alias, payload.relative_path
+    )
     scan = _discover_directory(
         target,
         include_patterns=payload.include_patterns,
@@ -391,7 +421,9 @@ def refresh_document(document_id: str, db: Session = Depends(get_db)):
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     if document.active_version_id is None:
-        raise HTTPException(status_code=409, detail="Document has no active version to refresh")
+        raise HTTPException(
+            status_code=409, detail="Document has no active version to refresh"
+        )
 
     cfg = _read_scan_config(db, document)
     source_type = document.source_type or "directory"
@@ -416,7 +448,9 @@ def refresh_document(document_id: str, db: Session = Depends(get_db)):
             .first()
         )
         if artifact is None:
-            raise HTTPException(status_code=409, detail="Archive original artifact missing")
+            raise HTTPException(
+                status_code=409, detail="Archive original artifact missing"
+            )
         from ...infrastructure.storage.minio_storage import MinioObjectStorage
 
         storage = MinioObjectStorage(
@@ -444,9 +478,7 @@ def refresh_document(document_id: str, db: Session = Depends(get_db)):
     project = db.get(Project, document.project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
-    result = _reindex(
-        db, project, document, scan, scan_config=dict(cfg)
-    )
+    result = _reindex(db, project, document, scan, scan_config=dict(cfg))
     return {"document_id": str(document.id), "source_type": source_type, **result}
 
 
@@ -458,10 +490,7 @@ def list_document_files(
     document = db.get(Document, document_id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
-    target_version = (
-        version_id
-        or document.active_version_id
-    )
+    target_version = version_id or document.active_version_id
     if target_version is None:
         return {"document_id": str(document.id), "version_id": None, "files": []}
     files = (

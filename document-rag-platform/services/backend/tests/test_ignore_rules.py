@@ -14,11 +14,37 @@ from src.infrastructure.repositories.ignore_rules import (
 # --- Default system ignore list ----------------------------------------------
 def test_default_ignore_list_covers_documented_entries():
     expected = {
-        ".git/", "node_modules/", ".venv/", "venv/", "dist/", "build/",
-        "target/", "coverage/", ".next/", ".cache/", "vendor/",
-        "*.min.js", "*.map", "*.lock", "*.png", "*.jpg", "*.pdf",
-        "*.exe", "*.dll", "*.so", "*.class", "*.jar", "*.zip", "*.tar",
-        "*.gz", ".env", ".env.*", "*.pem", "*.key", "*.p12", "*.jks",
+        ".git/",
+        "node_modules/",
+        ".venv/",
+        "venv/",
+        "dist/",
+        "build/",
+        "target/",
+        "coverage/",
+        ".next/",
+        ".cache/",
+        "vendor/",
+        "*.min.js",
+        "*.map",
+        "*.lock",
+        "*.png",
+        "*.jpg",
+        "*.pdf",
+        "*.exe",
+        "*.dll",
+        "*.so",
+        "*.class",
+        "*.jar",
+        "*.zip",
+        "*.tar",
+        "*.gz",
+        ".env",
+        ".env.*",
+        "*.pem",
+        "*.key",
+        "*.p12",
+        "*.jks",
         "id_rsa*",
     }
     assert len(DEFAULT_IGNORE_PATTERNS) == len(expected)
@@ -33,7 +59,7 @@ def test_default_ignore_dirs_and_files():
     assert rules.is_ignored("build", is_dir=True) is True
     # Files.
     assert rules.is_ignored(".env") is True
-    assert rules.is_ignored("config/.env") is True          # nested basename
+    assert rules.is_ignored("config/.env") is True  # nested basename
     assert rules.is_ignored(".env.production") is True
     assert rules.is_ignored("app.min.js") is True
     assert rules.is_ignored("static/app.css.map") is True
@@ -85,9 +111,7 @@ def test_gitignore_directory_pattern():
 
 
 def test_gitignore_anchored_slash_pattern():
-    rules = build_ignore_rules(
-        system_ignore=[], gitignore=["/docs/generated/", "*.md"]
-    )
+    rules = build_ignore_rules(system_ignore=[], gitignore=["/docs/generated/", "*.md"])
     # Any *.md ignored; docs only ignored when anchored under the root.
     assert rules.is_ignored("docs/generated/x.md") is True
     assert rules.is_ignored("other/file.md") is True
@@ -132,6 +156,7 @@ def test_user_include_reincludes_when_no_higher_rule_matches():
 def test_secret_policy_default_skips_sensitive(tmp_path):
     # Reading .gitignore / .contextvaultignore from a real tree does not crash.
     import os
+
     os.makedirs(tmp_path, exist_ok=True)
     rules = build_ignore_rules(root_path=str(tmp_path))
     assert rules.is_ignored("src/main.py") is False

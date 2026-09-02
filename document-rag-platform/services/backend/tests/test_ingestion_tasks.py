@@ -78,7 +78,11 @@ class FakeQuery:
         return self
 
     def _matching(self):
-        return [o for o in self.session.objects.get(self.model, []) if _matches(o, self._criteria)]
+        return [
+            o
+            for o in self.session.objects.get(self.model, [])
+            if _matches(o, self._criteria)
+        ]
 
     def order_by(self, *args, **kwargs):
         return self
@@ -362,7 +366,9 @@ def test_unreadable_document_fails_job_without_activating_new_version():
     db = FakeSession()
     storage = FakeStorage()
     old_active_version_id = uuid.uuid4()
-    document, version, job = _make_chain(db, storage, active_version_id=old_active_version_id)
+    document, version, job = _make_chain(
+        db, storage, active_version_id=old_active_version_id
+    )
 
     with pytest.raises(IngestionJobError):
         run_ingestion_job(

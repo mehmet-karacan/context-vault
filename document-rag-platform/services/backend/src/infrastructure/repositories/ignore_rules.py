@@ -39,7 +39,7 @@ DEFAULT_IGNORE_PATTERNS: tuple[str, ...] = (
     "*.lock",
     "*.png",
     "*.jpg",
-    "*.pdf",   # repo-code scans route PDFs to the document parser instead
+    "*.pdf",  # repo-code scans route PDFs to the document parser instead
     "*.exe",
     "*.dll",
     "*.so",
@@ -81,7 +81,7 @@ DEFAULT_SENSITIVE_PATTERNS: tuple[str, ...] = (
     "*secret*",
     "*secrets*",
     "*password*",
-    ".npmrc",   # often carries auth tokens
+    ".npmrc",  # often carries auth tokens
     ".pypirc",
     "*.pem.my.cnf",
 )
@@ -156,7 +156,7 @@ def _compile_glob(pattern: str) -> re.Pattern:
             while j < n and pattern[j] != "]":
                 j += 1
             if j < n:
-                cls = pattern[i:j + 1]
+                cls = pattern[i : j + 1]
                 if cls.startswith("[!"):
                     cls = "[^" + cls[2:]
                 out.append(cls)
@@ -217,7 +217,7 @@ class GitignoreMatcher:
             return ""
         prefix = self.base + "/"
         if rel.startswith(prefix):
-            return rel[len(prefix):]
+            return rel[len(prefix) :]
         # Rule not in scope for this path.
         return None
 
@@ -329,7 +329,9 @@ def build_ignore_rules(
 
     return IgnoreRules(
         system_patterns=(
-            list(system_ignore) if system_ignore is not None else DEFAULT_IGNORE_PATTERNS
+            list(system_ignore)
+            if system_ignore is not None
+            else DEFAULT_IGNORE_PATTERNS
         ),
         contextvault_patterns=contextvault_ignore or (),
         gitignore_patterns=gitignore or (),

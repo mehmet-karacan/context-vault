@@ -166,7 +166,9 @@ def test_fallback_profile_records_capabilities(digital_pdf):
 
 
 def test_force_fallback_option_disables_docling_path(digital_pdf):
-    source = PdfParser().parse(digital_pdf, "digital.pdf", options={"force_fallback": True})
+    source = PdfParser().parse(
+        digital_pdf, "digital.pdf", options={"force_fallback": True}
+    )
     assert source.metadata["parser_profile"] == "pypdf2-fallback"
 
 

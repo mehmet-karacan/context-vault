@@ -41,9 +41,7 @@ class NoopReranker:
     def __init__(self, model: str = "none") -> None:
         self.model = model or "none"
 
-    def rerank(
-        self, query: str, candidates: List[Any], top_k: int
-    ) -> List[Any]:
+    def rerank(self, query: str, candidates: List[Any], top_k: int) -> List[Any]:
         return list(candidates)
 
 
@@ -63,9 +61,7 @@ class SafeReranker:
         self.model = getattr(inner, "model", fallback_model) or fallback_model
         self.last_error: Optional[Exception] = None
 
-    def rerank(
-        self, query: str, candidates: List[Any], top_k: int
-    ) -> List[Any]:
+    def rerank(self, query: str, candidates: List[Any], top_k: int) -> List[Any]:
         try:
             return self._inner.rerank(query, candidates, top_k)
         except Exception as exc:  # noqa: BLE001 - intentional safe fallback

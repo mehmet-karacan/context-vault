@@ -39,23 +39,27 @@ def recall_at_k(ranked_ids: Sequence[str], relevant_ids: Sequence[str], k: int) 
     return any(cid in relevant for cid in top_k)
 
 
-def mrr_at_10(ranked_ids: Sequence[str], relevant_ids: Sequence[str], k: int = 10) -> float:
+def mrr_at_10(
+    ranked_ids: Sequence[str], relevant_ids: Sequence[str], k: int = 10
+) -> float:
     """Reciprocal rank of the first relevant id (0 if none or beyond k)."""
     relevant = set(relevant_ids)
-    for rank, cid in enumerate(ranked_ids[:max(k, 0)], start=1):
+    for rank, cid in enumerate(ranked_ids[: max(k, 0)], start=1):
         if cid in relevant:
             return 1.0 / rank
     return 0.0
 
 
-def ndcg_at_10(ranked_ids: Sequence[str], relevant_ids: Sequence[str], k: int = 10) -> float:
+def ndcg_at_10(
+    ranked_ids: Sequence[str], relevant_ids: Sequence[str], k: int = 10
+) -> float:
     """nDCG@10 with binary relevance and log2(rank+1) discount.
 
     IDCG is the best-possible DCG (the number of relevant ids, each at the
     earliest rank). Returns 0.0 when there is nothing relevant to retrieve.
     """
     relevant = set(relevant_ids)
-    top_k = list(ranked_ids)[:max(k, 0)]
+    top_k = list(ranked_ids)[: max(k, 0)]
 
     def dcg(sequence: Sequence[str]) -> float:
         total = 0.0
@@ -96,12 +100,16 @@ def no_answer_fp_fn(
             if not predicted:
                 fn += 1
     return {
-        "false_positives": fp,              # system answered, golden says no-answer
-        "false_negatives": fn,              # system no-answer, golden answerable
+        "false_positives": fp,  # system answered, golden says no-answer
+        "false_negatives": fn,  # system no-answer, golden answerable
         "n_golden_no_answer": n_golden_no_answer,
         "n_golden_answerable": n_golden_answerable,
-        "false_positive_rate": (fp / n_golden_no_answer) if n_golden_no_answer else None,
-        "false_negative_rate": (fn / n_golden_answerable) if n_golden_answerable else None,
+        "false_positive_rate": (fp / n_golden_no_answer)
+        if n_golden_no_answer
+        else None,
+        "false_negative_rate": (fn / n_golden_answerable)
+        if n_golden_answerable
+        else None,
         "overall_error": (
             (fp + fn) / (n_golden_no_answer + n_golden_answerable)
             if (n_golden_no_answer + n_golden_answerable)
@@ -113,7 +121,9 @@ def no_answer_fp_fn(
 # --------------------------------------------------------------------------- #
 # Latency helpers
 # --------------------------------------------------------------------------- #
-def latency_percentiles(latencies: Sequence[float], percentiles: Sequence[int] = (50, 95)) -> Dict[str, Optional[float]]:
+def latency_percentiles(
+    latencies: Sequence[float], percentiles: Sequence[int] = (50, 95)
+) -> Dict[str, Optional[float]]:
     """p-th percentiles over the given latencies in ms (deterministic)."""
     values = sorted(float(v) for v in latencies)
     if not values:
@@ -132,7 +142,9 @@ def latency_percentiles(latencies: Sequence[float], percentiles: Sequence[int] =
                 out[f"p{p}_ms"] = float(values[lower])
             else:
                 frac = idx - lower
-                out[f"p{p}_ms"] = float(values[lower] * (1 - frac) + values[upper] * frac)
+                out[f"p{p}_ms"] = float(
+                    values[lower] * (1 - frac) + values[upper] * frac
+                )
     return out
 
 
@@ -142,14 +154,19 @@ def latency_percentiles(latencies: Sequence[float], percentiles: Sequence[int] =
 def _normalize_golden(qid: str, label: Any) -> Dict[str, Any]:
     """Normalize a gold label into {'answerable': bool, 'relevant': list}."""
     if isinstance(label, dict):
-        relevant = label.get("relevant", label.get("expected_source_ids", label.get("expected_sources", [])))
+        relevant = label.get(
+            "relevant",
+            label.get("expected_source_ids", label.get("expected_sources", [])),
+        )
         answerable = bool(label.get("answerable", bool(relevant)))
         return {"answerable": answerable, "relevant": list(relevant)}
     # A bare list is treated as the relevant ids (answerable => non-empty).
     return {"answerable": bool(label), "relevant": list(label)}
 
 
-def _predicted_answerability(query_ids: Sequence[str], predictions: Mapping[str, Sequence[str]]) -> Dict[str, bool]:
+def _predicted_answerability(
+    query_ids: Sequence[str], predictions: Mapping[str, Sequence[str]]
+) -> Dict[str, bool]:
     """A query is considered "answered" when its ranked candidate list is non-empty."""
     return {qid: bool(predictions.get(qid)) for qid in query_ids}
 
@@ -196,7 +213,9 @@ def compute_retrieval_metrics(
     metrics: Dict[str, Any] = {
         "n_queries": len(labels),
         "n_evaluable": n_evaluable,
-        "n_golden_no_answer": sum(1 for g in normalized.values() if not g["answerable"]),
+        "n_golden_no_answer": sum(
+            1 for g in normalized.values() if not g["answerable"]
+        ),
     }
     for k in ks:
         key = f"recall@{k}"
@@ -273,7 +292,10 @@ def evaluate_quality_gate(
     else:
         reasons.append("no-answer metrikleri raporlanmadi (eksik)")
 
-    return {"pass": not any(r.startswith(("recall@", "mrr@10=")) for r in reasons), "reasons": reasons}
+    return {
+        "pass": not any(r.startswith(("recall@", "mrr@10=")) for r in reasons),
+        "reasons": reasons,
+    }
 
 
 def load_jsonl(path) -> List[Dict[str, Any]]:
@@ -281,6 +303,7 @@ def load_jsonl(path) -> List[Dict[str, Any]]:
     import json as _json
 
     from pathlib import Path as _Path
+
     records: List[Dict[str, Any]] = []
     with _Path(path).open("r", encoding="utf-8") as f:
         for line_no, line in enumerate(f, start=1):

@@ -107,7 +107,12 @@ def test_liveness_endpoint_returns_ok(monkeypatch):
 def test_readiness_reports_ok_when_all_dependencies_up(monkeypatch):
     monkeypatch.setattr("src.main.init_db", lambda: None)
     checker = ReadinessChecker(
-        {"db": lambda: True, "redis": lambda: True, "minio": lambda: True, "gateway": lambda: True}
+        {
+            "db": lambda: True,
+            "redis": lambda: True,
+            "minio": lambda: True,
+            "gateway": lambda: True,
+        }
     )
 
     def override():
@@ -129,7 +134,12 @@ def test_readiness_is_degraded_not_crash_when_dependency_down(monkeypatch):
     """A single down dependency degrades readiness instead of crashing it."""
     monkeypatch.setattr("src.main.init_db", lambda: None)
     checker = ReadinessChecker(
-        {"db": lambda: True, "redis": lambda: False, "minio": lambda: True, "gateway": lambda: True}
+        {
+            "db": lambda: True,
+            "redis": lambda: False,
+            "minio": lambda: True,
+            "gateway": lambda: True,
+        }
     )
     app.dependency_overrides[get_readiness_checker] = lambda: checker
     try:

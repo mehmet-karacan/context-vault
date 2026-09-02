@@ -23,6 +23,7 @@ tables:
 Only after that should ``alembic upgrade head`` be run (see
 MIGRATION_RUNBOOK.md for the full sequence).
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa

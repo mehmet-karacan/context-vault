@@ -168,10 +168,17 @@ class EvidenceSignal:
         if isinstance(raw, dict):
             keys = dict(raw)
         else:
-            keys = {k: getattr(raw, k) for k in (
-                "dense_score", "lexical_score", "identifier", "exact_identifier",
-                "lexical_presence",
-            ) if hasattr(raw, k)}
+            keys = {
+                k: getattr(raw, k)
+                for k in (
+                    "dense_score",
+                    "lexical_score",
+                    "identifier",
+                    "exact_identifier",
+                    "lexical_presence",
+                )
+                if hasattr(raw, k)
+            }
         return cls(
             dense_score=_to_float(keys.get("dense_score")),
             lexical_score=_to_float(keys.get("lexical_score")),
@@ -355,7 +362,11 @@ class AnswerPolicy:
                 inputs=base_inputs,
             )
 
-        if evidence_count >= self.min_evidence and top_dense is not None and top_dense >= self.score_threshold:
+        if (
+            evidence_count >= self.min_evidence
+            and top_dense is not None
+            and top_dense >= self.score_threshold
+        ):
             return Answerability(
                 intent=INTENT_DOCUMENT,
                 answerable=True,

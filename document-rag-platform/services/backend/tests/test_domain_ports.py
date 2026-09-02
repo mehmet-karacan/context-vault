@@ -29,9 +29,9 @@ def test_all_ports_are_runtime_checkable_protocols():
     for name in PORT_NAMES:
         port = getattr(ports, name)
         assert getattr(port, "_is_protocol", False) is True, f"{name} is not a Protocol"
-        assert getattr(port, "_is_runtime_protocol", False) is True, (
-            f"{name} is not @runtime_checkable"
-        )
+        assert (
+            getattr(port, "_is_runtime_protocol", False) is True
+        ), f"{name} is not @runtime_checkable"
 
 
 def test_embedding_provider_accepts_a_structurally_conforming_object():

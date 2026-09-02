@@ -93,7 +93,9 @@ class ContextItem:
     token_count: int = 0
     rank: int = 0
     sequence_no: int = 0
-    relation: str = "selected"  # selected | parent | adjacent | table_header | code_signature
+    relation: str = (
+        "selected"  # selected | parent | adjacent | table_header | code_signature
+    )
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -149,10 +151,16 @@ class ContextBuilder:
         include_adjacent: bool = True,
     ):
         self.token_counter: Callable[[str], int] = token_counter or NaiveTokenCounter()
-        self.max_chunks = int(max_chunks if max_chunks is not None else settings.CONTEXT_MAX_CHUNKS)
-        self.max_tokens = int(max_tokens if max_tokens is not None else settings.CONTEXT_MAX_TOKENS)
+        self.max_chunks = int(
+            max_chunks if max_chunks is not None else settings.CONTEXT_MAX_CHUNKS
+        )
+        self.max_tokens = int(
+            max_tokens if max_tokens is not None else settings.CONTEXT_MAX_TOKENS
+        )
         self.adjacent_window = int(
-            adjacent_window if adjacent_window is not None else settings.CONTEXT_ADJACENT_WINDOW
+            adjacent_window
+            if adjacent_window is not None
+            else settings.CONTEXT_ADJACENT_WINDOW
         )
         self.include_parents = include_parents
         self.include_adjacent = include_adjacent
@@ -206,9 +214,15 @@ class ContextBuilder:
                 continue
 
             added_any = False
-            if base.row_group_header is not None and base.row_group_header.content.strip() not in base.content:
+            if (
+                base.row_group_header is not None
+                and base.row_group_header.content.strip() not in base.content
+            ):
                 added_any = add(base.row_group_header) or added_any
-            if base.signature is not None and base.signature.content.strip() not in base.content:
+            if (
+                base.signature is not None
+                and base.signature.content.strip() not in base.content
+            ):
                 added_any = add(base.signature) or added_any
             added_any = add(base.base) or added_any
 
@@ -301,7 +315,9 @@ class ContextBuilder:
             sequence_no=int(_get(chunk, "sequence_no") or 0),
             relation="selected",
         )
-        return _BaseItem(base=base, row_group_header=row_group_header, signature=signature)
+        return _BaseItem(
+            base=base, row_group_header=row_group_header, signature=signature
+        )
 
     def _item_from(self, chunk: Any, rank: int, *, relation: str) -> ContextItem:
         return self._make_item(

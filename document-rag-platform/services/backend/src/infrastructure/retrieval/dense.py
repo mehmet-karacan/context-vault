@@ -56,7 +56,9 @@ class DenseVectorRetriever:
         distance: str = "cosine",
         scope_key: str = "scope",
     ):
-        self.candidate_k = candidate_k if candidate_k is not None else settings.VECTOR_CANDIDATE_K
+        self.candidate_k = (
+            candidate_k if candidate_k is not None else settings.VECTOR_CANDIDATE_K
+        )
         self.ef_search = ef_search if ef_search is not None else DEFAULT_HNSW_EF_SEARCH
         self.session = session
         self.table = table
@@ -121,7 +123,9 @@ class DenseVectorRetriever:
         # (avoids an infinite self-merge).
         if self.table != "chunks":
             legacy = legacy_spec_from_spec(spec)
-            legacy_candidates = self._search_spec(legacy, session, source_tag="chunks.embedding")
+            legacy_candidates = self._search_spec(
+                legacy, session, source_tag="chunks.embedding"
+            )
             return merge_dense_candidates(
                 primary, legacy_candidates, int(spec["candidate_k"])
             )

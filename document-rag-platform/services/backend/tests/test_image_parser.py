@@ -32,8 +32,15 @@ from src.infrastructure.parsers.router import ParserRouter
 
 FULL_TEXT = "Fatura toplamı 1000 TL\nNET tutar"
 BLOCKS = [
-    OcrBlock(text="Fatura toplamı", confidence=0.95, bbox=[10.0, 10.0, 120.0, 40.0], page=0),
-    OcrBlock(text="1000 TL NET tutar", confidence=0.90, bbox=[10.0, 50.0, 160.0, 80.0], page=0),
+    OcrBlock(
+        text="Fatura toplamı", confidence=0.95, bbox=[10.0, 10.0, 120.0, 40.0], page=0
+    ),
+    OcrBlock(
+        text="1000 TL NET tutar",
+        confidence=0.90,
+        bbox=[10.0, 50.0, 160.0, 80.0],
+        page=0,
+    ),
 ]
 _SUCCESS_RESULT = OcrResult(
     full_text=FULL_TEXT,
@@ -133,7 +140,9 @@ def test_low_confidence_sets_needs_review(tmp_path):
     assert source.metadata["needs_review"] is True
     assert "low OCR confidence" in source.metadata["review_reason"]
     # The recognized text is still emitted (searchable) even when flagged.
-    assert any(u.unit_type == UnitType.OCR_TEXT and u.text == "garbled" for u in source.units)
+    assert any(
+        u.unit_type == UnitType.OCR_TEXT and u.text == "garbled" for u in source.units
+    )
 
 
 def test_provider_unavailable_emits_image_unit_with_warning(tmp_path):
@@ -210,9 +219,7 @@ def test_resolve_provider_builds_via_build_ocr_provider(monkeypatch):
         built["settings"] = settings_
         return _Stub()
 
-    monkeypatch.setattr(
-        "src.infrastructure.ocr.factory.build_ocr_provider", fake_build
-    )
+    monkeypatch.setattr("src.infrastructure.ocr.factory.build_ocr_provider", fake_build)
     parser = ImageParser()
     provider = parser._resolve_provider()
     assert provider is not None
@@ -223,12 +230,11 @@ def test_resolve_provider_builds_via_build_ocr_provider(monkeypatch):
 def test_resolve_provider_returns_none_when_ocr_unavailable(monkeypatch):
     """When the factory raises (OCR disabled / no engine), the resolver must
     return None gracefully — no ImportError, no dead provider path."""
+
     def fake_build(settings_, registry=None):
         raise OcrUnavailableError("no OCR engine available")
 
-    monkeypatch.setattr(
-        "src.infrastructure.ocr.factory.build_ocr_provider", fake_build
-    )
+    monkeypatch.setattr("src.infrastructure.ocr.factory.build_ocr_provider", fake_build)
     assert ImageParser()._resolve_provider() is None
 
 
@@ -237,7 +243,9 @@ def test_parse_resolves_provider_via_factory_without_injection(tmp_path, monkeyp
     real resolution path builds a provider via the factory."""
     result = OcrResult(
         full_text="recognized by stub",
-        blocks=[OcrBlock(text="recognized by stub", confidence=0.9, bbox=[0, 0, 50, 20])],
+        blocks=[
+            OcrBlock(text="recognized by stub", confidence=0.9, bbox=[0, 0, 50, 20])
+        ],
         confidence=0.9,
         engine="stub",
     )
@@ -251,9 +259,7 @@ def test_parse_resolves_provider_via_factory_without_injection(tmp_path, monkeyp
     def fake_build(settings_, registry=None):
         return _Stub()
 
-    monkeypatch.setattr(
-        "src.infrastructure.ocr.factory.build_ocr_provider", fake_build
-    )
+    monkeypatch.setattr("src.infrastructure.ocr.factory.build_ocr_provider", fake_build)
     source = ImageParser().parse(_stub_image(tmp_path), "photo.png")
     assert source.metadata["ocr"] is True
     assert source.metadata["ocr_engine"] == "stub"

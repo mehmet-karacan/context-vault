@@ -66,7 +66,9 @@ def chunk_obj(chunk_id, content, **kw):
     return d
 
 
-def make_result(query, candidates, intent=INTENT_DOCUMENT, answerable=True, reason="ok"):
+def make_result(
+    query, candidates, intent=INTENT_DOCUMENT, answerable=True, reason="ok"
+):
     decision = Answerability(
         intent=intent,
         answerable=answerable,
@@ -86,7 +88,9 @@ class FakeLLM:
         self.answers = list(answers)
 
     def complete(self, system_prompt, user_prompt, model=None):
-        self.calls.append({"system": system_prompt, "user": user_prompt, "model": model})
+        self.calls.append(
+            {"system": system_prompt, "user": user_prompt, "model": model}
+        )
         return self.answers.pop(0) if self.answers else "FAKE_ANSWER"
 
 
@@ -139,11 +143,17 @@ def test_evidence_code_variant_repository():
     code_chunk = chunk_obj(
         "c5",
         "def query_chat(): pass",
-        locator={"file_path": "services/backend/src/main.py", "line_start": 220, "line_end": 315},
+        locator={
+            "file_path": "services/backend/src/main.py",
+            "line_start": 220,
+            "line_end": 315,
+        },
         metadata={"document_name": "context-vault", "source_type": "repository"},
     )
-    evidence = pack_evidence([cand("c5", rank=1, score=1.0, meta={"document_id": "d1"})],
-                             dict_resolver({"c5": code_chunk}))
+    evidence = pack_evidence(
+        [cand("c5", rank=1, score=1.0, meta={"document_id": "d1"})],
+        dict_resolver({"c5": code_chunk}),
+    )
     block = evidence[0].to_block()
     assert block.startswith("[S1]\n")
     assert "Repository: context-vault" in block
@@ -164,7 +174,9 @@ def test_build_prompt_keeps_evidence_out_of_system_instructions():
         content,
         metadata={"document_name": "rules.docx", "source_type": "document"},
     )
-    evidence = pack_evidence([cand("c1", rank=1, score=0.9)], dict_resolver({"c1": doc_chunk}))
+    evidence = pack_evidence(
+        [cand("c1", rank=1, score=0.9)], dict_resolver({"c1": doc_chunk})
+    )
 
     prompt = build_prompt("PAYMENT_FLAG nasıl belirleniyor?", evidence)
 
@@ -256,7 +268,12 @@ def test_citations_persisted_with_correct_fields():
         "c1",
         "PAYMENT_FLAG=1 olduğunda ödenmiş kabul edilir.",
         heading_path=["Tahsilat", "PAYMENT_FLAG"],
-        locator={"page_start": 12, "page_end": 13, "line_start": None, "line_end": None},
+        locator={
+            "page_start": 12,
+            "page_end": 13,
+            "line_start": None,
+            "line_end": None,
+        },
         metadata={
             "document_id": "doc-1",
             "version_id": "ver-1",
@@ -266,7 +283,9 @@ def test_citations_persisted_with_correct_fields():
         },
     )
     candidate = cand(
-        "c1", rank=1, score=0.912,
+        "c1",
+        rank=1,
+        score=0.912,
         meta={"document_id": "doc-1", "version_id": "ver-1", "source_file_id": "sf-1"},
         rerank=0.87,
     )

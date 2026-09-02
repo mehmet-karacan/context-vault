@@ -53,6 +53,7 @@ _chat_client = ChatCompletionClient(
 def embed_text(text: str, instruction: str = "") -> List[float]:
     return _embedding_provider.embed_one(text, instruction)
 
+
 def embed_texts(texts: List[str], instruction: str = "") -> List[List[float]]:
     return _embedding_provider.embed(texts, instruction)
 

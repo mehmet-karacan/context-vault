@@ -25,9 +25,7 @@ OCR_ARTIFACT_RELATIVE_PATH = "ocr/document.json"
 OCR_ARTIFACT_TYPE = "ocr_json"
 
 
-def ocr_artifact_key(
-    project_id: str, document_id: str, version_id: str
-) -> str:
+def ocr_artifact_key(project_id: str, document_id: str, version_id: str) -> str:
     """Builds the object key for a version's OCR JSON artifact."""
     return object_keys.artifact_key(
         project_id, document_id, version_id, OCR_ARTIFACT_RELATIVE_PATH

@@ -61,9 +61,7 @@ def create_app(cfg: Optional[Settings] = None) -> FastAPI:
     # server-side either way.
     @application.exception_handler(Exception)
     async def _handle_unhandled_exception(request: Request, exc: Exception):
-        logging.getLogger("app.error").exception(
-            "Unhandled exception", exc_info=exc
-        )
+        logging.getLogger("app.error").exception("Unhandled exception", exc_info=exc)
         if app_cfg.debug_enabled:
             return JSONResponse(
                 status_code=500,
@@ -72,7 +70,9 @@ def create_app(cfg: Optional[Settings] = None) -> FastAPI:
                     "traceback": traceback.format_exc(),
                 },
             )
-        return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+        return JSONResponse(
+            status_code=500, content={"detail": "Internal Server Error"}
+        )
 
     @application.on_event("startup")
     def _startup():

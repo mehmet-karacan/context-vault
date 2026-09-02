@@ -16,7 +16,10 @@ from types import SimpleNamespace
 import pytest
 
 from src.infrastructure.repositories.archive_source import ArchiveLimitError
-from src.infrastructure.security.arbitrary_path import PathBlockError, ensure_allowed_scan_path
+from src.infrastructure.security.arbitrary_path import (
+    PathBlockError,
+    ensure_allowed_scan_path,
+)
 from src.infrastructure.security.limits import (
     IngestionLimitError,
     enforce_ingestion_limits,
@@ -70,7 +73,9 @@ class TestArchiveBombGuards:
 
     def test_path_traversal_members_are_blocked(self, tmp_path):
         z = _make_zip({"safe.txt": "ok", "../../evil.txt": "pwn"})
-        result = scan_archive(z, "trav.zip", work=str(tmp_path / "s"), config=_LIMIT_CFG)
+        result = scan_archive(
+            z, "trav.zip", work=str(tmp_path / "s"), config=_LIMIT_CFG
+        )
         assert any("evil" in w and "traversal" in w for w in result.warnings)
         assert not (tmp_path / "evil.txt").exists()
 

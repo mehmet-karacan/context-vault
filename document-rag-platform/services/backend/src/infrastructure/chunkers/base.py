@@ -134,7 +134,9 @@ def merge_locators(locators: List[Any]) -> Dict[str, Any]:
         return {}
 
     def pick(name: str, agg):
-        vals = [_get_attr(loc, name) for loc in present if _get_attr(loc, name) is not None]
+        vals = [
+            _get_attr(loc, name) for loc in present if _get_attr(loc, name) is not None
+        ]
         return agg(vals) if vals else None
 
     return {

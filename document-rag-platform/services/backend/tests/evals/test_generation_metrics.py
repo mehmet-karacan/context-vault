@@ -48,15 +48,25 @@ def test_citation_accuracy_none_cited():
 
 
 def test_answer_sufficiency():
-    assert answer_sufficiency("Faturalama 30 gundur ve iade 14 gunde yapilir.",
-                              ["faturalama", "iade"]) == 1.0
-    assert answer_sufficiency("Yalnizca faturalama hakkinda.", ["faturalama", "iade"]) == 0.5
+    assert (
+        answer_sufficiency(
+            "Faturalama 30 gundur ve iade 14 gunde yapilir.", ["faturalama", "iade"]
+        )
+        == 1.0
+    )
+    assert (
+        answer_sufficiency("Yalnizca faturalama hakkinda.", ["faturalama", "iade"])
+        == 0.5
+    )
     assert answer_sufficiency("", ["faturalama"]) == 0.0
 
 
 def test_contradictory_source_behavior_clean():
     # Only one member of the conflicting pair cited -> handled safely.
-    assert contradictory_source_behavior(["sla-v1.pdf"], [("sla-v1.pdf", "sla-v2.pdf")]) == 1.0
+    assert (
+        contradictory_source_behavior(["sla-v1.pdf"], [("sla-v1.pdf", "sla-v2.pdf")])
+        == 1.0
+    )
 
 
 def test_contradictory_source_behavior_both_cited_requires_hedge():

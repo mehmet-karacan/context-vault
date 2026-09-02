@@ -15,7 +15,11 @@ from .base import (
 )
 from .dense import DenseVectorRetriever, dense_sql_from_spec
 from .lexical import LexicalRetriever, lexical_sql_from_spec
-from .identifier import IdentifierRetriever, identifier_sql_from_spec, extract_identifiers
+from .identifier import (
+    IdentifierRetriever,
+    identifier_sql_from_spec,
+    extract_identifiers,
+)
 from .rrf import reciprocal_rank_fusion, fuse, dedupe
 
 __all__ = [

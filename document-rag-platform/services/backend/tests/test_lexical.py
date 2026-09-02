@@ -90,13 +90,17 @@ def test_content_has_any_term_matches_single_lexeme():
     # A chunk whose content holds the contiguous acronym must count as lexical
     # presence even though the caller phrased it with a space.
     terms = significant_query_terms("ttnet sis ile tt sis arasındaki fark")
-    assert content_has_any_term(
-        "Mevcut UP10 sisteminin TTNETSIS sistemine aktarılması", terms
-    ) is True
+    assert (
+        content_has_any_term(
+            "Mevcut UP10 sisteminin TTNETSIS sistemine aktarılması", terms
+        )
+        is True
+    )
     # A chunk with no significant term in its text has no presence.
-    assert content_has_any_term(
-        "Tablo üzerinde proje türü filtrelenebilir", terms
-    ) is False
+    assert (
+        content_has_any_term("Tablo üzerinde proje türü filtrelenebilir", terms)
+        is False
+    )
     assert content_has_any_term("", terms) is False
     assert content_has_any_term("herhangi bir metin", []) is False
 

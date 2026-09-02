@@ -63,9 +63,7 @@ class ScanConfig:
             max_files=int(getattr(s, "CODE_MAX_FILES", 20000)),
             max_total_bytes=int(getattr(s, "CODE_MAX_TOTAL_BYTES", 1073741824)),
             max_file_bytes=int(getattr(s, "CODE_MAX_FILE_BYTES", 2097152)),
-            scan_timeout_seconds=float(
-                getattr(s, "CODE_SCAN_TIMEOUT_SECONDS", 900)
-            ),
+            scan_timeout_seconds=float(getattr(s, "CODE_SCAN_TIMEOUT_SECONDS", 900)),
             follow_symlinks=bool(getattr(s, "CODE_FOLLOW_SYMLINKS", False)),
             allow_submodules=bool(getattr(s, "CODE_ALLOW_SUBMODULES", False)),
             allow_git_lfs=bool(getattr(s, "CODE_ALLOW_GIT_LFS", False)),
@@ -117,9 +115,7 @@ Walker = Callable[[str], Iterator[Tuple[str, List[str], List[str]]]]
 
 
 def _default_walker(root: str) -> Iterator[Tuple[str, List[str], List[str]]]:
-    for dirpath, dirnames, filenames in os.walk(
-        root, topdown=True, followlinks=False
-    ):
+    for dirpath, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
         dirnames.sort()
         filenames.sort()
         yield dirpath, dirnames, filenames
@@ -149,7 +145,7 @@ def _read_file_metadata(abs_path: str, max_bytes: int) -> Optional[dict]:
                 hasher_local = sha
                 hasher_local.update(chunk)
                 if len(first_bytes) < _PROBE_SIZE:
-                    first_bytes += chunk[:_PROBE_SIZE - len(first_bytes)]
+                    first_bytes += chunk[: _PROBE_SIZE - len(first_bytes)]
     except OSError:
         return None
     return {

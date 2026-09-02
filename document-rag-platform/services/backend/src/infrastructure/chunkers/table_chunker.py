@@ -44,15 +44,15 @@ class TableChunker:
         )
         self.profile = chunker_profile or ChunkerProfile()
 
-    def chunk(self, unit: ContentUnit, source: NormalizedSource) -> List[ChunkCandidate]:
+    def chunk(
+        self, unit: ContentUnit, source: NormalizedSource
+    ) -> List[ChunkCandidate]:
         markdown = unit.markdown or unit.text or ""
         rows = [line.strip() for line in markdown.splitlines() if line.strip()]
         if not rows:
             return []
         groups = self._group_rows(rows)
-        heading_path = (
-            list(unit.hierarchy.heading_path) if unit.hierarchy else []
-        )
+        heading_path = list(unit.hierarchy.heading_path) if unit.hierarchy else []
         locator = unit.locator.to_dict() if unit.locator else {}
         return [
             self._make_group_chunk(
@@ -81,7 +81,9 @@ class TableChunker:
 
     def _group_rows(self, rows: List[str]) -> List[List[str]]:
         header = rows[0]
-        separator = rows[1] if len(rows) > 1 and self._looks_like_separator(rows[1]) else None
+        separator = (
+            rows[1] if len(rows) > 1 and self._looks_like_separator(rows[1]) else None
+        )
         data_start = 2 if separator else 1
         data_rows = rows[data_start:]
         if not data_rows:

@@ -35,9 +35,9 @@ _PEM_RE = re.compile(
 # Well-known token shapes.
 _TOKEN_RE = re.compile(
     r"(?i)\b("
-    r"sk-[A-Za-z0-9_\-]{8,}|"       # OpenAI-style
-    r"ghp_[A-Za-z0-9]{20,}|"        # GitHub PAT
-    r"AKIA[0-9A-Z]{16}|"            # AWS access key id
+    r"sk-[A-Za-z0-9_\-]{8,}|"  # OpenAI-style
+    r"ghp_[A-Za-z0-9]{20,}|"  # GitHub PAT
+    r"AKIA[0-9A-Z]{16}|"  # AWS access key id
     r"xox[baprs]-[A-Za-z0-9\-]{10,}|"  # Slack
     r"eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}"  # JWT-ish
     r")\b"
@@ -89,9 +89,7 @@ def _apply_redactor(text: str, pattern: re.Pattern) -> str:
     whole match is the secret.
     """
     if pattern is _KEY_VALUE_RE:
-        return _KEY_VALUE_RE.sub(
-            lambda m: m.group(1) + REDACTED, text
-        )
+        return _KEY_VALUE_RE.sub(lambda m: m.group(1) + REDACTED, text)
     return pattern.sub(REDACTED, text)
 
 

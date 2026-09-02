@@ -59,7 +59,9 @@ def extract_text_from_pdf(file_path: str) -> str:
     from PyPDF2 import PdfReader
 
     reader = PdfReader(file_path)
-    return "\n".join(page.extract_text() for page in reader.pages if page.extract_text())
+    return "\n".join(
+        page.extract_text() for page in reader.pages if page.extract_text()
+    )
 
 
 def extract_text_from_txt(file_path: str) -> str:
@@ -313,7 +315,9 @@ def upload_document(
         if not text.strip():
             raise ValueError("Belgenin okunabilir metin içeriği bulunamadı.")
 
-        chunks = chunk_text(text, chunk_size=chunk_size, overlap=min(50, chunk_size // 5))
+        chunks = chunk_text(
+            text, chunk_size=chunk_size, overlap=min(50, chunk_size // 5)
+        )
         embeddings = embed_texts(chunks, instruction=instruction)
 
         for index, (content, embedding) in enumerate(zip(chunks, embeddings)):
@@ -351,7 +355,11 @@ def upload_document(
         document.status = "error"
         document.error_message = str(e)
         db.commit()
-        return {"success": False, "document": serialize_document(document), "error": str(e)}
+        return {
+            "success": False,
+            "document": serialize_document(document),
+            "error": str(e),
+        }
 
     finally:
         if tmp_path and os.path.exists(tmp_path):
@@ -365,7 +373,8 @@ def list_documents(project_id: Optional[str] = None, db: Session = Depends(get_d
         query = query.filter(Document.project_id == project_id)
     documents = query.order_by(Document.uploaded_at.desc()).all()
     return [
-        serialize_document(doc, job=_latest_job_for_document(db, doc.id)) for doc in documents
+        serialize_document(doc, job=_latest_job_for_document(db, doc.id))
+        for doc in documents
     ]
 
 

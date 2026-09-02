@@ -25,7 +25,9 @@ def test_runner_writes_loggable_json(tmp_path):
     golden = load_golden(GOLDEN)
     subset = [g["id"] for g in golden if g.get("answerable")][:3]
     out_json = tmp_path / "metrics-report.json"
-    report = run_eval(golden, subset=subset, output_json=out_json, output_md=tmp_path / "r.md")
+    report = run_eval(
+        golden, subset=subset, output_json=out_json, output_md=tmp_path / "r.md"
+    )
 
     assert out_json.is_file()
     data = json.loads(out_json.read_text(encoding="utf-8"))

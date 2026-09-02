@@ -225,7 +225,10 @@ def test_chat_runtime_reuses_existing_conversation_when_present():
 def test_chat_runtime_honors_explicit_conversation_id():
     """A client-supplied conversation_id is returned unchanged (resume path)."""
     cid = str(uuid.uuid4())
-    assert ensure_conversation(FakeSession(), project_id="proj-1", conversation_id=cid) == cid
+    assert (
+        ensure_conversation(FakeSession(), project_id="proj-1", conversation_id=cid)
+        == cid
+    )
 
 
 def test_feature_new_citations_false_skips_persistence_but_keeps_citations():
@@ -280,7 +283,9 @@ def test_retrieval_debug_stages_shape_matches_frontend_contract():
     result = RetrievalResult(
         query="q",
         ranked_candidates=rerank,
-        answerability=Answerability(intent=INTENT_DOCUMENT, answerable=True, reason="ok"),
+        answerability=Answerability(
+            intent=INTENT_DOCUMENT, answerable=True, reason="ok"
+        ),
         stage_candidates={"dense": dense, "rerank": rerank},
     )
 
@@ -295,7 +300,9 @@ def test_retrieval_debug_stages_shape_matches_frontend_contract():
         for item in items:
             # Every entry is renderable: at least one of label/document_name/chunk_id.
             assert {"chunk_id", "rank", "score", "source"} <= set(item), item
-            assert item.get("label") or item.get("document_name") or item.get("chunk_id")
+            assert (
+                item.get("label") or item.get("document_name") or item.get("chunk_id")
+            )
 
     # document_name is surfaced when the resolved chunk has it (rerank stage).
     rerank_item = stages["rerank"][0]

@@ -41,7 +41,9 @@ class Document(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     project_id = Column(
-        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
     )
     name = Column(String, nullable=False)
     size = Column(Integer, nullable=False)
@@ -50,7 +52,9 @@ class Document(Base):
     uploaded_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     # --- Aşama 2 additive fields (nullable; see AKTIF_GOREV.md Bölüm 8.1) --
-    source_type = Column(String, nullable=True)  # document | image | repository | directory | archive
+    source_type = Column(
+        String, nullable=True
+    )  # document | image | repository | directory | archive
     origin_uri = Column(Text, nullable=True)
     mime_type = Column(String, nullable=True)
     checksum = Column(String, nullable=True)
@@ -95,7 +99,9 @@ class Chunk(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     document_id = Column(
-        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
     )
     chunk_index = Column(Integer, nullable=False)
     content = Column(Text, nullable=False)
@@ -137,10 +143,16 @@ class Chunk(Base):
     identifiers = Column(ARRAY(Text), nullable=True)
     created_at = Column(DateTime, nullable=True)
 
-    document = relationship("Document", back_populates="chunks", foreign_keys=[document_id])
-    version = relationship("DocumentVersion", back_populates="chunks", foreign_keys=[version_id])
+    document = relationship(
+        "Document", back_populates="chunks", foreign_keys=[document_id]
+    )
+    version = relationship(
+        "DocumentVersion", back_populates="chunks", foreign_keys=[version_id]
+    )
     source_file = relationship("SourceFile", foreign_keys=[source_file_id])
-    parent_chunk = relationship("Chunk", remote_side=[id], foreign_keys=[parent_chunk_id])
+    parent_chunk = relationship(
+        "Chunk", remote_side=[id], foreign_keys=[parent_chunk_id]
+    )
     chunk_embeddings = relationship(
         "ChunkEmbedding", back_populates="chunk", cascade="all, delete-orphan"
     )
@@ -156,7 +168,11 @@ class DocumentVersion(Base):
 
     __tablename__ = "document_versions"
     __table_args__ = (
-        UniqueConstraint("document_id", "version_no", name="uq_document_versions_document_id_version_no"),
+        UniqueConstraint(
+            "document_id",
+            "version_no",
+            name="uq_document_versions_document_id_version_no",
+        ),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -343,7 +359,9 @@ class EmbeddingProfile(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     chunk_embeddings = relationship(
-        "ChunkEmbedding", back_populates="embedding_profile", cascade="all, delete-orphan"
+        "ChunkEmbedding",
+        back_populates="embedding_profile",
+        cascade="all, delete-orphan",
     )
 
 
@@ -357,7 +375,9 @@ class ChunkEmbedding(Base):
     __tablename__ = "chunk_embeddings"
 
     chunk_id = Column(
-        UUID(as_uuid=True), ForeignKey("chunks.id", ondelete="CASCADE"), primary_key=True
+        UUID(as_uuid=True),
+        ForeignKey("chunks.id", ondelete="CASCADE"),
+        primary_key=True,
     )
     embedding_profile_id = Column(
         UUID(as_uuid=True),
@@ -369,7 +389,9 @@ class ChunkEmbedding(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     chunk = relationship("Chunk", back_populates="chunk_embeddings")
-    embedding_profile = relationship("EmbeddingProfile", back_populates="chunk_embeddings")
+    embedding_profile = relationship(
+        "EmbeddingProfile", back_populates="chunk_embeddings"
+    )
 
 
 class Conversation(Base):
@@ -433,13 +455,19 @@ class MessageCitation(Base):
         UUID(as_uuid=True), ForeignKey("chunks.id", ondelete="SET NULL"), nullable=True
     )
     document_id = Column(
-        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True
+        UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="SET NULL"),
+        nullable=True,
     )
     version_id = Column(
-        UUID(as_uuid=True), ForeignKey("document_versions.id", ondelete="SET NULL"), nullable=True
+        UUID(as_uuid=True),
+        ForeignKey("document_versions.id", ondelete="SET NULL"),
+        nullable=True,
     )
     source_file_id = Column(
-        UUID(as_uuid=True), ForeignKey("source_files.id", ondelete="SET NULL"), nullable=True
+        UUID(as_uuid=True),
+        ForeignKey("source_files.id", ondelete="SET NULL"),
+        nullable=True,
     )
     rank = Column(Integer, nullable=True)
     retrieval_score = Column(Float, nullable=True)

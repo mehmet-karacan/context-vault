@@ -96,20 +96,82 @@ _EXTENSION_TYPES: Dict[str, str] = {
 
 # Source-code extensions routed to the "code" parser (Aşama 7.5).
 _CODE_EXTENSIONS: Tuple[str, ...] = (
-    ".py", ".pyi", ".pyw",
-    ".java", ".kt", ".kts", ".scala",
-    ".go", ".rs",
-    ".c", ".h", ".cc", ".cpp", ".cxx", ".c++", ".hh", ".hpp", ".hxx",
+    ".py",
+    ".pyi",
+    ".pyw",
+    ".java",
+    ".kt",
+    ".kts",
+    ".scala",
+    ".go",
+    ".rs",
+    ".c",
+    ".h",
+    ".cc",
+    ".cpp",
+    ".cxx",
+    ".c++",
+    ".hh",
+    ".hpp",
+    ".hxx",
     ".cs",
-    ".js", ".mjs", ".cjs", ".jsx", ".ts", ".mts", ".cts", ".tsx",
-    ".rb", ".php", ".swift", ".m", ".mm",
-    ".sh", ".bash", ".zsh", ".fish", ".ps1", ".bat", ".cmd",
-    ".sql", ".plsql", ".pks", ".pkb", ".prc", ".fnc", ".trg", ".vw",
-    ".json", ".yaml", ".yml", ".toml", ".xml",
-    ".html", ".htm", ".css", ".scss", ".sass", ".less",
-    ".tf", ".hcl", ".proto", ".graphql", ".gql", ".r", ".lua",
-    ".ex", ".exs", ".erl", ".hrl", ".hs", ".clj", ".cljs", ".dart",
-    ".vue", ".svelte", ".dockerfile",
+    ".js",
+    ".mjs",
+    ".cjs",
+    ".jsx",
+    ".ts",
+    ".mts",
+    ".cts",
+    ".tsx",
+    ".rb",
+    ".php",
+    ".swift",
+    ".m",
+    ".mm",
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".fish",
+    ".ps1",
+    ".bat",
+    ".cmd",
+    ".sql",
+    ".plsql",
+    ".pks",
+    ".pkb",
+    ".prc",
+    ".fnc",
+    ".trg",
+    ".vw",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".xml",
+    ".html",
+    ".htm",
+    ".css",
+    ".scss",
+    ".sass",
+    ".less",
+    ".tf",
+    ".hcl",
+    ".proto",
+    ".graphql",
+    ".gql",
+    ".r",
+    ".lua",
+    ".ex",
+    ".exs",
+    ".erl",
+    ".hrl",
+    ".hs",
+    ".clj",
+    ".cljs",
+    ".dart",
+    ".vue",
+    ".svelte",
+    ".dockerfile",
 )
 for _ext in _CODE_EXTENSIONS:
     _EXTENSION_TYPES.setdefault(_ext, "code")
@@ -209,6 +271,7 @@ def _type_from_extension(filename: Optional[str]) -> Optional[str]:
 
 
 # --- Concrete parser implementations --------------------------------------
+
 
 def _base_source(source_type: str, title: Optional[str]) -> NormalizedSource:
     return NormalizedSource(
@@ -318,10 +381,14 @@ def _decode_bytes(raw: bytes) -> Tuple[str, str, Dict[str, Any]]:
             return text, "utf-8", info
         return text, candidate, info
 
-    return raw.decode("utf-8", errors="replace"), "utf-8", {
-        **info,
-        "fallback": "replace",
-    }
+    return (
+        raw.decode("utf-8", errors="replace"),
+        "utf-8",
+        {
+            **info,
+            "fallback": "replace",
+        },
+    )
 
 
 def _detect_language(text: str) -> Optional[str]:
@@ -436,7 +503,7 @@ def _fence_info(stripped: str) -> Optional[Tuple[str, Optional[str]]]:
         marker = "~~~"
     if marker is None:
         return None
-    rest = stripped[len(marker):].strip()
+    rest = stripped[len(marker) :].strip()
     return marker, (rest or None)
 
 

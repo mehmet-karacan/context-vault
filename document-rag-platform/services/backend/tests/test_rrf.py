@@ -93,7 +93,9 @@ def _c(hid, source="dense", rank=1, score=1.0, content=None):
     meta = {}
     if content is not None:
         meta["content_hash"] = content
-    return RetrievalCandidate(chunk_id=hid, rank=rank, score=score, source=source, metadata=meta)
+    return RetrievalCandidate(
+        chunk_id=hid, rank=rank, score=score, source=source, metadata=meta
+    )
 
 
 def test_fuse_returns_candidates_with_accumulated_scores():

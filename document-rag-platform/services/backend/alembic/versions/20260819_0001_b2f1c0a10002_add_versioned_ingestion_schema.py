@@ -27,6 +27,7 @@ New nullable columns on existing tables:
 ``downgrade()`` removes everything this migration adds, in dependency-safe
 reverse order, and touches nothing else.
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -80,19 +81,28 @@ def upgrade() -> None:
         sa.Column("storage_key", sa.Text(), nullable=True),
         # FK to document_artifacts.id added below, once that table exists
         # (document_artifacts.version_id references this table -> circular).
-        sa.Column("normalized_artifact_id", postgresql.UUID(as_uuid=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
+        sa.Column(
+            "normalized_artifact_id", postgresql.UUID(as_uuid=True), nullable=True
+        ),
+        sa.Column(
+            "created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")
+        ),
         sa.Column("activated_at", sa.DateTime(), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.UniqueConstraint(
-            "document_id", "version_no", name="uq_document_versions_document_id_version_no"
+            "document_id",
+            "version_no",
+            name="uq_document_versions_document_id_version_no",
         ),
     )
-    op.create_index("ix_document_versions_document_id", "document_versions", ["document_id"])
+    op.create_index(
+        "ix_document_versions_document_id", "document_versions", ["document_id"]
+    )
 
     # documents.active_version_id -> document_versions.id
     op.add_column(
-        "documents", sa.Column("active_version_id", postgresql.UUID(as_uuid=True), nullable=True)
+        "documents",
+        sa.Column("active_version_id", postgresql.UUID(as_uuid=True), nullable=True),
     )
     op.create_foreign_key(
         "fk_documents_active_version_id_document_versions",
@@ -102,7 +112,9 @@ def upgrade() -> None:
         ["id"],
         ondelete="SET NULL",
     )
-    op.create_index("ix_documents_active_version_id", "documents", ["active_version_id"])
+    op.create_index(
+        "ix_documents_active_version_id", "documents", ["active_version_id"]
+    )
 
     # --- source_files (Bölüm 8.3) -----------------------------------------
     op.create_table(
@@ -120,8 +132,12 @@ def upgrade() -> None:
         sa.Column("size_bytes", sa.BigInteger(), nullable=True),
         sa.Column("content_hash", sa.String(), nullable=True),
         sa.Column("is_binary", sa.Boolean(), nullable=False, server_default=sa.false()),
-        sa.Column("is_generated", sa.Boolean(), nullable=False, server_default=sa.false()),
-        sa.Column("is_ignored", sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column(
+            "is_generated", sa.Boolean(), nullable=False, server_default=sa.false()
+        ),
+        sa.Column(
+            "is_ignored", sa.Boolean(), nullable=False, server_default=sa.false()
+        ),
         sa.Column("metadata_json", postgresql.JSONB(), nullable=True),
     )
     op.create_index("ix_source_files_version_id", "source_files", ["version_id"])
@@ -141,9 +157,13 @@ def upgrade() -> None:
         sa.Column("checksum", sa.String(), nullable=True),
         sa.Column("size_bytes", sa.BigInteger(), nullable=True),
         sa.Column("metadata_json", postgresql.JSONB(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
+        sa.Column(
+            "created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")
+        ),
     )
-    op.create_index("ix_document_artifacts_version_id", "document_artifacts", ["version_id"])
+    op.create_index(
+        "ix_document_artifacts_version_id", "document_artifacts", ["version_id"]
+    )
 
     # Now that document_artifacts exists, close the circular FK.
     op.create_foreign_key(
@@ -173,7 +193,9 @@ def upgrade() -> None:
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("started_at", sa.DateTime(), nullable=True),
         sa.Column("finished_at", sa.DateTime(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
+        sa.Column(
+            "created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")
+        ),
     )
     op.create_index("ix_ingestion_jobs_version_id", "ingestion_jobs", ["version_id"])
 
@@ -191,7 +213,9 @@ def upgrade() -> None:
         sa.Column("status", sa.String(), nullable=True),
         sa.Column("message", sa.Text(), nullable=True),
         sa.Column("payload_json", postgresql.JSONB(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
+        sa.Column(
+            "created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")
+        ),
     )
     op.create_index("ix_ingestion_events_job_id", "ingestion_events", ["job_id"])
 
@@ -208,17 +232,24 @@ def upgrade() -> None:
         sa.Column("profile_version", sa.Integer(), nullable=False, server_default="1"),
         sa.Column("config_hash", sa.String(), nullable=True),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.false()),
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
+        sa.Column(
+            "created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")
+        ),
     )
 
     # --- chunks: additive nullable columns (Bölüm 8.7) ----------------------
-    op.add_column("chunks", sa.Column("version_id", postgresql.UUID(as_uuid=True), nullable=True))
     op.add_column(
-        "chunks", sa.Column("source_file_id", postgresql.UUID(as_uuid=True), nullable=True)
+        "chunks", sa.Column("version_id", postgresql.UUID(as_uuid=True), nullable=True)
+    )
+    op.add_column(
+        "chunks",
+        sa.Column("source_file_id", postgresql.UUID(as_uuid=True), nullable=True),
     )
     op.add_column("chunks", sa.Column("sequence_no", sa.Integer(), nullable=True))
     op.add_column("chunks", sa.Column("chunk_type", sa.String(), nullable=True))
-    op.add_column("chunks", sa.Column("heading_path", postgresql.JSONB(), nullable=True))
+    op.add_column(
+        "chunks", sa.Column("heading_path", postgresql.JSONB(), nullable=True)
+    )
     op.add_column("chunks", sa.Column("page_start", sa.Integer(), nullable=True))
     op.add_column("chunks", sa.Column("page_end", sa.Integer(), nullable=True))
     op.add_column("chunks", sa.Column("line_start", sa.Integer(), nullable=True))
@@ -229,10 +260,15 @@ def upgrade() -> None:
     op.add_column("chunks", sa.Column("token_count", sa.Integer(), nullable=True))
     op.add_column("chunks", sa.Column("content_hash", sa.String(), nullable=True))
     op.add_column(
-        "chunks", sa.Column("parent_chunk_id", postgresql.UUID(as_uuid=True), nullable=True)
+        "chunks",
+        sa.Column("parent_chunk_id", postgresql.UUID(as_uuid=True), nullable=True),
     )
-    op.add_column("chunks", sa.Column("metadata_json", postgresql.JSONB(), nullable=True))
-    op.add_column("chunks", sa.Column("search_vector", postgresql.TSVECTOR(), nullable=True))
+    op.add_column(
+        "chunks", sa.Column("metadata_json", postgresql.JSONB(), nullable=True)
+    )
+    op.add_column(
+        "chunks", sa.Column("search_vector", postgresql.TSVECTOR(), nullable=True)
+    )
     op.add_column(
         "chunks", sa.Column("identifiers", postgresql.ARRAY(sa.Text()), nullable=True)
     )
@@ -285,11 +321,17 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("embedding", Vector(_EMBEDDING_DIMENSION), nullable=False),
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
-        sa.PrimaryKeyConstraint("chunk_id", "embedding_profile_id", name="pk_chunk_embeddings"),
+        sa.Column(
+            "created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")
+        ),
+        sa.PrimaryKeyConstraint(
+            "chunk_id", "embedding_profile_id", name="pk_chunk_embeddings"
+        ),
     )
     op.create_index(
-        "ix_chunk_embeddings_embedding_profile_id", "chunk_embeddings", ["embedding_profile_id"]
+        "ix_chunk_embeddings_embedding_profile_id",
+        "chunk_embeddings",
+        ["embedding_profile_id"],
     )
 
     # --- conversations / messages / message_citations (Bölüm 8.10) ---------
@@ -303,7 +345,9 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("title", sa.String(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
+        sa.Column(
+            "created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")
+        ),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
     )
     op.create_index("ix_conversations_project_id", "conversations", ["project_id"])
@@ -321,7 +365,9 @@ def upgrade() -> None:
         sa.Column("content", sa.Text(), nullable=False),
         sa.Column("model", sa.String(), nullable=True),
         sa.Column("answerable", sa.Boolean(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
+        sa.Column(
+            "created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")
+        ),
     )
     op.create_index("ix_messages_conversation_id", "messages", ["conversation_id"])
 
@@ -367,7 +413,9 @@ def upgrade() -> None:
         sa.Column("line_end", sa.Integer(), nullable=True),
         sa.Column("citation_label", sa.String(), nullable=True),
     )
-    op.create_index("ix_message_citations_message_id", "message_citations", ["message_id"])
+    op.create_index(
+        "ix_message_citations_message_id", "message_citations", ["message_id"]
+    )
 
 
 def downgrade() -> None:
@@ -384,14 +432,20 @@ def downgrade() -> None:
     op.drop_index("ix_conversations_project_id", table_name="conversations")
     op.drop_table("conversations")
 
-    op.drop_index("ix_chunk_embeddings_embedding_profile_id", table_name="chunk_embeddings")
+    op.drop_index(
+        "ix_chunk_embeddings_embedding_profile_id", table_name="chunk_embeddings"
+    )
     op.drop_table("chunk_embeddings")
 
     op.drop_table("embedding_profiles")
 
     op.drop_constraint("fk_chunks_parent_chunk_id_chunks", "chunks", type_="foreignkey")
-    op.drop_constraint("fk_chunks_source_file_id_source_files", "chunks", type_="foreignkey")
-    op.drop_constraint("fk_chunks_version_id_document_versions", "chunks", type_="foreignkey")
+    op.drop_constraint(
+        "fk_chunks_source_file_id_source_files", "chunks", type_="foreignkey"
+    )
+    op.drop_constraint(
+        "fk_chunks_version_id_document_versions", "chunks", type_="foreignkey"
+    )
     op.drop_index("ix_chunks_parent_chunk_id", table_name="chunks")
     op.drop_index("ix_chunks_source_file_id", table_name="chunks")
     op.drop_index("ix_chunks_version_id", table_name="chunks")
@@ -437,7 +491,9 @@ def downgrade() -> None:
 
     op.drop_index("ix_documents_active_version_id", table_name="documents")
     op.drop_constraint(
-        "fk_documents_active_version_id_document_versions", "documents", type_="foreignkey"
+        "fk_documents_active_version_id_document_versions",
+        "documents",
+        type_="foreignkey",
     )
     op.drop_column("documents", "active_version_id")
 

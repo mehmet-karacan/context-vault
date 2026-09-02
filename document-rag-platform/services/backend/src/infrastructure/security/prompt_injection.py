@@ -52,19 +52,37 @@ _add("act_as_system", r"role\s*[:=]\s*system")
 _add("new_system_prompt", r"set(?:ting)? your system prompt")
 
 # Instruct the model to discard its prior instructions / guardrails.
-_add("ignore_prior", r"ignore (?:all )?(?:the |my |your )?(?:previous|prior|above) instructions")
-_add("ignore_earlier", r"disregard (?:all )?(?:previous|prior|above) (?:instructions|guidelines)")
-_add("forget_context", r"forget (?:everything|all (?:previous|prior) (?:context|instructions))")
+_add(
+    "ignore_prior",
+    r"ignore (?:all )?(?:the |my |your )?(?:previous|prior|above) instructions",
+)
+_add(
+    "ignore_earlier",
+    r"disregard (?:all )?(?:previous|prior|above) (?:instructions|guidelines)",
+)
+_add(
+    "forget_context",
+    r"forget (?:everything|all (?:previous|prior) (?:context|instructions))",
+)
 
 # Chain-of-thought / system-prompt exfiltration.
-_add("reveal_system_prompt", r"(?:reveal|show|print|expose|repeat|leak) (?:your |the )?system prompt")
-_add("reveal_cot", r"(?:show|reveal|explain|output) (?:your|the) (?:chain of thought|reasoning process|inner monologue)")
+_add(
+    "reveal_system_prompt",
+    r"(?:reveal|show|print|expose|repeat|leak) (?:your |the )?system prompt",
+)
+_add(
+    "reveal_cot",
+    r"(?:show|reveal|explain|output) (?:your|the) (?:chain of thought|reasoning process|inner monologue)",
+)
 _add("extract_instructions", r"what are your internal instructions")
 
 # Common jailbreak phrases.
 _add("jailbreak_dan", r"\bdan\b(?: mode)?:? (?:do anything now|jailbreak)")
 _add("developer_mode", r"(?:developer|dev) mode")
-_add("no_restrictions", r"ignore (?:your )?(?:safety|content) (?:policy|filters|guidelines|restrictions)")
+_add(
+    "no_restrictions",
+    r"ignore (?:your )?(?:safety|content) (?:policy|filters|guidelines|restrictions)",
+)
 _add("pretend_no_limits", r"pretend you (?:have|are running with) no restrictions")
 
 

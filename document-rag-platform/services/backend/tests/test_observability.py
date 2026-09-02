@@ -97,7 +97,12 @@ def test_metrics_collector_records_embedding_counters():
 
 def test_readiness_ok_when_all_dependencies_up():
     checker = ReadinessChecker(
-        {"db": lambda: True, "redis": lambda: True, "minio": lambda: True, "gateway": lambda: True}
+        {
+            "db": lambda: True,
+            "redis": lambda: True,
+            "minio": lambda: True,
+            "gateway": lambda: True,
+        }
     )
     result = checker.run()
     assert result["status"] == "ok"
@@ -111,7 +116,12 @@ def test_readiness_ok_when_all_dependencies_up():
 
 def test_readiness_degraded_not_crash_when_dependency_down():
     checker = ReadinessChecker(
-        {"db": lambda: True, "redis": lambda: False, "minio": lambda: True, "gateway": lambda: True}
+        {
+            "db": lambda: True,
+            "redis": lambda: False,
+            "minio": lambda: True,
+            "gateway": lambda: True,
+        }
     )
     result = checker.run()  # must not raise
     assert result["status"] == "degraded"

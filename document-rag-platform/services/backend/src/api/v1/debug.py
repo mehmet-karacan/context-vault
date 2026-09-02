@@ -68,6 +68,7 @@ def _chunk_to_dict(chunk: Chunk, doc: Optional[Document]) -> Dict[str, Any]:
 
 def _build_resolvers(db: Session):
     """Build DB-backed chunk / neighbour resolvers for a session."""
+
     # Pre-fetch documents so we can attach names cheaply.
     def chunk_resolver(chunk_id: str) -> Optional[Dict[str, Any]]:
         row = (

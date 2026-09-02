@@ -125,7 +125,12 @@ _BINARY_MAGICS: tuple[tuple[bytes, ...], ...] = (
     (b"GIF87a", b"GIF89a"),
     (b"BM",),  # Windows BMP
     (b"\xca\xfe\xba\xbe", b"\xca\xfe\xba\xbb"),  # Java class / Mach-O fat
-    (b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\xcf\xfa\xed\xfe"),  # Mach-O
+    (
+        b"\xfe\xed\xfa\xce",
+        b"\xce\xfa\xed\xfe",
+        b"\xfe\xed\xfa\xcf",
+        b"\xcf\xfa\xed\xfe",
+    ),  # Mach-O
     (b"\x7fELF",),  # ELF
     (b"\x4d\x5a",),  # PE (MZ)
     (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"),  # ZIP / JAR / ODT etc.
@@ -141,14 +146,61 @@ _BINARY_MAGICS: tuple[tuple[bytes, ...], ...] = (
 
 # Extension-based binary shortcut: these extensions almost always denote
 # compiled/binary artifacts and are checked before content sniffing.
-_BINARY_EXTENSIONS: frozenset[str] = frozenset({
-    "png", "jpg", "jpeg", "gif", "bmp", "webp", "ico", "tif", "tiff",
-    "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
-    "zip", "jar", "gz", "tar", "tgz", "bz2", "xz", "7z", "rar", "zst",
-    "exe", "dll", "so", "dylib", "class", "obj", "o", "a", "lib",
-    "wasm", "pyc", "pyo", "pyd", "woff", "woff2", "ttf", "otf", "eot",
-    "db", "sqlite", "sqlite3", "mdb", "bin", "iso", "img",
-})
+_BINARY_EXTENSIONS: frozenset[str] = frozenset(
+    {
+        "png",
+        "jpg",
+        "jpeg",
+        "gif",
+        "bmp",
+        "webp",
+        "ico",
+        "tif",
+        "tiff",
+        "pdf",
+        "doc",
+        "docx",
+        "xls",
+        "xlsx",
+        "ppt",
+        "pptx",
+        "zip",
+        "jar",
+        "gz",
+        "tar",
+        "tgz",
+        "bz2",
+        "xz",
+        "7z",
+        "rar",
+        "zst",
+        "exe",
+        "dll",
+        "so",
+        "dylib",
+        "class",
+        "obj",
+        "o",
+        "a",
+        "lib",
+        "wasm",
+        "pyc",
+        "pyo",
+        "pyd",
+        "woff",
+        "woff2",
+        "ttf",
+        "otf",
+        "eot",
+        "db",
+        "sqlite",
+        "sqlite3",
+        "mdb",
+        "bin",
+        "iso",
+        "img",
+    }
+)
 
 
 def _extract_extension(relative_path: str) -> str:
@@ -158,7 +210,9 @@ def _extract_extension(relative_path: str) -> str:
     return filename.rsplit(".", 1)[-1].lower()
 
 
-def detect_language(relative_path: str, filename: Optional[str] = None) -> Optional[str]:
+def detect_language(
+    relative_path: str, filename: Optional[str] = None
+) -> Optional[str]:
     """Return a language slug for the given path/filename, or ``None``.
 
     ``relative_path`` is used to derive the extension (and the basename for

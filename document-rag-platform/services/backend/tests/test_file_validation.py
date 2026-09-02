@@ -64,7 +64,10 @@ def test_extension_vs_magic_mismatch_renamed_pdf_rejected():
     res = validate_upload(_PDF, "aslinda_pdf.txt", "text/plain", config=CFG)
     assert res.ok is False
     assert res.detected_magic == "pdf"
-    assert "mismatch" in (res.error or "").lower() or "content" in (res.error or "").lower()
+    assert (
+        "mismatch" in (res.error or "").lower()
+        or "content" in (res.error or "").lower()
+    )
 
 
 def test_claimed_pdf_without_magic_rejected():

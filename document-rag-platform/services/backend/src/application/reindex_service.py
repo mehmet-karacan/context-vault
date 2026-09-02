@@ -69,8 +69,10 @@ def _default_parse(file_path: str, filename: str) -> str:
         parsed = CodeParser().parse(file_path, filename)
     except Exception:
         parsed = None
-    if parsed is not None and parsed.source_type == "code" and any(
-        u.text.strip() for u in parsed.units
+    if (
+        parsed is not None
+        and parsed.source_type == "code"
+        and any(u.text.strip() for u in parsed.units)
     ):
         return json.dumps(parsed.to_dict())
     with open(file_path, "rb") as fh:
@@ -119,6 +121,7 @@ def _default_chunk(text: str, chunk_size: int = 500, overlap: int = 50) -> List[
 
 def _default_embed(texts: List[str], instruction: str = "") -> List[List[float]]:
     from ..llm import embed_texts  # type: ignore
+
     return embed_texts(texts, instruction=instruction)
 
 
@@ -180,10 +183,18 @@ class ReindexService:
         return db.get(DocumentVersion, document.active_version_id)
 
     def _store_original_artifact(
-        self, db, document: Document, version: DocumentVersion, sf: SourceFile, data: bytes
+        self,
+        db,
+        document: Document,
+        version: DocumentVersion,
+        sf: SourceFile,
+        data: bytes,
     ) -> None:
         key = object_keys.artifact_key(
-            str(document.project_id), str(document.id), str(version.id), sf.relative_path
+            str(document.project_id),
+            str(document.id),
+            str(version.id),
+            sf.relative_path,
         )
         if self.storage is not None:
             self.storage.put(key, data, content_type="application/octet-stream")
@@ -217,7 +228,9 @@ class ReindexService:
         text = self.parse_fn(file.abs_path, file.relative_path)
         if not text:
             return 0
-        chunks = self.chunk_fn(text, chunk_size=self.chunk_size, overlap=self.chunk_overlap)
+        chunks = self.chunk_fn(
+            text, chunk_size=self.chunk_size, overlap=self.chunk_overlap
+        )
         if not chunks:
             return 0
         embeddings = self.embed_fn(chunks, instruction=self.embed_instruction)
@@ -239,7 +252,10 @@ class ReindexService:
                 content_hash=hashlib.sha256(content.encode("utf-8")).hexdigest(),
                 line_start=None,
                 line_end=None,
-                metadata_json={"source_file": sf.relative_path, "language": file.language},
+                metadata_json={
+                    "source_file": sf.relative_path,
+                    "language": file.language,
+                },
                 created_at=datetime.utcnow(),
             )
             db.add(chunk)
@@ -310,7 +326,9 @@ class ReindexService:
         if prev_version is not None:
             prev_by_path = {
                 sf.relative_path: sf
-                for sf in db.query(SourceFile).filter(SourceFile.version_id == prev_version.id).all()
+                for sf in db.query(SourceFile)
+                .filter(SourceFile.version_id == prev_version.id)
+                .all()
             }
             for c in db.query(Chunk).filter(Chunk.version_id == prev_version.id).all():
                 prev_chunks_by_file.setdefault(str(c.source_file_id), []).append(c)
@@ -330,8 +348,10 @@ class ReindexService:
             version_no=version_no,
             source_revision=scan.source_revision,
             status="pending",
-            parser_profile=getattr(settings, "CODE_PARSER_PROFILE", None) or "code-default",
-            chunker_profile=getattr(settings, "CODE_CHUNKER_PROFILE", None) or "code-default",
+            parser_profile=getattr(settings, "CODE_PARSER_PROFILE", None)
+            or "code-default",
+            chunker_profile=getattr(settings, "CODE_CHUNKER_PROFILE", None)
+            or "code-default",
             created_at=now,
         )
         db.add(new_version)
@@ -369,7 +389,9 @@ class ReindexService:
                     db, document, new_version, sf, prev_sf, prev_chunks_by_file
                 )
             else:
-                processed += self._process_changed_file(db, document, new_version, sf, file)
+                processed += self._process_changed_file(
+                    db, document, new_version, sf, file
+                )
 
         # ---- atomic activation: only after the whole version is ready ----
         new_version.status = "ready"

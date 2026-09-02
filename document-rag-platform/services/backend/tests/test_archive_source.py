@@ -41,6 +41,7 @@ def _write_tmp(data: bytes, suffix: str = ".zip"):
 def _stub_discovery(result):
     def _discover(root_dir, **kwargs):
         return result
+
     return _discover
 
 
@@ -111,4 +112,3 @@ def test_archive_exceeding_entry_count_raises(tmp_path):
     os.makedirs(dest)
     with pytest.raises(ArchiveLimitError):
         scanner.extract(_write_tmp(z), dest)
-

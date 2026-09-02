@@ -83,9 +83,7 @@ def extract_page_texts(file_path: str, min_text_len: int = _MIN_TEXT_LEN) -> Lis
     try:
         reader = PdfReader(file_path)
     except Exception as exc:  # MissingPdfReadError / PyPdfError / OSError ...
-        raise UnreadablePdfError(
-            f"could not read PDF '{file_path}': {exc}"
-        ) from exc
+        raise UnreadablePdfError(f"could not read PDF '{file_path}': {exc}") from exc
 
     pages: List[Dict] = []
     for i, page in enumerate(reader.pages):
@@ -252,9 +250,7 @@ class PdfParser(DocumentParser):
                 "bbox": False,
                 "digital_scanned_classification": True,
                 "ocr": False,
-                "warnings": [
-                    "Docling unavailable or disabled; limited fallback used"
-                ],
+                "warnings": ["Docling unavailable or disabled; limited fallback used"],
             },
         }
         source.metadata.update(coverage_metadata(pages, coverage, classification))

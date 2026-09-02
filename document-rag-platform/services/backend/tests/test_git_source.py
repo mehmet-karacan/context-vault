@@ -41,7 +41,9 @@ def _stub_discovery():
 def test_scan_captures_metadata_and_flags(tmp_path):
     fake = FakeGitRunner()
     src = GitRepositorySource(
-        git_runner=fake, sandbox_factory=lambda: str(tmp_path / "sbx"), discovery=_stub_discovery()
+        git_runner=fake,
+        sandbox_factory=lambda: str(tmp_path / "sbx"),
+        discovery=_stub_discovery(),
     )
     scan = src.scan("https://github.com/org/repo.git", ref="main")
 
@@ -60,7 +62,9 @@ def test_scan_captures_metadata_and_flags(tmp_path):
     assert "--config" in clone
     assert "core.autocrlf=false" in clone
     assert "filter.lfs.required=false" in clone
-    assert next(c for c in clone if c.startswith("core.hooksPath=")).startswith("core.hooksPath=")
+    assert next(c for c in clone if c.startswith("core.hooksPath=")).startswith(
+        "core.hooksPath="
+    )
     assert "git" in clone
     assert "rev-parse" in [a for c in fake.calls for a in c["argv"]]
 
@@ -68,7 +72,9 @@ def test_scan_captures_metadata_and_flags(tmp_path):
 def test_no_ref_is_full_clone_without_branch_flag(tmp_path):
     fake = FakeGitRunner()
     src = GitRepositorySource(
-        git_runner=fake, sandbox_factory=lambda: str(tmp_path / "sbx"), discovery=_stub_discovery()
+        git_runner=fake,
+        sandbox_factory=lambda: str(tmp_path / "sbx"),
+        discovery=_stub_discovery(),
     )
     src.scan("https://github.com/org/repo.git")
     clone = [c["argv"] for c in fake.calls if c["argv"][:2] == ["git", "clone"]][0]
@@ -79,7 +85,9 @@ def test_no_ref_is_full_clone_without_branch_flag(tmp_path):
 def test_no_forbidden_command_is_ever_invoked(tmp_path):
     fake = FakeGitRunner()
     src = GitRepositorySource(
-        git_runner=fake, sandbox_factory=lambda: str(tmp_path / "sbx"), discovery=_stub_discovery()
+        git_runner=fake,
+        sandbox_factory=lambda: str(tmp_path / "sbx"),
+        discovery=_stub_discovery(),
     )
     src.scan("https://github.com/org/repo.git", ref="main")
 
@@ -90,7 +98,10 @@ def test_no_forbidden_command_is_ever_invoked(tmp_path):
     for call in fake.calls:
         assert call["argv"][0] == "git", f"non-git executable invoked: {call['argv']}"
         # Submodules are never pulled automatically.
-        assert "submodule" not in call["argv"] and "submodule" not in " ".join(call["argv"]).lower()
+        assert (
+            "submodule" not in call["argv"]
+            and "submodule" not in " ".join(call["argv"]).lower()
+        )
 
 
 def test_real_runner_is_non_shell_and_safe_env(monkeypatch):

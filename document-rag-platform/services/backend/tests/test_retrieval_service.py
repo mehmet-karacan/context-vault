@@ -13,7 +13,11 @@ tight token budget verify the rerank and context paths. Covers:
 - the debug payload contains per-stage ranks / scores / labels.
 """
 
-from src.application.retrieval_service import RetrievalResult, RetrievalService, dict_chunk_resolver
+from src.application.retrieval_service import (
+    RetrievalResult,
+    RetrievalService,
+    dict_chunk_resolver,
+)
 from src.infrastructure.retrieval.base import RetrievalCandidate
 from src.infrastructure.retrieval.context_builder import ContextBuilder
 from src.infrastructure.retrieval.no_answer import INTENT_DOCUMENT, INTENT_SMALLTALK
@@ -33,7 +37,7 @@ class FakeRetriever:
 
     def search(self, query, top_k, filters=None, **kwargs):
         self.calls.append({"query": query, "top_k": top_k, "filters": filters})
-        return list(self._candidates[: top_k])
+        return list(self._candidates[:top_k])
 
 
 class RecordingReranker:
@@ -57,12 +61,16 @@ class ReversingReranker(RecordingReranker):
 
     def rerank(self, query, candidates, top_k):
         super().rerank(query, candidates, top_k)
-        return list(reversed(candidates))[: top_k]
+        return list(reversed(candidates))[:top_k]
 
 
 def cand(chunk_id, rank, score, source, meta=None):
     return RetrievalCandidate(
-        chunk_id=chunk_id, rank=rank, score=score, source=source, metadata=dict(meta or {})
+        chunk_id=chunk_id,
+        rank=rank,
+        score=score,
+        source=source,
+        metadata=dict(meta or {}),
     )
 
 
@@ -93,10 +101,20 @@ def build_service(dense, lexical, identifier, **kw):
 
 
 def test_rrf_fusion_order_is_correct():
-    dense = [cand("A", 1, 0.9, "dense"), cand("B", 2, 0.8, "dense"), cand("C", 3, 0.7, "dense")]
+    dense = [
+        cand("A", 1, 0.9, "dense"),
+        cand("B", 2, 0.8, "dense"),
+        cand("C", 3, 0.7, "dense"),
+    ]
     lexical = [cand("D", 1, 0.6, "lexical"), cand("A", 2, 0.5, "lexical")]
     identifier = [cand("E", 1, 1.0, "identifier")]
-    pool = [chunk("A", "a"), chunk("B", "b"), chunk("C", "c"), chunk("D", "d"), chunk("E", "e")]
+    pool = [
+        chunk("A", "a"),
+        chunk("B", "b"),
+        chunk("C", "c"),
+        chunk("D", "d"),
+        chunk("E", "e"),
+    ]
 
     service = build_service(dense, lexical, identifier, _pool=pool)
     result = service.retrieve("some query", debug=True)
@@ -110,12 +128,16 @@ def test_rrf_fusion_order_is_correct():
 def test_dedupe_removes_identical_content_copies():
     # Distinct chunk ids, identical content_hash across two different candidates
     # that both make it past fusion.
-    dense = [cand("X1", 1, 0.9, "dense", meta={"content_hash": "H"}),
-             cand("X2", 2, 0.8, "dense", meta={"content_hash": "H"})]
+    dense = [
+        cand("X1", 1, 0.9, "dense", meta={"content_hash": "H"}),
+        cand("X2", 2, 0.8, "dense", meta={"content_hash": "H"}),
+    ]
     lexical = []
     identifier = []
-    pool = [chunk("X1", "identical body", content_hash="H"),
-            chunk("X2", "identical body", content_hash="H")]
+    pool = [
+        chunk("X1", "identical body", content_hash="H"),
+        chunk("X2", "identical body", content_hash="H"),
+    ]
 
     service = build_service(dense, lexical, identifier, _pool=pool)
     result = service.retrieve("dup", debug=True)
@@ -159,8 +181,12 @@ def test_reranker_reorder_is_honored_when_enabled():
 
 def test_context_built_within_budget():
     # Tight token budget (each chunk = 100 tokens via exact counter).
-    dense = [cand("A", 1, 0.9, "dense"), cand("B", 2, 0.8, "dense"),
-             cand("C", 3, 0.7, "dense"), cand("D", 4, 0.6, "dense")]
+    dense = [
+        cand("A", 1, 0.9, "dense"),
+        cand("B", 2, 0.8, "dense"),
+        cand("C", 3, 0.7, "dense"),
+        cand("D", 4, 0.6, "dense"),
+    ]
     lexical, identifier = [], []
     pool = [chunk("A", "aaa"), chunk("B", "bbb"), chunk("C", "ccc"), chunk("D", "ddd")]
 
@@ -169,7 +195,9 @@ def test_context_built_within_budget():
             return 100
 
     builder = ContextBuilder(token_counter=Exact(), max_tokens=250, max_chunks=8)
-    service = build_service(dense, lexical, identifier, _pool=pool, context_builder=builder)
+    service = build_service(
+        dense, lexical, identifier, _pool=pool, context_builder=builder
+    )
     result = service.retrieve("q")
 
     assert result.context is not None
@@ -268,7 +296,7 @@ def _real_retriever_service():
     from src.infrastructure.retrieval.identifier import IdentifierRetriever
     from src.infrastructure.retrieval.lexical import LexicalRetriever
 
-    sessions = [ _RecordingSession() for _ in range(3) ]
+    sessions = [_RecordingSession() for _ in range(3)]
     service = RetrievalService(
         dense_retriever=DenseVectorRetriever(session=sessions[0]),
         lexical_retriever=LexicalRetriever(session=sessions[1]),
@@ -288,7 +316,9 @@ def test_real_retriever_path_applies_non_empty_filters():
     service, (dense_s, lexical_s, identifier_s) = _real_retriever_service()
 
     # Non-empty: project_id only ---
-    result = service.retrieve("PAYMENT_FLAG nasıl set ediliyor?", filters={"project_id": "proj-1"})
+    result = service.retrieve(
+        "PAYMENT_FLAG nasıl set ediliyor?", filters={"project_id": "proj-1"}
+    )
     assert result.filters == {"project_id": "proj-1"}
     for session in (dense_s, lexical_s, identifier_s):
         assert session.executed_sql is not None

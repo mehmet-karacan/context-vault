@@ -45,7 +45,10 @@ from typing import Any, Callable, Dict, List, Optional
 
 from src.config import Settings, settings as default_settings
 from src.infrastructure.retrieval.base import RetrievalCandidate
-from src.infrastructure.retrieval.context_builder import ContextBuilder, ContextBuildResult
+from src.infrastructure.retrieval.context_builder import (
+    ContextBuilder,
+    ContextBuildResult,
+)
 from src.infrastructure.retrieval.lexical import (
     content_has_any_term,
     significant_query_terms,
@@ -134,7 +137,9 @@ class RetrievalResult:
             "filters": dict(self.filters),
             "intent": self.answerability.intent if self.answerability else None,
             "answerable": self.answerability.answerable if self.answerability else None,
-            "answerability": self.answerability.to_dict() if self.answerability else None,
+            "answerability": self.answerability.to_dict()
+            if self.answerability
+            else None,
             "ranked": [serialize_candidate(c) for c in self.ranked_candidates],
             "context": self.context.to_dict() if self.context else None,
             "citations": list(self.citations),
@@ -150,7 +155,9 @@ class RetrievalResult:
             "filters": dict(self.filters),
             "config": dict(self.config_snapshot),
             "reranker": dict(self.reranker),
-            "answerability": self.answerability.to_dict() if self.answerability else None,
+            "answerability": self.answerability.to_dict()
+            if self.answerability
+            else None,
             "stages": {
                 stage: [serialize_candidate(c) for c in candidates]
                 for stage, candidates in self.stage_candidates.items()
@@ -238,12 +245,16 @@ class RetrievalService:
         self._embedder = embedder
         self._fusion_fn = fusion_fn or _fuse
         self._dedupe_fn = dedupe_fn or _dedupe
-        self.reranker = reranker if reranker is not None else build_reranker(self.settings)
+        self.reranker = (
+            reranker if reranker is not None else build_reranker(self.settings)
+        )
         self.context_builder = context_builder or ContextBuilder()
         self.policy = policy or AnswerPolicy()
 
         self._chunk_resolver = (
-            chunk_resolver if chunk_resolver is not None else dict_chunk_resolver(chunk_pool)
+            chunk_resolver
+            if chunk_resolver is not None
+            else dict_chunk_resolver(chunk_pool)
         )
         self.neighbor_resolver = neighbor_resolver
 
@@ -453,11 +464,10 @@ class RetrievalService:
                     "lexical_score": lexical_scores.get(c.chunk_id),
                     "identifier": ident_score is not None,
                     "exact_identifier": (
-                        ident_score is not None and ident_score >= _EXACT_IDENTIFIER_SCORE
+                        ident_score is not None
+                        and ident_score >= _EXACT_IDENTIFIER_SCORE
                     ),
-                    "lexical_presence": _candidate_lexical_presence(
-                        c, presence_terms
-                    ),
+                    "lexical_presence": _candidate_lexical_presence(c, presence_terms),
                 }
             )
         return evidence
@@ -467,7 +477,11 @@ class RetrievalService:
         for i, c in enumerate(ranked or [], start=1):
             chunk = getattr(c, "chunk", None)
             meta = dict(c.metadata or {})
-            chunk_meta = dict(getattr(chunk, "metadata", None) or {}) if chunk is not None else {}
+            chunk_meta = (
+                dict(getattr(chunk, "metadata", None) or {})
+                if chunk is not None
+                else {}
+            )
             heading = list(getattr(chunk, "heading_path", None) or [])
             locator = dict(getattr(chunk, "locator", None) or {})
             citations.append(
@@ -478,7 +492,8 @@ class RetrievalService:
                     "source": c.source,
                     "chunk_id": c.chunk_id,
                     "document_id": meta.get("document_id"),
-                    "document_name": meta.get("document_name") or chunk_meta.get("document_name"),
+                    "document_name": meta.get("document_name")
+                    or chunk_meta.get("document_name"),
                     "source_type": meta.get("source_type"),
                     "heading_path": heading,
                     "locator": locator,

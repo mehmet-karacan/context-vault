@@ -18,7 +18,14 @@ from datetime import datetime
 
 from src.application.reindex_service import ReindexService
 from src.infrastructure.repositories.scan_result import ScannedFile, ScanResult
-from src.models import Chunk, ChunkEmbedding, Document, DocumentVersion, EmbeddingProfile, SourceFile
+from src.models import (
+    Chunk,
+    ChunkEmbedding,
+    Document,
+    DocumentVersion,
+    EmbeddingProfile,
+    SourceFile,
+)
 
 
 # --- Fake SQLAlchemy session (pattern from tests/test_ingestion_tasks.py) ----
@@ -50,7 +57,11 @@ class FakeQuery:
         return self
 
     def _matching(self):
-        return [o for o in self.session.objects.get(self.model, []) if _matches(o, self._criteria)]
+        return [
+            o
+            for o in self.session.objects.get(self.model, [])
+            if _matches(o, self._criteria)
+        ]
 
     def first(self):
         m = self._matching()
@@ -127,7 +138,11 @@ def _scanned(tmpdir, name, content: bytes) -> ScannedFile:
 def _seed_prev_version(db, doc):
     """Latest active version with 3 source_files (a, b, del) each 1 chunk."""
     prev = DocumentVersion(
-        id=uuid.uuid4(), document_id=doc.id, version_no=1, status="ready", created_at=datetime.utcnow()
+        id=uuid.uuid4(),
+        document_id=doc.id,
+        version_no=1,
+        status="ready",
+        created_at=datetime.utcnow(),
     )
     db.add(prev)
     doc.active_version_id = prev.id
@@ -135,22 +150,36 @@ def _seed_prev_version(db, doc):
     files = {}
     for name in ("a.py", "b.py", "del.py"):
         sf = SourceFile(
-            id=uuid.uuid4(), version_id=prev.id, relative_path=name, content_hash=_h(name.encode()),
-            size_bytes=4, language="python",
+            id=uuid.uuid4(),
+            version_id=prev.id,
+            relative_path=name,
+            content_hash=_h(name.encode()),
+            size_bytes=4,
+            language="python",
         )
         db.add(sf)
         files[name] = sf.id
 
     profile = EmbeddingProfile(
-        id=uuid.uuid4(), provider="p", model="m", dimension=4, is_active=True, created_at=datetime.utcnow()
+        id=uuid.uuid4(),
+        provider="p",
+        model="m",
+        dimension=4,
+        is_active=True,
+        created_at=datetime.utcnow(),
     )
     db.add(profile)
 
     for name, sfid in files.items():
         db.add(
             Chunk(
-                id=uuid.uuid4(), document_id=doc.id, version_id=prev.id, source_file_id=sfid,
-                chunk_index=0, content=f"old {name}", embedding=[0.0, 0.0, 0.0, 0.0],
+                id=uuid.uuid4(),
+                document_id=doc.id,
+                version_id=prev.id,
+                source_file_id=sfid,
+                chunk_index=0,
+                content=f"old {name}",
+                embedding=[0.0, 0.0, 0.0, 0.0],
             )
         )
     return prev
@@ -178,19 +207,28 @@ def _counting_collaborators(tmpdir):
 def test_changed_reparsed_unchanged_skipped_deleted_absent(tmp_path):
     db = FakeSession()
     doc = Document(
-        id=uuid.uuid4(), project_id=uuid.uuid4(), name="repo", size=0, status="indexed",
-        created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        id=uuid.uuid4(),
+        project_id=uuid.uuid4(),
+        name="repo",
+        size=0,
+        status="indexed",
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
     )
     db.add(doc)
     prev = _seed_prev_version(db, doc)
 
-    parsed, embedded, parse_fn, chunk_fn, embed_fn = _counting_collaborators(str(tmp_path))
+    parsed, embedded, parse_fn, chunk_fn, embed_fn = _counting_collaborators(
+        str(tmp_path)
+    )
 
     # a.py unchanged (same hash as prev), b.py changed, c.py new; del.py deleted
     a = _scanned(tmp_path, "a.py", b"a.py")
     b = _scanned(tmp_path, "b.py", b"NEW B CONTENT")
     c = _scanned(tmp_path, "c.py", b"NEW C CONTENT")
-    scan = ScanResult(source_type="repository", source_revision="newcommit", files=[a, b, c])
+    scan = ScanResult(
+        source_type="repository", source_revision="newcommit", files=[a, b, c]
+    )
 
     service = ReindexService(
         storage=FakeStorage(), parse_fn=parse_fn, chunk_fn=chunk_fn, embed_fn=embed_fn
@@ -199,7 +237,7 @@ def test_changed_reparsed_unchanged_skipped_deleted_absent(tmp_path):
 
     assert result["version_no"] == 2
     assert result["files_processed"] == 2  # b, c
-    assert result["files_copied"] == 1     # a
+    assert result["files_copied"] == 1  # a
     assert result["deleted_files"] == ["del.py"]
 
     # parse only happened for b and c (not the unchanged a.py)
@@ -217,12 +255,18 @@ def test_changed_reparsed_unchanged_skipped_deleted_absent(tmp_path):
     assert doc.active_version_id == new_version.id
 
     # New version's source_files = a,b,c (no del.py)
-    new_paths = {sf.relative_path for sf in db.query(SourceFile).filter(
-        SourceFile.version_id == new_version.id).all()}
+    new_paths = {
+        sf.relative_path
+        for sf in db.query(SourceFile)
+        .filter(SourceFile.version_id == new_version.id)
+        .all()
+    }
     assert new_paths == {"a.py", "b.py", "c.py"}
 
     # Chunks in new version: 3 (a copied + b + c)
-    new_chunks = [ch for ch in db.objects.get(Chunk, []) if ch.version_id == new_version.id]
+    new_chunks = [
+        ch for ch in db.objects.get(Chunk, []) if ch.version_id == new_version.id
+    ]
     assert len(new_chunks) == 3
     assert doc.active_version_id == new_version.id
 
@@ -231,7 +275,11 @@ def test_atomic_activation_not_swapped_without_all_ready(tmp_path):
     """Validation failure mid-run must NOT swap active_version_id."""
     db = FakeSession()
     doc = Document(
-        id=uuid.uuid4(), project_id=uuid.uuid4(), name="repo", size=0, status="indexed",
+        id=uuid.uuid4(),
+        project_id=uuid.uuid4(),
+        name="repo",
+        size=0,
+        status="indexed",
         created_at=datetime.utcnow(),
     )
     db.add(doc)
@@ -244,7 +292,9 @@ def test_atomic_activation_not_swapped_without_all_ready(tmp_path):
 
     f = _scanned(tmp_path, "x.py", b"content x")
     scan = ScanResult(source_type="repository", source_revision="r2", files=[f])
-    service = ReindexService(parse_fn=lambda p, f: "t", chunk_fn=lambda t, **kw: ["c1"], embed_fn=bad_embed)
+    service = ReindexService(
+        parse_fn=lambda p, f: "t", chunk_fn=lambda t, **kw: ["c1"], embed_fn=bad_embed
+    )
 
     try:
         service.run(db, doc, scan)
@@ -257,14 +307,24 @@ def test_atomic_activation_not_swapped_without_all_ready(tmp_path):
 
 def test_first_ingest_creates_version_one_without_prev(tmp_path):
     db = FakeSession()
-    doc = Document(id=uuid.uuid4(), project_id=uuid.uuid4(), name="repo", size=0, created_at=datetime.utcnow())
+    doc = Document(
+        id=uuid.uuid4(),
+        project_id=uuid.uuid4(),
+        name="repo",
+        size=0,
+        created_at=datetime.utcnow(),
+    )
     db.add(doc)
 
-    parsed, embedded, parse_fn, chunk_fn, embed_fn = _counting_collaborators(str(tmp_path))
+    parsed, embedded, parse_fn, chunk_fn, embed_fn = _counting_collaborators(
+        str(tmp_path)
+    )
     f = _scanned(tmp_path, "only.py", b"hello")
     scan = ScanResult(source_type="repository", source_revision="abc", files=[f])
 
-    service = ReindexService(storage=FakeStorage(), parse_fn=parse_fn, chunk_fn=chunk_fn, embed_fn=embed_fn)
+    service = ReindexService(
+        storage=FakeStorage(), parse_fn=parse_fn, chunk_fn=chunk_fn, embed_fn=embed_fn
+    )
     result = service.run(db, doc, scan)
 
     assert result["version_no"] == 1
@@ -289,8 +349,13 @@ def test_default_wiring_uses_real_code_parser_and_plsql_chunker(tmp_path):
     """
     db = FakeSession()
     doc = Document(
-        id=uuid.uuid4(), project_id=uuid.uuid4(), name="repo", size=0, status="indexed",
-        created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        id=uuid.uuid4(),
+        project_id=uuid.uuid4(),
+        name="repo",
+        size=0,
+        status="indexed",
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
     )
     db.add(doc)
 
@@ -308,7 +373,7 @@ def test_default_wiring_uses_real_code_parser_and_plsql_chunker(tmp_path):
         b"\n"
         b"class Greeter:\n"
         b"    def hello(self):\n"
-        b"        return \"hi\"\n"
+        b'        return "hi"\n'
     )
 
     pks_path = _write(tmp_path, "pkg/emp_mgmt.pks", pks_content)
@@ -319,14 +384,20 @@ def test_default_wiring_uses_real_code_parser_and_plsql_chunker(tmp_path):
         source_revision="r1",
         files=[
             ScannedFile(
-                relative_path="pkg/emp_mgmt.pks", abs_path=pks_path,
-                size_bytes=len(pks_content), content_hash=_h(pks_content),
-                language="plsql", mime_type="text/x-plsql",
+                relative_path="pkg/emp_mgmt.pks",
+                abs_path=pks_path,
+                size_bytes=len(pks_content),
+                content_hash=_h(pks_content),
+                language="plsql",
+                mime_type="text/x-plsql",
             ),
             ScannedFile(
-                relative_path="code/util.py", abs_path=py_path,
-                size_bytes=len(py_content), content_hash=_h(py_content),
-                language="python", mime_type="text/x-python",
+                relative_path="code/util.py",
+                abs_path=py_path,
+                size_bytes=len(py_content),
+                content_hash=_h(py_content),
+                language="python",
+                mime_type="text/x-python",
             ),
         ],
     )
@@ -341,12 +412,18 @@ def test_default_wiring_uses_real_code_parser_and_plsql_chunker(tmp_path):
     # 2 PL/SQL chunks + 1 Python chunk == 3 total processed chunks.
     assert result["files_processed"] == 3
 
-    chunks = [ch for ch in db.objects.get(Chunk, []) if ch.version_id == doc.active_version_id]
+    chunks = [
+        ch for ch in db.objects.get(Chunk, []) if ch.version_id == doc.active_version_id
+    ]
     plsql_chunks = [
-        c for c in chunks if "pkg/emp_mgmt.pks" in (c.metadata_json or {}).get("source_file", "")
+        c
+        for c in chunks
+        if "pkg/emp_mgmt.pks" in (c.metadata_json or {}).get("source_file", "")
     ]
     py_chunks = [
-        c for c in chunks if "code/util.py" in (c.metadata_json or {}).get("source_file", "")
+        c
+        for c in chunks
+        if "code/util.py" in (c.metadata_json or {}).get("source_file", "")
     ]
 
     # Real PlSqlChunker symbol-split the PACKAGE BODY: package header + function.

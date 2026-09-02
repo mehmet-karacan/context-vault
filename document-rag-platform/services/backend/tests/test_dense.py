@@ -10,7 +10,10 @@ from __future__ import annotations
 
 from src.infrastructure.retrieval import DenseVectorRetriever, dense_sql_from_spec
 from src.infrastructure.retrieval.base import normalize_filters
-from src.infrastructure.retrieval.dense import legacy_spec_from_spec, merge_dense_candidates
+from src.infrastructure.retrieval.dense import (
+    legacy_spec_from_spec,
+    merge_dense_candidates,
+)
 from src.infrastructure.retrieval.base import RetrievalCandidate
 
 
@@ -76,7 +79,9 @@ def test_spec_candidate_k_uses_top_k_when_given():
 def test_ef_search_configurable_hnsw():
     assert DenseVectorRetriever().ef_search == 40
     assert DenseVectorRetriever(ef_search=120).ef_search == 120
-    assert DenseVectorRetriever(ef_search=120).build_spec([0.1])["hnsw"] == {"ef_search": 120}
+    assert DenseVectorRetriever(ef_search=120).build_spec([0.1])["hnsw"] == {
+        "ef_search": 120
+    }
 
 
 def test_filters_applied_as_terms_in_spec():
@@ -111,7 +116,9 @@ def test_empty_document_ids_produces_no_filter():
 
 def test_explicit_source_type_overrides_scope():
     terms = normalize_filters({"source_type": "image", "scope": "code"})
-    assert [t for t in terms] == [t for t in normalize_filters({"source_type": "image"})]
+    assert [t for t in terms] == [
+        t for t in normalize_filters({"source_type": "image"})
+    ]
     assert terms[0].op == "eq"
 
 
@@ -122,8 +129,14 @@ def test_sql_includes_filter_order_limit_and_dense_columns():
     sql, params = dense_sql_from_spec(spec)
     assert "JOIN chunks ON chunks.id = chunk_embeddings.chunk_id" in sql
     assert "JOIN documents AS d ON d.id = chunks.document_id" in sql
-    assert "1 - (chunk_embeddings.embedding <=> CAST(:query_embedding AS vector)) AS score" in sql
-    assert "ORDER BY chunk_embeddings.embedding <=> CAST(:query_embedding AS vector)" in sql
+    assert (
+        "1 - (chunk_embeddings.embedding <=> CAST(:query_embedding AS vector)) AS score"
+        in sql
+    )
+    assert (
+        "ORDER BY chunk_embeddings.embedding <=> CAST(:query_embedding AS vector)"
+        in sql
+    )
     assert "WHERE d.project_id = :fp0" in sql
     assert "LIMIT :candidate_k" in sql
     assert params["fp0"] == "proj-9"
@@ -182,13 +195,17 @@ def test_chunk_in_both_sources_merged_once_keeps_higher_score():
 def test_candidate_k_bounds_merged_result():
     # Merging both sources must never exceed candidate_k, and the kept set is
     # the highest-scoring union (dedup by chunk_id).
-    primary = [RetrievalCandidate(chunk_id=f"p{i}", rank=i, score=0.9 - i * 0.01) for i in range(5)]
-    legacy = [RetrievalCandidate(chunk_id=f"l{i}", rank=i, score=0.5 - i * 0.01) for i in range(5)]
+    primary = [
+        RetrievalCandidate(chunk_id=f"p{i}", rank=i, score=0.9 - i * 0.01)
+        for i in range(5)
+    ]
+    legacy = [
+        RetrievalCandidate(chunk_id=f"l{i}", rank=i, score=0.5 - i * 0.01)
+        for i in range(5)
+    ]
     merged = merge_dense_candidates(primary, legacy, candidate_k=7)
     assert len(merged) <= 7
-    assert [c.chunk_id for c in merged] == [
-        "p0", "p1", "p2", "p3", "p4", "l0", "l1"
-    ]
+    assert [c.chunk_id for c in merged] == ["p0", "p1", "p2", "p3", "p4", "l0", "l1"]
     assert [c.rank for c in merged] == list(range(1, 8))
     # Solely legacy overlaps (candidate appears in both) still dedupes to one.
     dup = [
@@ -219,7 +236,9 @@ def test_legacy_spec_and_sql_carry_both_sources():
     assert "SELECT c.id AS chunk_id," in sql
     assert "1 - (c.embedding <=> CAST(:query_embedding AS vector)) AS score" in sql
     assert "ORDER BY c.embedding <=> CAST(:query_embedding AS vector)" in sql
-    assert "chunks.embedding" not in sql, "SELECT/ORDER BY must use alias c, not chunks."
+    assert (
+        "chunks.embedding" not in sql
+    ), "SELECT/ORDER BY must use alias c, not chunks."
     assert "JOIN documents AS d ON d.id = c.document_id" in sql
     assert "c.embedding IS NOT NULL" in sql
     assert "c.document_id IN" in sql

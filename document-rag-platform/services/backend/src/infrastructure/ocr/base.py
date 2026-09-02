@@ -86,9 +86,7 @@ class OcrResult:
         if not eligible:
             return self.confidence
         total_len = max(1, sum(len(b.text) for b in eligible))
-        weighted = sum(
-            b.confidence * len(b.text) for b in eligible
-        ) / total_len
+        weighted = sum(b.confidence * len(b.text) for b in eligible) / total_len
         return round(weighted, 4)
 
     def needs_review(self, min_confidence: float = 0.60) -> bool:

@@ -44,7 +44,10 @@ target_metadata = Base.metadata
 
 def include_object(object_, name, type_, reflected, compare_to):
     """Keep Alembic's own revision table outside application autogenerate."""
-    return not (type_ == "table" and name == config.get_main_option("version_table", "alembic_version"))
+    return not (
+        type_ == "table"
+        and name == config.get_main_option("version_table", "alembic_version")
+    )
 
 
 def run_migrations_offline() -> None:

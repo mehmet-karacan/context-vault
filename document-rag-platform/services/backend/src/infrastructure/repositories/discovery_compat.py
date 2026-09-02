@@ -27,12 +27,38 @@ from .scan_result import ScannedFile
 # apply a richer set; this is only the minimal safety floor used by the
 # fallback walker.
 _DEFAULT_IGNORED_DIRS = {
-    ".git", ".hg", ".svn", "node_modules", ".venv", "venv", "dist", "build",
-    "target", "coverage", ".next", ".cache", "vendor", "__pycache__",
+    ".git",
+    ".hg",
+    ".svn",
+    "node_modules",
+    ".venv",
+    "venv",
+    "dist",
+    "build",
+    "target",
+    "coverage",
+    ".next",
+    ".cache",
+    "vendor",
+    "__pycache__",
 }
 _DEFAULT_IGNORED_EXTS = {
-    ".min.js", ".map", ".lock", ".png", ".jpg", ".jpeg", ".gif", ".pdf",
-    ".exe", ".dll", ".so", ".class", ".jar", ".zip", ".tar", ".gz",
+    ".min.js",
+    ".map",
+    ".lock",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".pdf",
+    ".exe",
+    ".dll",
+    ".so",
+    ".class",
+    ".jar",
+    ".zip",
+    ".tar",
+    ".gz",
 }
 _SENSITIVE_NAMES = (".env", ".pem", ".key", ".p12", ".jks", "id_rsa")
 
@@ -43,9 +69,20 @@ def _content_hash(data: bytes) -> str:
 
 def _guess_language(relative_path: str) -> Optional[str]:
     ext = os.path.splitext(relative_path)[1].lower().lstrip(".")
-    return {"py": "python", "java": "java", "js": "javascript", "ts": "typescript",
-            "json": "json", "yaml": "yaml", "yml": "yaml", "sql": "sql",
-            "md": "markdown", "plsql": "plsql", "pks": "plsql", "pkb": "plsql"}.get(ext)
+    return {
+        "py": "python",
+        "java": "java",
+        "js": "javascript",
+        "ts": "typescript",
+        "json": "json",
+        "yaml": "yaml",
+        "yml": "yaml",
+        "sql": "sql",
+        "md": "markdown",
+        "plsql": "plsql",
+        "pks": "plsql",
+        "pkb": "plsql",
+    }.get(ext)
 
 
 def _is_binary(data: bytes) -> bool:
@@ -64,18 +101,25 @@ def _walk_fallback(
 
     for dirpath, dirnames, filenames in os.walk(root_dir):
         dirnames[:] = [
-            d for d in dirnames
+            d
+            for d in dirnames
             if d not in _DEFAULT_IGNORED_DIRS
-            and not (os.path.realpath(os.path.join(dirpath, d)) != root_real
-                     and not os.path.realpath(os.path.join(dirpath, d)).startswith(
-                         root_real + os.sep))
+            and not (
+                os.path.realpath(os.path.join(dirpath, d)) != root_real
+                and not os.path.realpath(os.path.join(dirpath, d)).startswith(
+                    root_real + os.sep
+                )
+            )
         ]
         for name in filenames:
             full = os.path.join(dirpath, name)
             rel = os.path.relpath(full, root_real).replace(os.sep, "/")
             base = name.lower()
-            if base in _SENSITIVE_NAMES or base.endswith(_SENSITIVE_NAMES) or \
-               base.startswith(".env"):
+            if (
+                base in _SENSITIVE_NAMES
+                or base.endswith(_SENSITIVE_NAMES)
+                or base.startswith(".env")
+            ):
                 continue
             ext = os.path.splitext(base)[1]
             if ext in _DEFAULT_IGNORED_EXTS:
@@ -127,6 +171,7 @@ def discover_files(
     """
     try:
         from . import discovery as _conc  # concurrent module (may be absent)
+
         if hasattr(_conc, "discover_directory"):
             result = _conc.discover_directory(root_dir)
             return [
@@ -146,4 +191,6 @@ def discover_files(
             ]
     except Exception:
         pass
-    return _walk_fallback(root_dir, include_patterns=include_patterns, exclude_patterns=exclude_patterns)
+    return _walk_fallback(
+        root_dir, include_patterns=include_patterns, exclude_patterns=exclude_patterns
+    )

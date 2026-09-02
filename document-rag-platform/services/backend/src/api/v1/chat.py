@@ -121,7 +121,9 @@ def _resolve_project_id(db: Session, project_id: Optional[str]) -> Optional[str]
         return project_id
     project = db.query(Project).order_by(Project.created_at.asc()).first()
     if project is None:
-        project = Project(id=uuid.uuid4(), name="Varsayılan", created_at=datetime.utcnow())
+        project = Project(
+            id=uuid.uuid4(), name="Varsayılan", created_at=datetime.utcnow()
+        )
         db.add(project)
         db.flush()
     return str(project.id)
@@ -157,7 +159,9 @@ def query_chat(
         neighbor_resolver=neighbor_resolver,
     )
 
-    retrieval_result = service.retrieve(chat_query.query, filters, debug=chat_query.debug)
+    retrieval_result = service.retrieve(
+        chat_query.query, filters, debug=chat_query.debug
+    )
 
     project_id = _resolve_project_id(db, chat_query.project_id)
     conversation_id = ensure_conversation(

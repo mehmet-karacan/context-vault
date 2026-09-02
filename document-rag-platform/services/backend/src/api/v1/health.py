@@ -44,7 +44,9 @@ def root():
 @router.get("/health")
 def health(db: Session = Depends(get_db)):
     total = db.query(func.count(Document.id)).scalar()
-    indexed = db.query(func.count(Document.id)).filter(Document.status == "indexed").scalar()
+    indexed = (
+        db.query(func.count(Document.id)).filter(Document.status == "indexed").scalar()
+    )
     return {
         "status": "healthy",
         "documents_count": total,

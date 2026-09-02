@@ -72,7 +72,9 @@ def _table_unit(unit_id, header, rows, order):
         markdown="\n".join(lines),
         order=order,
         hierarchy=Hierarchy(heading_path=["Tablolar"]),
-        locator=SourceLocator(file_path="doc.md", line_start=order, line_end=order + len(lines)),
+        locator=SourceLocator(
+            file_path="doc.md", line_start=order, line_end=order + len(lines)
+        ),
         metadata={"row_count": len(lines)},
     )
 
@@ -85,7 +87,9 @@ def _code_unit(unit_id, code, order, heading_path=()):
         markdown=f"```python\n{code}\n```",
         order=order,
         hierarchy=Hierarchy(heading_path=list(heading_path)),
-        locator=SourceLocator(file_path="code.py", line_start=order, line_end=order + 5),
+        locator=SourceLocator(
+            file_path="code.py", line_start=order, line_end=order + 5
+        ),
         metadata={"language": "python"},
     )
 
@@ -116,11 +120,7 @@ def _paragraphs(n, text_len=200, heading_path=("KIRKBEŞİNCİBÖLÜM",)):
 
 def test_document_chunks_are_token_bounded_and_respect_unit_boundaries():
     source = _source(_paragraphs(60, text_len=100))
-    chunks = [
-        c
-        for c in _simple_registry().chunk(source)
-        if c.chunk_type == "document"
-    ]
+    chunks = [c for c in _simple_registry().chunk(source) if c.chunk_type == "document"]
     assert len(chunks) >= 2
     for c in chunks:
         assert c.token_count <= 900
@@ -130,10 +130,7 @@ def test_document_chunks_are_token_bounded_and_respect_unit_boundaries():
 
 
 def test_document_chunks_respect_min_tokens_except_final_remainder():
-    chunks = [
-        c
-        for c in _simple_registry().chunk(_source(_paragraphs(80))).__iter__()
-    ]
+    chunks = [c for c in _simple_registry().chunk(_source(_paragraphs(80))).__iter__()]
     docs = [c for c in chunks if c.chunk_type == "document"]
     for c in docs[:-1]:
         assert c.token_count >= 250
@@ -146,11 +143,7 @@ def test_document_chunks_respect_min_tokens_except_final_remainder():
 
 def test_heading_context_in_embedding_text_but_not_raw_content():
     source = _source(_paragraphs(5))
-    chunks = [
-        c
-        for c in _simple_registry().chunk(source)
-        if c.chunk_type == "document"
-    ]
+    chunks = [c for c in _simple_registry().chunk(source) if c.chunk_type == "document"]
     assert chunks
     for c in chunks:
         assert "KIRKBEŞİNCİBÖLÜM" in c.embedding_text
@@ -186,9 +179,7 @@ def test_large_table_split_into_row_groups_with_repeated_header():
 def test_small_table_kept_as_single_group():
     unit = _table_unit("t1", "| A | B |", ["| 1 | 2 |"], 100)
     chunks = [
-        c
-        for c in _simple_registry().chunk(_source([unit]))
-        if c.chunk_type == "table"
+        c for c in _simple_registry().chunk(_source([unit])) if c.chunk_type == "table"
     ]
     assert len(chunks) == 1
 
@@ -197,14 +188,10 @@ def test_small_table_kept_as_single_group():
 
 
 def test_code_block_not_sliced_like_paragraph():
-    code = "\n".join(
-        f"def func_{i}():\n    return {i}" for i in range(20)
-    )
+    code = "\n".join(f"def func_{i}():\n    return {i}" for i in range(20))
     unit = _code_unit("c1", code, 50, heading_path=["Kodlar"])
     chunks = [
-        c
-        for c in _simple_registry().chunk(_source([unit]))
-        if c.chunk_type == "code"
+        c for c in _simple_registry().chunk(_source([unit])) if c.chunk_type == "code"
     ]
     assert chunks
     assert len(chunks) == 1

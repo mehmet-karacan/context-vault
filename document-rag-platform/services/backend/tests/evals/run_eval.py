@@ -69,7 +69,9 @@ def is_relevant(result: Dict[str, Any], expected_sources: List[Dict[str, Any]]) 
     return False
 
 
-def matching_chunk_ids(results: List[Dict[str, Any]], expected_sources: List[Dict[str, Any]]) -> List[str]:
+def matching_chunk_ids(
+    results: List[Dict[str, Any]], expected_sources: List[Dict[str, Any]]
+) -> List[str]:
     return [str(r["chunk_id"]) for r in results if is_relevant(r, expected_sources)]
 
 
@@ -90,11 +92,19 @@ class FakeRetriever:
     def __init__(self, *, filler_count: int = 2) -> None:
         self.filler_count = filler_count
 
-    def retrieve(self, query: str, scope: str = "documents", fixture: str = "") -> List[Dict[str, Any]]:
+    def retrieve(
+        self, query: str, scope: str = "documents", fixture: str = ""
+    ) -> List[Dict[str, Any]]:
         return []
 
-    def __call__(self, query: str, scope: str = "documents", fixture: str = "", *,
-                 expected_sources: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+    def __call__(
+        self,
+        query: str,
+        scope: str = "documents",
+        fixture: str = "",
+        *,
+        expected_sources: Optional[List[Dict[str, Any]]] = None,
+    ) -> List[Dict[str, Any]]:
         expected_sources = expected_sources or []
         if not expected_sources:
             return []
@@ -103,7 +113,9 @@ class FakeRetriever:
         for idx, source in enumerate(expected_sources, start=1):
             doc = source.get("document", "unknown")
             terms = source.get("must_contain") or []
-            content = f"{doc} bolum: " + (" ve ".join(str(t) for t in terms) if terms else "icerik")
+            content = f"{doc} bolum: " + (
+                " ve ".join(str(t) for t in terms) if terms else "icerik"
+            )
             results.append(
                 {
                     "chunk_id": f"{doc}::{idx}",
@@ -132,8 +144,12 @@ class FakeAnswerer:
     with sufficient coverage and no contradictions (for the smoke run).
     """
 
-    def __call__(self, query: str, results: List[Dict[str, Any]],
-                 expected_sources: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def __call__(
+        self,
+        query: str,
+        results: List[Dict[str, Any]],
+        expected_sources: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
         if not expected_sources:
             return {"claims": [], "citations": [], "answer": "", "required_aspects": []}
         claims = []
@@ -223,7 +239,8 @@ def run_eval(
                 "n_results": len(results),
                 "n_relevant": len(relevant),
                 "first_relevant_rank": next(
-                    (i for i, cid in enumerate(ranked_ids, 1) if cid in set(relevant)), None
+                    (i for i, cid in enumerate(ranked_ids, 1) if cid in set(relevant)),
+                    None,
                 ),
             }
         )
@@ -287,8 +304,13 @@ def run_eval(
 
 
 def _average_generation(samples: List[Dict[str, Any]]) -> Dict[str, float]:
-    keys = ("citation_coverage", "unsourced_claim_rate", "citation_accuracy",
-            "answer_sufficiency", "contradictory_source_behavior")
+    keys = (
+        "citation_coverage",
+        "unsourced_claim_rate",
+        "citation_accuracy",
+        "answer_sufficiency",
+        "contradictory_source_behavior",
+    )
     out: Dict[str, float] = {}
     for key in keys:
         values = [s[key] for s in samples if key in s]
@@ -363,15 +385,28 @@ def _fmt(value: Any) -> str:
 # CLI
 # --------------------------------------------------------------------------- #
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--golden", type=Path, default=Path(__file__).parent / "datasets" / "golden.jsonl")
-    parser.add_argument("--subset-ids", type=str, default=None,
-                        help="comma-separated query ids to restrict the run")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--golden",
+        type=Path,
+        default=Path(__file__).parent / "datasets" / "golden.jsonl",
+    )
+    parser.add_argument(
+        "--subset-ids",
+        type=str,
+        default=None,
+        help="comma-separated query ids to restrict the run",
+    )
     parser.add_argument("--output-json", type=Path, default=METRICS_REPORT_JSON)
     parser.add_argument("--output-md", type=Path, default=METRICS_REPORT_MD)
-    parser.add_argument("--fake", action="store_true", default=True,
-                        help="use the offline FakeRetriever/FakeAnswerer (default)")
+    parser.add_argument(
+        "--fake",
+        action="store_true",
+        default=True,
+        help="use the offline FakeRetriever/FakeAnswerer (default)",
+    )
     parser.add_argument("--collect-latency", action="store_true")
     args = parser.parse_args()
 
@@ -384,8 +419,15 @@ def main() -> None:
         output_md=args.output_md,
         collect_latency=args.collect_latency,
     )
-    print(json.dumps({"n_records": report["n_records"],
-                      "gate_pass": report["quality_gate"]["pass"]}, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "n_records": report["n_records"],
+                "gate_pass": report["quality_gate"]["pass"],
+            },
+            ensure_ascii=False,
+        )
+    )
     print(f"reporto {args.output_json}")
 
 

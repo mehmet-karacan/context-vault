@@ -82,7 +82,9 @@ def _segment(value: str, label: str) -> str:
     return value
 
 
-def original_key(project_id: str, document_id: str, version_id: str, filename: str) -> str:
+def original_key(
+    project_id: str, document_id: str, version_id: str, filename: str
+) -> str:
     """Key for the immutable original uploaded file."""
     p = _segment(project_id, "project_id")
     d = _segment(document_id, "document_id")
@@ -126,4 +128,6 @@ def artifact_key(
         raise ValueError("artifact_relative_path must not be empty")
 
     sanitized_parts = [safe_filename(seg) for seg in parts]
-    return f"projects/{p}/documents/{d}/versions/{v}/artifacts/" + "/".join(sanitized_parts)
+    return f"projects/{p}/documents/{d}/versions/{v}/artifacts/" + "/".join(
+        sanitized_parts
+    )

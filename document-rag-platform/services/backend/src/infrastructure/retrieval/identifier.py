@@ -34,7 +34,10 @@ from src.infrastructure.retrieval.base import (
 # returned tokens (first-match-first is preserved through dedupe).
 IDENTIFIER_PATTERNS: List[tuple] = [
     # Package / module / qualified paths and Schema.table, Class.method.
-    ("qualified", re.compile(r"(?<![A-Za-z0-9_])[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+(?![A-Za-z0-9_])")),
+    (
+        "qualified",
+        re.compile(r"(?<![A-Za-z0-9_])[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+(?![A-Za-z0-9_])"),
+    ),
     # UPPER_SNAKE constants / columns, e.g. PAYMENT_FLAG.
     ("screaming_snake", re.compile(r"\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b")),
     # PascalCase class / type names, e.g. PaymentService.

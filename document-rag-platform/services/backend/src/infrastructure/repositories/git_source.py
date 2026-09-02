@@ -38,9 +38,9 @@ from .scan_result import ScanResult, ScannedFile
 
 # Env additions applied to every git subprocess. Never a shell.
 GIT_SAFE_ENV = {
-    "GIT_TERMINAL_PROMPT": "0",     # never prompt; fail instead
-    "GIT_LFS_SKIP_SMUDGE": "1",     # no LFS object download by default
-    "GIT_CONFIG_NOSYSTEM": "1",     # ignore host system/global git config
+    "GIT_TERMINAL_PROMPT": "0",  # never prompt; fail instead
+    "GIT_LFS_SKIP_SMUDGE": "1",  # no LFS object download by default
+    "GIT_CONFIG_NOSYSTEM": "1",  # ignore host system/global git config
 }
 
 
@@ -86,7 +86,9 @@ class GitRepositorySource:
         discovery: Optional[Callable[..., List[ScannedFile]]] = None,
     ):
         self.git_runner = git_runner or GitRunner()
-        self.sandbox_factory = sandbox_factory or (lambda: tempfile.mkdtemp(prefix="code-repo-"))
+        self.sandbox_factory = sandbox_factory or (
+            lambda: tempfile.mkdtemp(prefix="code-repo-")
+        )
         self.discovery = discovery or _default_discover
         self._git_calls: List[List[str]] = []
 
@@ -117,9 +119,12 @@ class GitRepositorySource:
             argv += ["--depth", "1", "--branch", ref]
         # Hardening flags (§7.2): no autocrlf, no LFS required, no host config.
         argv += [
-            "--config", "core.autocrlf=false",
-            "--config", "filter.lfs.required=false",
-            "--config", "core.hooksPath=",
+            "--config",
+            "core.autocrlf=false",
+            "--config",
+            "filter.lfs.required=false",
+            "--config",
+            "core.hooksPath=",
         ]
         argv += [repository_url, checkout]
 

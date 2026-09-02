@@ -26,7 +26,9 @@ def serialize_project(project: Project, document_count: Optional[int] = None) ->
         "id": str(project.id),
         "name": project.name,
         "created_at": project.created_at.strftime("%Y-%m-%d %H:%M"),
-        "document_count": document_count if document_count is not None else len(project.documents),
+        "document_count": document_count
+        if document_count is not None
+        else len(project.documents),
     }
 
 

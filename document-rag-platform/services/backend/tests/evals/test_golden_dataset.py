@@ -9,9 +9,9 @@ from golden_spec import (
 
 
 def test_dataset_exists():
-    assert DEFAULT_DATASET_PATH.is_file(), (
-        f"golden dataset bulunamadi: {DEFAULT_DATASET_PATH}"
-    )
+    assert (
+        DEFAULT_DATASET_PATH.is_file()
+    ), f"golden dataset bulunamadi: {DEFAULT_DATASET_PATH}"
 
 
 def test_dataset_has_at_least_50_items():

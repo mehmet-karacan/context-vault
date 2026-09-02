@@ -40,7 +40,9 @@ class TesseractOcrProvider:
     ):
         self.languages = list(languages) if languages else ["tur", "eng"]
         self.min_confidence = min_confidence
-        self.preprocessing_steps = list(preprocessing_steps) if preprocessing_steps else []
+        self.preprocessing_steps = (
+            list(preprocessing_steps) if preprocessing_steps else []
+        )
         self.engine_version = self._tesseract_version()
 
     # --- availability -------------------------------------------------------
@@ -211,9 +213,7 @@ class TesseractOcrProvider:
         if not eligible:
             return None
         total_len = max(1, sum(len(b.text) for b in eligible))
-        return round(
-            sum(b.confidence * len(b.text) for b in eligible) / total_len, 4
-        )
+        return round(sum(b.confidence * len(b.text) for b in eligible) / total_len, 4)
 
 
 def _to_bbox(left, top, width, height, i):
