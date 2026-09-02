@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
@@ -13,9 +13,12 @@ RUN apt-get update && apt-get install -y \
 COPY ttroot-g3.crt /usr/local/share/ca-certificates/ttroot-g3.crt
 RUN update-ca-certificates
 
-# Copy requirements
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install the exact locked runtime dependency graph.
+COPY pyproject.toml uv.lock ./
+RUN pip install --no-cache-dir uv==0.12.5 \
+    && uv sync --frozen --no-dev --no-install-project
+
+ENV PATH="/app/.venv/bin:$PATH"
 
 # httpx/requests use certifi's bundled CA file, not the OS trust store —
 # append the corporate root there too so outbound TLS to the gateway verifies.

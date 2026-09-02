@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "author": "Mehmet Karacan",
+  "engines": {
+    "node": "20.x",
+    "npm": "10.x"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
