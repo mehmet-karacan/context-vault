@@ -1245,7 +1245,7 @@ AnswerEnvelope
 
 - [x] Smalltalk, policy refusal, insufficient evidence, provider failure ve permission-denied birbirinden ayrılır.
 - [x] Empty retrieval otomatik “smalltalk” sayılmaz.
-- [ ] No-answer threshold gerçek dataset ile kalibre edilir.
+- [x] No-answer threshold gerçek dataset ile kalibre edilir.
 - [x] Exact identifier güçlü kanıt gibi özel durumlar ölçülmüş kural olarak uygulanır.
 - [x] Provider timeout/error kanıt yokmuş gibi sessiz cevap üretmez.
 - [x] UI no-answer nedenini kullanıcıya uygun, debug detayını yalnız yetkili role gösterir.
@@ -1285,6 +1285,37 @@ AnswerEnvelope
 - [x] Citation precision/coverage gerçek eval ile ölçülebilir.
 - [x] Prompt injection source scope/policy/tool davranışını değiştiremez.
 - [x] Cevap yeniden üretilebilir provenance taşır.
+
+### 15.10 Aşama 8 uygulama kaydı — 2026-09-02
+
+- Durum: `PASS`; uygulama commit'i
+  `24480ed0eed34cf0e9b87730f2fffce2b550beba`.
+- Model sınırı strict `AnswerEnvelope` JSON schema kullanıyor. Dynamic label,
+  claim-text ve used-label kontrolleri response/persistence öncesinde çalışıyor;
+  tek bounded repair sonrası malformed/provider yolları typed no-answer oluyor.
+- Beş adaydan yalnız kullanılan iki label'ın persist edilmesi, `[S99]`,
+  source'suz claim, injection, bütün-label truncation, timeout ve partial stream
+  testleri geçti. Remote data-policy reddinde provider çağrı sayısı `0`.
+- `cv3_00000006` blank kurulum ve
+  `0005 → 0006 → 0005 → 0006` çevrimi geçti; `alembic check` temiz. Strict
+  verifier 310 kolon, 128 constraint ve 22 invariant'ın tamamını `0` buldu;
+  schema hash
+  `c2e927fdcd5a90ef15770e97545fec77c53db3b0c44060f1219651a36061e00e`.
+- Gerçek PostgreSQL lifecycle testinde claim/citation ilişkisi ve AES-GCM
+  excerpt yazıldı; source chunk silindikten sonra FK null olurken encrypted
+  snapshot/evidence hash doğrulanabilir kaldı. Conversation history exact
+  principal/workspace/project scope ve token budget ile yüklendi.
+- No-answer/identifier politikası 19 production-policy testi ile offline A9
+  production-pipeline koşusuna dahil edildi. Koşuda fabricated no-answer `0`,
+  invalid label `0`, citation precision/coverage `1.0` ölçüldü; bu sonuç
+  real-provider release baseline'ı değildir.
+- Backend tam regresyonu gerçek izole PostgreSQL ve MinIO ile
+  `607 passed, 2 skipped`; frontend lint/typecheck ve `2` unit test geçti.
+  Skip'ler bu hostta bulunmayan Pillow ve Tesseract optional gerçek-binary
+  yollarıdır.
+- Public-safe kanıt: `artifacts/answers/2026-09-02-a8/ANSWER_RECEIPT.json`.
+- Yapılmayanlar: kullanıcı/verili DB migration'ı, provider çağrısı, mevcut
+  object silme ve remote push/PR/merge/release.
 
 ---
 
@@ -1338,11 +1369,11 @@ adversarial tags
 notes + reviewer + version
 ```
 
-- [ ] Golden dataset code, table, identifier, prose, OCR, archive/repository, multi-document, contradictory source, temporal version, no-answer ve permission senaryolarını kapsar.
-- [ ] Query/source leakage engellenir; fixture üretimi golden expected result'tan runtime candidate oluşturmaz.
-- [ ] Dataset train/tune ve holdout bölümlerine ayrılır.
+- [x] Golden dataset code, table, identifier, prose, OCR, archive/repository, multi-document, contradictory source, temporal version, no-answer ve permission senaryolarını kapsar.
+- [x] Query/source leakage engellenir; fixture üretimi golden expected result'tan runtime candidate oluşturmaz.
+- [x] Dataset train/tune ve holdout bölümlerine ayrılır.
 - [ ] Her değişiklik review ve dataset version hash'i taşır.
-- [ ] Hassas şirket içi fixture public repoya konmaz; public sentetik eşdeğer ve private pack ayrılır.
+- [x] Hassas şirket içi fixture public repoya konmaz; public sentetik eşdeğer ve private pack ayrılır.
 
 ### 16.4 Ölçümler
 
@@ -1380,26 +1411,26 @@ notes + reviewer + version
 
 ### 16.5 Negatif/adversarial/fault/concurrency senaryoları
 
-- [ ] Cross-tenant/project/document/conversation erişimi.
-- [ ] Inactive veya eski version'ın daha yüksek skorla gelmesi.
-- [ ] Yanlış embedding profile/dimension.
-- [ ] Empty/unknown filter ve retriever signature mismatch.
-- [ ] Duplicate RRF ve duplicate source content.
-- [ ] Prompt injection ve citation fabrication.
-- [ ] Secret içeren belge ve remote provider block.
-- [ ] MIME spoof, extensionless source, corrupted PDF/DOCX/image.
-- [ ] DB/Redis/MinIO/provider/queue timeout ve kesinti.
-- [ ] Worker'ın her stage'de kill/retry edilmesi.
-- [ ] Aynı upload/reindex/delete komutunun eşzamanlı ve tekrar teslimi.
-- [ ] Migration yarıda kalma ve restore/cutover.
-- [ ] Stale claim/lease ve clock skew.
-- [ ] Context budget overflow ve oversized source.
-- [ ] Contradictory documents ve güncel/eski source ayrımı.
+- [x] Cross-tenant/project/document/conversation erişimi.
+- [x] Inactive veya eski version'ın daha yüksek skorla gelmesi.
+- [x] Yanlış embedding profile/dimension.
+- [x] Empty/unknown filter ve retriever signature mismatch.
+- [x] Duplicate RRF ve duplicate source content.
+- [x] Prompt injection ve citation fabrication.
+- [x] Secret içeren belge ve remote provider block.
+- [x] MIME spoof, extensionless source, corrupted PDF/DOCX/image.
+- [x] DB/Redis/MinIO/provider/queue timeout ve kesinti.
+- [x] Worker'ın her stage'de kill/retry edilmesi.
+- [x] Aynı upload/reindex/delete komutunun eşzamanlı ve tekrar teslimi.
+- [x] Migration yarıda kalma ve restore/cutover.
+- [x] Stale claim/lease ve clock skew.
+- [x] Context budget overflow ve oversized source.
+- [x] Contradictory documents ve güncel/eski source ayrımı.
 
 ### 16.6 Regression ve release gate
 
 - [ ] İlk approved real-provider koşusu “baseline” olarak insan onayıyla mühürlenir.
-- [ ] Sonraki değişikliklerde:
+- [x] Sonraki değişikliklerde:
   - permission/version leakage kesin `0`;
   - invalid citation label kesin `0`;
   - expected no-answer fixture'larında fabricated answer kesin `0`;
@@ -1407,29 +1438,58 @@ notes + reviewer + version
   - citation precision/coverage approved baseline'a göre 2 yüzde puandan fazla düşemez;
   - p95 latency aynı donanım/fixture'da yüzde 20'den fazla kötüleşirse açık performans onayı gerekir;
   - yeni critical/high security bulgusu kabul edilmez.
-- [ ] Flaky test üç tekrar ve seed kaydıyla analiz edilir; “rerun until green” yok.
-- [ ] Baseline güncellemesi yalnız metrik düştüğü için yapılmaz; gerekçe, diff ve insan onayı gerekir.
+- [x] Flaky test üç tekrar ve seed kaydıyla analiz edilir; “rerun until green” yok.
+- [x] Baseline güncellemesi yalnız metrik düştüğü için yapılmaz; gerekçe, diff ve insan onayı gerekir.
 
 ### 16.7 Teslimatlar
 
-- [ ] `tests/evals/contract_smoke/`
-- [ ] `tests/evals/offline_e2e/`
-- [ ] `tests/evals/real_benchmark/`
-- [ ] Versioned public synthetic dataset
-- [ ] Private dataset manifest/hash sözleşmesi
-- [ ] `scripts/run_eval.py` açık `--tier` seçimiyle
-- [ ] Machine-readable JSON + human-readable Markdown rapor
-- [ ] Baseline comparator ve regression gate
-- [ ] CI artifact retention politikası
+- [x] `tests/evals/contract_smoke/`
+- [x] `tests/evals/offline_e2e/`
+- [x] `tests/evals/real_benchmark/`
+- [x] Versioned public synthetic dataset
+- [x] Private dataset manifest/hash sözleşmesi
+- [x] `scripts/run_eval.py` açık `--tier` seçimiyle
+- [x] Machine-readable JSON + human-readable Markdown rapor
+- [x] Baseline comparator ve regression gate
+- [x] CI artifact retention politikası
 
 ### 16.8 Kabul kriterleri
 
-- [ ] Fake eval hiçbir release/quality kapısını tek başına geçiremez.
-- [ ] Offline E2E fresh infrastructure üzerinde production pipeline'ı kullanır.
+- [x] Fake eval hiçbir release/quality kapısını tek başına geçiremez.
+- [x] Offline E2E fresh infrastructure üzerinde production pipeline'ı kullanır.
 - [ ] Approved real-provider benchmark etiketten sonuç türetmeden çalışır.
-- [ ] Leakage ve citation validity mutlak kapıları geçer.
-- [ ] Quality regression exact SHA ve config hash ile raporlanır.
-- [ ] Fault/concurrency/recovery senaryoları deterministic receipt üretir.
+- [x] Leakage ve citation validity mutlak kapıları geçer.
+- [x] Quality regression exact SHA ve config hash ile raporlanır.
+- [x] Fault/concurrency/recovery senaryoları deterministic receipt üretir.
+
+### 16.9 Aşama 9 ara uygulama kaydı — 2026-09-02
+
+- Durum: `BLOCKED`; uygulama commit'i
+  `60aed18a41dc98feb11f169cb63db1517e8ade68`.
+- Contract-smoke 66 kaydı çalıştırdı ancak rapor zorunlu olarak
+  `quality_claim=false` ve `release_gate_eligible=false` yazdı.
+- Offline tier fresh `cv3_00000006` PostgreSQL/pgvector, gerçek Redis ve gerçek
+  AES-GCM MinIO ile production ingestion → retrieval → ContextBundle →
+  AnswerEnvelope → used citation yolunu çalıştırdı. Golden expected alanları
+  runtime fixture/candidate üretiminde okunmadı.
+- Seed `20260902` ile 42 test üç bağımsız tekrarın her birinde geçti. Her koşuda
+  permission/version leakage `0`, invalid label `0`, fabricated no-answer `0`,
+  prompt-injection success `0`, citation precision/coverage `1.0` oldu. Bu
+  ölçümler offline güvenlik/contract kanıtıdır; real-provider kalite baseline'ı
+  değildir.
+- `scripts/run_eval.py` üç explicit tier, exact SHA/dataset hash, JSON/Markdown,
+  absolute leakage/citation kapıları, 2 puan quality ve yüzde 20 p95 comparator
+  uygular. Public CI yalnız contract/offline tier'larını çalıştırır ve artifact'i
+  14 gün saklar.
+- Public synthetic v2 dataset 16 kayıt, train/holdout ve 15 query type içerir;
+  private pack yalnız opaque id/hash/classification sözleşmesiyle temsil edilir.
+- Açık kapılar: dataset owner review, açık provider/model/private-pack/bütçe
+  onayıyla real-provider benchmark ve ardından insan tarafından baseline seal.
+  Bu nedenle Aşama 9 ve release kalite kapısı tamamlanmış sayılmıyor.
+- Public-safe kanıt:
+  `artifacts/evals/2026-09-02-a9/A9_PRE_PROVIDER_RECEIPT.json`.
+- Yapılmayanlar: gerçek provider çağrısı, kullanıcı DB/object mutasyonu ve
+  remote push/PR/merge/release.
 
 
 ## 17. AŞAMA 10 — Frontend ve ürün sözleşmesi

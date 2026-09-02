@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "verify",
+  "operation_id": "cv3-a9-eval-tiers-20260902-001",
+  "work_item_id": "CV3-A9-EVAL",
+  "actor": "codex-local-agent",
+  "observed_at_utc": "2026-09-02T18:14:15Z",
+  "baseline_revision": "23512f41700511fe98408e567285bc2e8216b16a",
+  "result_revision": "60aed18a41dc98feb11f169cb63db1517e8ade68",
+  "result": "BLOCKED",
+  "completed_gates": [
+    "contract smoke explicitly cannot make a quality or release claim",
+    "offline production pipeline on isolated PostgreSQL pgvector Redis and encrypted MinIO",
+    "production IngestionOrchestrator through used-citation persistence",
+    "42 offline tests repeated three times with seed 20260902 and zero failures",
+    "permission/version leakage zero",
+    "invalid citation labels zero",
+    "fabricated no-answer responses zero",
+    "citation precision and coverage 1.0 on bounded offline fixture",
+    "public synthetic v2 dataset and private-pack manifest contract",
+    "two-percentage-point quality and twenty-percent latency comparator",
+    "CI artifact retention of 14 days"
+  ],
+  "blocking_gates": [
+    {
+      "gate": "approved real-provider benchmark",
+      "reason": "No explicit provider/model/private-pack approval or authorized budget was supplied.",
+      "required_input": "owner-reviewed dataset manifest, opaque private-pack manifest, provider/model and explicit benchmark approval"
+    },
+    {
+      "gate": "approved baseline seal",
+      "reason": "A baseline can only be sealed after the approved real-provider run and human review."
+    },
+    {
+      "gate": "public dataset owner review",
+      "reason": "The generated v2 dataset manifest honestly remains pending owner review."
+    }
+  ],
+  "data_safety": {
+    "user_database_mutated": false,
+    "existing_user_objects_deleted": false,
+    "isolated_postgresql": true,
+    "isolated_redis": true,
+    "isolated_minio": true
+  },
+  "remote_actions": {
+    "provider_call": false,
+    "push": false,
+    "pull_request": false,
+    "merge": false,
+    "release": false
+  }
+}
