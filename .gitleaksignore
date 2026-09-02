@@ -1,0 +1,10 @@
+# Synthetic fixtures used only to verify the redaction detector.
+# History fingerprints are pinned to the introducing commit; path fingerprints
+# cover the current working-tree scan. Any moved or changed finding must be
+# reviewed again instead of inheriting a broad path/rule allowlist.
+074c1f5be321e0c48f675496f212e1cd72f232f0:document-rag-platform/services/backend/tests/test_redaction.py:generic-api-key:21
+074c1f5be321e0c48f675496f212e1cd72f232f0:document-rag-platform/services/backend/tests/test_redaction.py:generic-api-key:26
+074c1f5be321e0c48f675496f212e1cd72f232f0:document-rag-platform/services/backend/tests/test_redaction.py:private-key:44
+document-rag-platform/services/backend/tests/test_redaction.py:generic-api-key:21
+document-rag-platform/services/backend/tests/test_redaction.py:generic-api-key:26
+document-rag-platform/services/backend/tests/test_redaction.py:private-key:44
