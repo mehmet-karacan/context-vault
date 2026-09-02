@@ -29,8 +29,21 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U raguser -d rag_platform"
           --health-interval 5s --health-timeout 5s --health-retries 12
+      redis:
+        image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       DATABASE_URL: postgresql://raguser:test-only-password@localhost:5432/rag_platform
+      REDIS_URL: redis://localhost:6379/0
+      MINIO_ENDPOINT: localhost:9000
+      MINIO_ACCESS_KEY: cv3_ci
+      MINIO_SECRET_KEY: cv3-ci-test-only-12345
+      MINIO_BUCKET: cv3-ci-eval
+      OBJECT_STORAGE_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       UV_VERSION: 0.12.5
     defaults:
       run:
@@ -61,15 +74,31 @@ jobs:
           mkdir -p reports
           uv run alembic upgrade head
 
-      - name: Offline contract and end-to-end fixture
+      - name: Start isolated MinIO
+        run: >-
+          docker run -d --name cv3-ci-minio -p 127.0.0.1:9000:9000
+          -e MINIO_ROOT_USER=cv3_ci
+          -e MINIO_ROOT_PASSWORD=cv3-ci-test-only-12345
+          minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+          server /data
+
+      - name: Contract smoke (not a quality claim)
         env:
           LITELLM_API_KEY: test-only
           LITELLM_BASE_URL: https://llm-gateway.example.invalid/v1
-        run: uv run pytest tests/evals -m evals --junitxml=reports/rag-contract-junit.xml
+        run: >-
+          uv run python ../../../scripts/run_eval.py --tier contract-smoke --strict
+          --json-output reports/contract-smoke.json
+          --markdown-output reports/contract-smoke.md
 
-      - name: Record fixture classification
-        run: |
-          uv run python -c 'import json; json.dump({"schema_version": 1, "classification": "offline_contract_fixture", "quality_claim": False, "private_benchmark": False, "commit": "${{ github.sha }}"}, open("reports/rag-contract-receipt.json", "w"), indent=2)'
+      - name: Offline production-pipeline E2E
+        env:
+          LITELLM_API_KEY: test-only
+          LITELLM_BASE_URL: https://llm-gateway.example.invalid/v1
+        run: >-
+          uv run python ../../../scripts/run_eval.py --tier offline-e2e --strict
+          --json-output reports/offline-e2e.json
+          --markdown-output reports/offline-e2e.md
 
       - name: Upload RAG contract evidence
         if: ${{ !cancelled() }}

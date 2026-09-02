@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://context-vault.local/schemas/private-eval-pack-manifest-v1.json",
+  "title": "Private evaluation pack manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "opaque_pack_id", "dataset_sha256", "classification", "reviewed_by", "approved_at_utc"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "opaque_pack_id": {"type": "string", "minLength": 1},
+    "dataset_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "classification": {"enum": ["internal", "confidential", "restricted"]},
+    "reviewed_by": {"type": "string", "minLength": 1},
+    "approved_at_utc": {"type": "string", "format": "date-time"},
+    "secret_store_reference": {"type": "string"}
+  }
+}
