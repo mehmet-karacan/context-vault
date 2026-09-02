@@ -154,6 +154,7 @@ interface Message {
   citations?: CitationPayload[];
   retrievalDebug?: RetrievalDebug | null;
   answerable?: boolean;
+  noAnswerReason?: ChatResponse["no_answer_reason"];
   sources?: LegacySource[];
   durationMs?: number;
 }
@@ -294,12 +295,21 @@ function RetrievalDebugPanel({ retrievalDebug }: { retrievalDebug: RetrievalDebu
   );
 }
 
-function NoAnswerBlock() {
+const NO_ANSWER_LABELS: Record<NonNullable<ChatResponse["no_answer_reason"]>, string> = {
+  smalltalk: "Bu mesaj belge sorgusu olarak değerlendirilmedi.",
+  policy_refusal: "Kaynağın veri politikası bu modelle yanıt üretimine izin vermiyor.",
+  insufficient_evidence: "Yüklediğin belgelerde doğrulanabilir yeterli kanıt bulunamadı.",
+  provider_failure: "Yanıt sağlayıcısı isteği güvenli biçimde tamamlayamadı.",
+  permission_denied: "Bu konuşma veya kaynak için erişim yetkin bulunmuyor.",
+  malformed_response: "Model çıktısı doğrulama sözleşmesini geçemedi.",
+};
+
+function NoAnswerBlock({ reason }: { reason?: ChatResponse["no_answer_reason"] }) {
   return (
     <div className="rounded-md border border-ink-line bg-paper-dim/50 px-3.5 py-2.5 flex items-start gap-2">
       <CloseIcon className="w-3.5 h-3.5 text-rust shrink-0 mt-0.5" />
       <p className="text-[13px] text-ink-soft leading-relaxed">
-        Kaynaklarda bilgi bulunamadı. Bu soruya yüklediğin belgelerden doğrulanabilir bir yanıt üretilemedi.
+        {reason ? NO_ANSWER_LABELS[reason] : "Bu soruya doğrulanabilir bir yanıt üretilemedi."}
       </p>
     </div>
   );
@@ -411,7 +421,6 @@ export default function ChatWidget() {
           project_id: selectedProjectId || null,
           model: selectedModel || null,
           scope: scopeValue(sourceTypeFilter),
-          source_type: sourceTypeFilter === "all" ? null : scopeValue(sourceTypeFilter),
           debug: devMode,
         }),
       });
@@ -424,6 +433,7 @@ export default function ChatWidget() {
           role: "assistant",
           content: data.answer || "",
           answerable: data.answerable ?? true,
+          noAnswerReason: data.no_answer_reason ?? null,
           citations: data.citations ?? [],
           retrievalDebug: data.retrieval_debug ?? null,
           sources: data.sources,
@@ -490,7 +500,9 @@ export default function ChatWidget() {
                 )}
               </div>
 
-              {message.role === "assistant" && message.answerable === false && <NoAnswerBlock />}
+              {message.role === "assistant" && message.answerable === false && (
+                <NoAnswerBlock reason={message.noAnswerReason} />
+              )}
 
               {message.role === "assistant" &&
                 (() => {

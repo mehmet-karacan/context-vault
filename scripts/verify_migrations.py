@@ -14,8 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-TOOL_VERSION = "1.1.0"
-EXPECTED_HEAD = "cv3_00000005"
+TOOL_VERSION = "1.2.0"
+EXPECTED_HEAD = "cv3_00000006"
 VERSIONS_RELATIVE = Path("document-rag-platform/services/backend/alembic/versions_v3")
 BACKEND_RELATIVE = Path("document-rag-platform/services/backend")
 
@@ -208,6 +208,23 @@ def database_snapshot(database_url: str) -> dict[str, Any]:
                OR query_hash IS NULL OR length(query_hash) <> 64
                OR principal_id IS NULL OR workspace_id IS NULL
                OR project_id IS NULL OR embedding_profile_id IS NULL
+        """,
+        "cross_workspace_conversations": """
+            SELECT count(*) FROM conversations c
+            JOIN projects p ON p.id = c.project_id
+            WHERE c.workspace_id IS NOT NULL AND c.workspace_id <> p.workspace_id
+        """,
+        "validated_citations_without_provenance": """
+            SELECT count(*) FROM message_citations
+            WHERE validation_result = 'valid'
+              AND (evidence_hash IS NULL OR evidence_snapshot_encrypted IS NULL
+                   OR prompt_hash IS NULL OR citation_label IS NULL)
+        """,
+        "claims_without_citations": """
+            SELECT count(*) FROM message_claims mc
+            WHERE NOT EXISTS (
+                SELECT 1 FROM claim_citations cc WHERE cc.claim_id = mc.id
+            )
         """,
     }
     try:

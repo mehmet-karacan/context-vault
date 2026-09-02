@@ -22,7 +22,6 @@ from src.application.answer_service import (
     EVIDENCE_CLOSE,
     EVIDENCE_OPEN,
     NO_ANSWER_TEXT,
-    SMALLTALK_SYSTEM_PROMPT,
     build_prompt,
     generate_answer,
     pack_evidence,
@@ -91,6 +90,23 @@ class FakeLLM:
             {"system": system_prompt, "user": user_prompt, "model": model}
         )
         return self.answers.pop(0) if self.answers else "FAKE_ANSWER"
+
+    def complete_structured(self, system_prompt, user_prompt, *, schema, model=None):
+        self.calls.append(
+            {"system": system_prompt, "user": user_prompt, "model": model}
+        )
+        answer = self.answers.pop(0) if self.answers else "FAKE_ANSWER"
+        if isinstance(answer, dict):
+            return answer
+        return {
+            "answerable": True,
+            "no_answer_reason": None,
+            "answer_text": answer,
+            "claims": [{"claim_text": answer, "source_labels": ["S1"]}],
+            "used_source_labels": ["S1"],
+            "uncertainty": [],
+            "safety_flags": [],
+        }
 
 
 class FakeSession:
@@ -251,9 +267,8 @@ def test_smalltalk_handled_without_evidence():
     )
     assert resp["answerable"] is False
     assert resp["citations"] == []
-    assert len(llm.calls) == 1
-    assert llm.calls[0]["system"] == SMALLTALK_SYSTEM_PROMPT
-    assert "PAYMENT_FLAG" not in llm.calls[0]["user"]  # no evidence injected
+    assert resp["no_answer_reason"] == "smalltalk"
+    assert len(llm.calls) == 0
 
 
 # --------------------------------------------------------------------------- #
@@ -302,7 +317,11 @@ def test_citations_persisted_with_correct_fields():
     )
 
     # --- persistence: one Message + one MessageCitation ----------------------
-    messages = [o for o in db.added if o.__class__.__name__ == "Message"]
+    messages = [
+        o
+        for o in db.added
+        if o.__class__.__name__ == "Message" and o.role == "assistant"
+    ]
     citations = [o for o in db.added if o.__class__.__name__ == "MessageCitation"]
     assert len(messages) == 1
     assert messages[0].role == "assistant"
@@ -319,7 +338,16 @@ def test_citations_persisted_with_correct_fields():
     assert c.page_end == 13
 
     # --- response schema ------------------------------------------------------
-    assert set(resp.keys()) == {"answer", "answerable", "citations", "retrieval_debug"}
+    assert {
+        "answer",
+        "answerable",
+        "no_answer_reason",
+        "claims",
+        "uncertainty",
+        "safety_flags",
+        "citations",
+        "retrieval_debug",
+    } == set(resp)
     assert resp["answerable"] is True
     assert len(resp["citations"]) == 1
     cit = resp["citations"][0]

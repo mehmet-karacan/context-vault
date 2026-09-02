@@ -69,6 +69,13 @@ class Settings(BaseSettings):
     # Comma-separated allow-list of chat models the UI may request.
     # None (unset) means "fall back to CHAT_MODEL only".
     CHAT_MODELS: Optional[str] = None
+    ANSWER_CONTEXT_WINDOW_TOKENS: int = 32768
+    ANSWER_RESERVED_OUTPUT_TOKENS: int = 2048
+    ANSWER_SAFETY_MARGIN_TOKENS: int = 1024
+    ANSWER_SCHEMA_REPAIR_ATTEMPTS: int = 1
+    ANSWER_PROMPT_TEMPLATE_VERSION: str = "answer-envelope-v1"
+    ANSWER_EVIDENCE_RETENTION_DAYS: int = 30
+    PROVIDER_REQUEST_RETENTION: Literal["none", "metadata_only"] = "none"
 
     # --- Object storage (MinIO / S3-compatible) ------------------------
     # Required. docker-compose.yml already injects ENDPOINT/ACCESS_KEY/

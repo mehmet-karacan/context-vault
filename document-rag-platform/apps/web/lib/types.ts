@@ -46,6 +46,14 @@ export interface LegacySource {
 export interface ChatResponse {
   answer: string;
   answerable: boolean;
+  no_answer_reason:
+    | "smalltalk"
+    | "policy_refusal"
+    | "insufficient_evidence"
+    | "provider_failure"
+    | "permission_denied"
+    | "malformed_response"
+    | null;
   citations: Citation[];
   retrieval_debug: RetrievalDebug | null;
   // Old-stage backend still returns `sources`; keep accepting it so the
@@ -95,8 +103,8 @@ export const SOURCE_TYPE_FILTERS: { value: SourceTypeFilter; label: string }[] =
 
 // Maps the chat query filter (<-> backend scope values).
 export function scopeValue(filter: SourceTypeFilter): string {
-  if (filter === "documents") return "document";
+  if (filter === "documents") return "documents";
   if (filter === "code") return "code";
-  if (filter === "images") return "image";
+  if (filter === "images") return "images";
   return "all";
 }

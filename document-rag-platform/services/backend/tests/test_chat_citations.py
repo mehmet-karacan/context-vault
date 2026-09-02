@@ -102,6 +102,18 @@ class FakeLLM:
         self.calls += 1
         return self.answer
 
+    def complete_structured(self, system_prompt, user_prompt, *, schema, model=None):
+        self.calls += 1
+        return {
+            "answerable": True,
+            "no_answer_reason": None,
+            "answer_text": self.answer,
+            "claims": [{"claim_text": self.answer, "source_labels": ["S1"]}],
+            "used_source_labels": ["S1"],
+            "uncertainty": [],
+            "safety_flags": [],
+        }
+
 
 def cand(chunk_id, rank, score, source="dense", meta=None, rerank=None):
     c = RetrievalCandidate(
@@ -192,7 +204,11 @@ def test_chat_runtime_creates_conversation_and_persists_message_and_citations():
     assert len(conv) == 1, "a Conversation must be created and flushed"
     assert str(conv[0].id) == conv_id
 
-    messages = [o for o in db.added if o.__class__.__name__ == "Message"]
+    messages = [
+        o
+        for o in db.added
+        if o.__class__.__name__ == "Message" and o.role == "assistant"
+    ]
     citations = [o for o in db.added if o.__class__.__name__ == "MessageCitation"]
 
     assert len(messages) == 1

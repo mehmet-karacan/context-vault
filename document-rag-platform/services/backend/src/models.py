@@ -12,6 +12,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -935,7 +936,22 @@ class Conversation(Base):
         nullable=False,
         index=True,
     )
+    workspace_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    principal_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("principals.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     title = Column(String, nullable=True)
+    title_status = Column(String, nullable=False, default="unset")
+    title_model = Column(String, nullable=True)
+    title_prompt_hash = Column(String(64), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
@@ -1013,11 +1029,46 @@ class Message(Base):
     content = Column(Text, nullable=False)
     model = Column(String, nullable=True)
     answerable = Column(Boolean, nullable=True)
+    no_answer_reason = Column(String, nullable=True)
+    prompt_template_version = Column(String, nullable=True)
+    prompt_hash = Column(String(64), nullable=True)
+    generation_config = Column(JSONB, nullable=False, default=dict)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     conversation = relationship("Conversation", back_populates="messages")
     citations = relationship(
         "MessageCitation", back_populates="message", cascade="all, delete-orphan"
+    )
+    claims = relationship(
+        "MessageClaim", back_populates="message", cascade="all, delete-orphan"
+    )
+
+
+class MessageClaim(Base):
+    """One validated answer claim; citation links live in claim_citations."""
+
+    __tablename__ = "message_claims"
+    __table_args__ = (
+        UniqueConstraint("message_id", "claim_index", name="uq_message_claim_index"),
+        CheckConstraint("claim_index > 0", name="ck_message_claim_index_positive"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    message_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("messages.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    claim_index = Column(Integer, nullable=False)
+    claim_text = Column(Text, nullable=False)
+    claim_hash = Column(String(64), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+    message = relationship("Message", back_populates="claims")
+    citation_links = relationship(
+        "ClaimCitation", back_populates="claim", cascade="all, delete-orphan"
     )
 
 
@@ -1032,6 +1083,11 @@ class MessageCitation(Base):
         ForeignKey("messages.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
+    )
+    retrieval_run_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("retrieval_runs.id", ondelete="SET NULL"),
+        nullable=True,
     )
     chunk_id = Column(
         UUID(as_uuid=True), ForeignKey("chunks.id", ondelete="SET NULL"), nullable=True
@@ -1051,13 +1107,58 @@ class MessageCitation(Base):
         ForeignKey("source_files.id", ondelete="SET NULL"),
         nullable=True,
     )
+    embedding_profile_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("embedding_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     rank = Column(Integer, nullable=True)
+    usage_order = Column(Integer, nullable=False, default=1)
     retrieval_score = Column(Float, nullable=True)
+    fusion_score = Column(Float, nullable=True)
     reranker_score = Column(Float, nullable=True)
     page_start = Column(Integer, nullable=True)
     page_end = Column(Integer, nullable=True)
     line_start = Column(Integer, nullable=True)
     line_end = Column(Integer, nullable=True)
     citation_label = Column(String, nullable=True)
+    locator_json = Column(JSONB, nullable=False, default=dict)
+    evidence_snapshot_encrypted = Column(LargeBinary, nullable=True)
+    evidence_hash = Column(String(64), nullable=True)
+    content_hash = Column(String(64), nullable=True)
+    model = Column(String, nullable=True)
+    prompt_template_version = Column(String, nullable=True)
+    prompt_hash = Column(String(64), nullable=True)
+    generation_config = Column(JSONB, nullable=False, default=dict)
+    validation_result = Column(String, nullable=False, default="valid")
+    evidence_expires_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     message = relationship("Message", back_populates="citations")
+    claim_links = relationship(
+        "ClaimCitation", back_populates="citation", cascade="all, delete-orphan"
+    )
+
+
+class ClaimCitation(Base):
+    """Many-to-many ordered relation between claims and actually used sources."""
+
+    __tablename__ = "claim_citations"
+    __table_args__ = (
+        CheckConstraint("source_order > 0", name="ck_claim_citation_order_positive"),
+    )
+
+    claim_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("message_claims.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    citation_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("message_citations.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    source_order = Column(Integer, nullable=False)
+
+    claim = relationship("MessageClaim", back_populates="citation_links")
+    citation = relationship("MessageCitation", back_populates="claim_links")

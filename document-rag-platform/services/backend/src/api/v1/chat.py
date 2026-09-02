@@ -40,6 +40,7 @@ from src.application.answer_service import (
     ConversationScopeError,
     ensure_conversation,
     generate_answer,
+    load_conversation_history,
 )
 from src.application.retrieval_service import RetrievalService
 from src.domain.identity import PrincipalContext
@@ -70,7 +71,11 @@ class ChatQuery(BaseModel):
 
 
 def _chunk_to_dict(
-    chunk: Chunk, doc: Optional[Document], *, workspace_id: UUID
+    chunk: Chunk,
+    doc: Optional[Document],
+    *,
+    workspace_id: UUID,
+    policy: Optional[ContentPolicyDecisionRecord] = None,
 ) -> Dict[str, Any]:
     """Map an ORM Chunk (+ its Document) into the chunk shape ContextBuilder
     and AnswerService read (chunk_id / content / heading_path / locator /
@@ -85,6 +90,9 @@ def _chunk_to_dict(
     if doc is not None:
         metadata["document_name"] = doc.name
         metadata["source_type"] = doc.source_type
+    if policy is not None:
+        metadata["permit_remote_generation"] = bool(policy.permit_remote_generation)
+        metadata["classification"] = policy.classification
     return {
         "chunk_id": str(chunk.id),
         "source_id": ":".join(
@@ -108,6 +116,10 @@ def _chunk_to_dict(
         "version_id": str(chunk.version_id),
         "source_file_id": str(chunk.source_file_id) if chunk.source_file_id else None,
         "metadata": metadata,
+        "remote_generation_allowed": bool(policy and policy.permit_remote_generation),
+        "policy_classification": (
+            policy.classification if policy is not None else "restricted"
+        ),
     }
 
 
@@ -116,7 +128,7 @@ def _build_resolvers(db: Session, scope: RetrievalScope):
 
     def chunk_resolver(chunk_id: str) -> Optional[Dict[str, Any]]:
         row = (
-            db.query(Chunk, Document)
+            db.query(Chunk, Document, ContentPolicyDecisionRecord)
             .join(Document, Chunk.document_id == Document.id)
             .join(Project, Document.project_id == Project.id)
             .join(DocumentVersion, Chunk.version_id == DocumentVersion.id)
@@ -140,13 +152,15 @@ def _build_resolvers(db: Session, scope: RetrievalScope):
         )
         if row is None:
             return None
-        chunk, doc = row
+        chunk, doc, policy = row
         if (
             scope.allowed_document_ids is not None
             and chunk.document_id not in scope.allowed_document_ids
         ):
             return None
-        return _chunk_to_dict(chunk, doc, workspace_id=scope.workspace_id)
+        return _chunk_to_dict(
+            chunk, doc, workspace_id=scope.workspace_id, policy=policy
+        )
 
     def neighbor_resolver(
         resolver_scope: RetrievalScope | None, key: ScopedNeighborKey
@@ -158,7 +172,7 @@ def _build_resolvers(db: Session, scope: RetrievalScope):
         ):
             return None
         row = (
-            db.query(Chunk, Document)
+            db.query(Chunk, Document, ContentPolicyDecisionRecord)
             .join(Document, Chunk.document_id == Document.id)
             .join(Project, Document.project_id == Project.id)
             .join(DocumentVersion, Chunk.version_id == DocumentVersion.id)
@@ -187,8 +201,10 @@ def _build_resolvers(db: Session, scope: RetrievalScope):
         ).first()
         if row is None:
             return None
-        chunk, doc = row
-        return _chunk_to_dict(chunk, doc, workspace_id=scope.workspace_id)
+        chunk, doc, policy = row
+        return _chunk_to_dict(
+            chunk, doc, workspace_id=scope.workspace_id, policy=policy
+        )
 
     return chunk_resolver, neighbor_resolver
 
@@ -223,10 +239,19 @@ def query_chat(
         conversation_id = ensure_conversation(
             db,
             project_id=str(chat_query.project_id),
+            workspace_id=str(principal.workspace_id),
+            principal_id=str(principal.principal_id),
             conversation_id=chat_query.conversation_id,
         )
     except ConversationScopeError as exc:
         raise HTTPException(status_code=404, detail="Conversation not found") from exc
+    conversation_history = load_conversation_history(
+        db,
+        conversation_id=conversation_id,
+        project_id=str(chat_query.project_id),
+        workspace_id=str(principal.workspace_id),
+        principal_id=str(principal.principal_id),
+    )
 
     source_types = {
         "all": ("document", "image", "repository", "directory", "archive"),
@@ -274,5 +299,6 @@ def query_chat(
         conversation_id=conversation_id,
         model=chat_query.model,
         debug=debug,
+        conversation_history=conversation_history,
     )
     return response
