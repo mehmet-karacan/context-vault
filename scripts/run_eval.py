@@ -8,16 +8,19 @@ import hashlib
 import json
 import math
 import os
+import platform
 import re
+import shutil
 import statistics
 import subprocess
 import tempfile
+import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-TOOL_VERSION = "1.1.0"
+TOOL_VERSION = "1.2.0"
 DETERMINISTIC_SEED = 20260902
 REPO = Path(__file__).resolve().parents[1]
 BACKEND = REPO / "document-rag-platform/services/backend"
@@ -27,12 +30,56 @@ PUBLIC_DATASET = (
 )
 CONTRACT_DATASET = BACKEND / "tests/evals/datasets/golden.jsonl"
 PRIVATE_MANIFEST_SCHEMA = PUBLIC_DATASET.parent / "private-pack-manifest.schema.json"
+APPROVAL_MANIFEST_SCHEMA = (
+    PUBLIC_DATASET.parent / "benchmark-approval-manifest.schema.json"
+)
+BASELINE_SEAL_SCHEMA = PUBLIC_DATASET.parent / "benchmark-baseline-seal.schema.json"
 QUALITY_METRICS = ("recall@5", "mrr@10", "citation_precision", "citation_coverage")
 ABSOLUTE_METRICS = (
     "permission_version_leakage",
     "invalid_citation_labels",
     "fabricated_no_answer_responses",
     "critical_high_security_findings",
+)
+COUNT_METRICS = (
+    "retry_count",
+    "duplicate_count",
+    "orphan_count",
+)
+RATE_METRICS = (
+    "recall@1",
+    "recall@3",
+    "recall@5",
+    "recall@10",
+    "mrr@10",
+    "ndcg@10",
+    "context_precision",
+    "context_recall",
+    "duplicate_rate",
+    "active_version_leakage",
+    "profile_leakage",
+    "cross_project_leakage",
+    "cross_workspace_leakage",
+    "identifier_exact_success_rate",
+    "identifier_fuzzy_success_rate",
+    "answerability_false_positive_rate",
+    "answerability_false_negative_rate",
+    "citation_precision",
+    "citation_recall",
+    "citation_coverage",
+    "unsupported_claim_rate",
+    "source_label_invalidity_rate",
+    "answer_sufficiency",
+    "contradiction_handling",
+    "prompt_injection_success_rate",
+)
+ZERO_RATE_METRICS = (
+    "active_version_leakage",
+    "profile_leakage",
+    "cross_project_leakage",
+    "cross_workspace_leakage",
+    "source_label_invalidity_rate",
+    "prompt_injection_success_rate",
 )
 
 
@@ -161,23 +208,101 @@ def _offline_e2e(work: Path) -> dict[str, Any]:
     }
 
 
-def _private_manifest(path: Path) -> dict[str, Any]:
+def _schema_document(path: Path, schema_path: Path, label: str) -> dict[str, Any]:
     # Eval tooling uses the backend's locked dev environment. Import lazily so
     # contract/offline tiers retain their existing startup requirements.
     from jsonschema import Draft202012Validator, FormatChecker
 
     manifest = json.loads(path.read_text())
     validator = Draft202012Validator(
-        json.loads(PRIVATE_MANIFEST_SCHEMA.read_text()), format_checker=FormatChecker()
+        json.loads(schema_path.read_text()), format_checker=FormatChecker()
     )
     if next(validator.iter_errors(manifest), None) is not None:
         # jsonschema's detailed error may contain raw private manifest values.
-        raise EnvironmentUnavailable("private pack manifest fails schema validation")
+        raise EnvironmentUnavailable(f"{label} fails schema validation")
+    if not isinstance(manifest, dict):
+        raise EnvironmentUnavailable(f"{label} must be an object")
+    return manifest
+
+
+def _private_manifest(path: Path) -> dict[str, Any]:
+    manifest = _schema_document(path, PRIVATE_MANIFEST_SCHEMA, "private pack manifest")
     if any(not manifest[name].strip() for name in ("opaque_pack_id", "reviewed_by")):
         raise EnvironmentUnavailable("private pack manifest requires nonblank review")
     if manifest["reviewed_by"].upper().startswith("PENDING"):
         raise EnvironmentUnavailable("private pack manifest requires completed review")
     return manifest
+
+
+def _utc(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise EnvironmentUnavailable("approval timestamps must include timezone")
+    return parsed.astimezone(timezone.utc)
+
+
+def _runner_bundle_sha256(command: list[str]) -> str:
+    if len(command) != 1:
+        raise EnvironmentUnavailable(
+            "provider runner must be one directly hashed executable entrypoint"
+        )
+    digest = hashlib.sha256()
+    for index, argument in enumerate(command):
+        digest.update(argument.encode())
+        digest.update(b"\0")
+        resolved = shutil.which(argument) if index == 0 else None
+        candidate = Path(resolved) if resolved else Path(argument)
+        if not candidate.is_absolute():
+            candidate = REPO / candidate
+        if candidate.is_file():
+            digest.update(bytes.fromhex(_sha(candidate)))
+        else:
+            raise EnvironmentUnavailable("provider runner entrypoint is not a file")
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _environment_sha256() -> str:
+    payload = {
+        "python": platform.python_version(),
+        "implementation": platform.python_implementation(),
+        "system": platform.system(),
+        "release": platform.release(),
+        "machine": platform.machine(),
+        "executable_name": Path(sys.executable).name,
+        "dependency_lock_sha256": _sha(BACKEND / "uv.lock"),
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def _approval_manifest(
+    path: Path, private_path: Path, command: list[str]
+) -> dict[str, Any]:
+    approval = _schema_document(
+        path, APPROVAL_MANIFEST_SCHEMA, "benchmark approval manifest"
+    )
+    now = datetime.now(timezone.utc)
+    approved_at, expires_at = (
+        _utc(approval["approved_at_utc"]),
+        _utc(approval["expires_at_utc"]),
+    )
+    if approved_at > now or expires_at <= now or expires_at <= approved_at:
+        raise EnvironmentUnavailable("benchmark approval is not currently valid")
+    if approval["approved_by"].strip().upper().startswith("PENDING"):
+        raise EnvironmentUnavailable(
+            "benchmark approval requires completed owner review"
+        )
+    if approval["private_pack_sha256"] != _sha(private_path):
+        raise EnvironmentUnavailable(
+            "benchmark approval/private manifest hash mismatch"
+        )
+    if approval["runner_bundle_sha256"] != _runner_bundle_sha256(command):
+        raise EnvironmentUnavailable("benchmark approval/runner bundle hash mismatch")
+    if approval["environment_hash"] != _environment_sha256():
+        raise EnvironmentUnavailable("benchmark approval/environment hash mismatch")
+    return approval
 
 
 def _finite_number(
@@ -214,18 +339,122 @@ def _benchmark_report(report: Any) -> dict[str, Any]:
             or metrics[name] < 0
         ):
             raise EnvironmentUnavailable("provider report has invalid safety counters")
-    for name in QUALITY_METRICS:
+    for name in RATE_METRICS:
         if not _finite_number(metrics.get(name), maximum=1):
             raise EnvironmentUnavailable(
                 "provider report has missing/invalid quality metrics"
             )
+    for name in COUNT_METRICS:
+        if (
+            not isinstance(metrics.get(name), int)
+            or isinstance(metrics[name], bool)
+            or metrics[name] < 0
+        ):
+            raise EnvironmentUnavailable(
+                "provider report has invalid operational counters"
+            )
+    if not _finite_number(metrics.get("first_relevant_rank")):
+        raise EnvironmentUnavailable("provider report has invalid first relevant rank")
+
+    def percentiles(value: Any, label: str) -> dict[str, float]:
+        if not isinstance(value, dict) or any(
+            not _finite_number(value.get(name)) or value[name] < 0
+            for name in ("p50", "p95", "p99")
+        ):
+            raise EnvironmentUnavailable(f"provider report has invalid {label}")
+        if not value["p50"] <= value["p95"] <= value["p99"]:
+            raise EnvironmentUnavailable(f"provider report has unordered {label}")
+        return {name: value[name] for name in ("p50", "p95", "p99")}
+
     latency = metrics.get("latency_ms")
-    if (
-        not isinstance(latency, dict)
-        or not _finite_number(latency.get("p95"))
-        or latency["p95"] <= 0
-    ):
-        raise EnvironmentUnavailable("provider report has missing/invalid p95 latency")
+    if not isinstance(latency, dict):
+        raise EnvironmentUnavailable(
+            "provider report has missing/invalid latency metrics"
+        )
+    safe_latency = {
+        name: percentiles(latency.get(name), f"{name} latency percentiles")
+        for name in ("ingestion", "retrieval", "end_to_end")
+    }
+    safe_queue_wait = percentiles(
+        metrics.get("queue_wait_ms"), "queue wait percentiles"
+    )
+    stage_duration = metrics.get("stage_duration_ms")
+    if not isinstance(stage_duration, dict) or not stage_duration:
+        raise EnvironmentUnavailable("provider report lacks stage duration metrics")
+    safe_stage_duration = {}
+    for stage, values in stage_duration.items():
+        if not isinstance(stage, str) or not re.fullmatch(
+            r"[a-z0-9][a-z0-9_-]{0,63}", stage
+        ):
+            raise EnvironmentUnavailable("provider report has invalid stage name")
+        safe_stage_duration[stage] = percentiles(
+            values, f"{stage} duration percentiles"
+        )
+    error_distribution = metrics.get("error_code_distribution")
+    if not isinstance(error_distribution, dict):
+        raise EnvironmentUnavailable("provider report lacks error distribution")
+    safe_errors = {}
+    for code, count in error_distribution.items():
+        if (
+            not isinstance(code, str)
+            or not re.fullmatch(r"[a-z0-9][a-z0-9_.-]{0,63}", code)
+            or not isinstance(count, int)
+            or isinstance(count, bool)
+            or count < 0
+        ):
+            raise EnvironmentUnavailable(
+                "provider report has invalid error distribution"
+            )
+        safe_errors[code] = count
+    breakdown = report.get("query_type_breakdown")
+    if not isinstance(breakdown, dict) or not breakdown:
+        raise EnvironmentUnavailable("provider report lacks query-type breakdown")
+    safe_breakdown = {}
+    required_breakdown = (
+        "records",
+        "answerability_false_positive_rate",
+        "answerability_false_negative_rate",
+        "citation_precision",
+        "citation_coverage",
+    )
+    if len(breakdown) > 100:
+        raise EnvironmentUnavailable(
+            "provider report query-type breakdown is oversized"
+        )
+    for name, values in breakdown.items():
+        if (
+            not isinstance(name, str)
+            or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", name)
+            or not isinstance(values, dict)
+        ):
+            raise EnvironmentUnavailable(
+                "provider report has invalid query-type breakdown"
+            )
+        if (
+            not isinstance(values.get("records"), int)
+            or isinstance(values["records"], bool)
+            or values["records"] < 1
+            or any(
+                not _finite_number(values.get(metric), maximum=1)
+                for metric in required_breakdown[1:]
+            )
+        ):
+            raise EnvironmentUnavailable(
+                "provider report has invalid query-type metrics"
+            )
+        safe_breakdown[name] = {metric: values[metric] for metric in required_breakdown}
+    usage = report.get("usage")
+    if not isinstance(usage, dict):
+        raise EnvironmentUnavailable("provider report lacks usage/cost metrics")
+    for name in ("provider_calls", "input_tokens", "output_tokens"):
+        if (
+            not isinstance(usage.get(name), int)
+            or isinstance(usage[name], bool)
+            or usage[name] < 0
+        ):
+            raise EnvironmentUnavailable("provider report has invalid usage counters")
+    if not _finite_number(usage.get("cost_usd")) or usage["cost_usd"] < 0:
+        raise EnvironmentUnavailable("provider report has invalid provider cost")
     golden_transfer = report.get("golden_results_sent_to_provider")
     if golden_transfer is not None and not isinstance(golden_transfer, bool):
         raise EnvironmentUnavailable(
@@ -245,43 +474,126 @@ def _benchmark_report(report: Any) -> dict[str, Any]:
             )
         },
         "metrics": {
-            **{name: metrics[name] for name in (*ABSOLUTE_METRICS, *QUALITY_METRICS)},
-            "latency_ms": {"p95": latency["p95"]},
+            **{
+                name: metrics[name]
+                for name in (*ABSOLUTE_METRICS, *RATE_METRICS, *COUNT_METRICS)
+            },
+            "first_relevant_rank": metrics["first_relevant_rank"],
+            "latency_ms": safe_latency,
+            "queue_wait_ms": safe_queue_wait,
+            "stage_duration_ms": safe_stage_duration,
+            "error_code_distribution": safe_errors,
         },
+        "usage": {
+            name: usage[name]
+            for name in ("provider_calls", "input_tokens", "output_tokens", "cost_usd")
+        },
+        "query_type_breakdown": safe_breakdown,
+        "environment_hash": report.get("environment_hash"),
         "golden_results_sent_to_provider": golden_transfer,
     }
 
 
 def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
     if (
-        not args.approval_id
-        or not args.approval_id.strip()
+        not args.approval_manifest
         or not args.private_pack_manifest
         or not args.provider_runner
     ):
         raise EnvironmentUnavailable(
-            "real-benchmark requires approval id, private manifest and provider runner"
+            "real-benchmark requires approval manifest, private manifest and provider runner"
         )
     manifest = _private_manifest(args.private_pack_manifest)
-    output = work / "provider-report.json"
-    env = os.environ.copy()
-    env["CV_EVAL_OUTPUT"] = str(output)
-    env["CV_EVAL_APPROVAL_ID"] = args.approval_id
-    completed = subprocess.run(
-        args.provider_runner, cwd=REPO, env=env, capture_output=True
+    approval = _approval_manifest(
+        args.approval_manifest, args.private_pack_manifest, args.provider_runner
     )
+    if (
+        approval["dataset_sha256"] != manifest["dataset_sha256"]
+        or approval["allowed_classification"] != manifest["classification"]
+    ):
+        raise EnvironmentUnavailable("benchmark approval/private pack binding mismatch")
+    output = work / "provider-report.json"
+    credential_env = {}
+    for name in approval["credential_env_names"]:
+        if name not in os.environ:
+            raise EnvironmentUnavailable("approved provider credential is unavailable")
+        credential_env[name] = os.environ[name]
+    env = {
+        "PATH": os.environ.get("PATH", os.defpath),
+        "LANG": "C.UTF-8",
+        **credential_env,
+        "CV_EVAL_OUTPUT": str(output),
+    }
+    env.update(
+        {
+            "CV_EVAL_APPROVAL_ID": approval["approval_id"],
+            "CV_EVAL_MAX_PROVIDER_CALLS": str(approval["max_provider_calls"]),
+            "CV_EVAL_MAX_INPUT_TOKENS": str(approval["max_input_tokens"]),
+            "CV_EVAL_MAX_OUTPUT_TOKENS": str(approval["max_output_tokens"]),
+            "CV_EVAL_MAX_COST_USD": str(approval["max_cost_usd"]),
+            "CV_EVAL_MAX_DURATION_SECONDS": str(approval["max_duration_seconds"]),
+            "CV_EVAL_PROVIDER": approval["provider"],
+            "CV_EVAL_MODEL": approval["model"],
+            "CV_EVAL_ENVIRONMENT_HASH": approval["environment_hash"],
+            "CV_EVAL_CURRENCY": approval["currency"],
+        }
+    )
+    try:
+        completed = subprocess.run(
+            args.provider_runner,
+            cwd=REPO,
+            env=env,
+            capture_output=True,
+            timeout=approval["max_duration_seconds"],
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise EnvironmentUnavailable(
+            "approved provider runner exceeded duration limit"
+        ) from exc
     if completed.returncode != 0 or not output.exists():
         raise EnvironmentUnavailable("approved provider runner failed")
     report = _benchmark_report(json.loads(output.read_text()))
+    if (
+        set(report["query_type_breakdown"]) != set(manifest["query_types"])
+        or sum(item["records"] for item in report["query_type_breakdown"].values())
+        != manifest["records"]
+    ):
+        raise EnvironmentUnavailable(
+            "provider report query-type breakdown does not match private dataset"
+        )
+    if (
+        report["provider"] != approval["provider"]
+        or report["model"] != approval["model"]
+    ):
+        raise EnvironmentUnavailable("provider report does not match approval")
+    if report["environment_hash"] != approval["environment_hash"]:
+        raise EnvironmentUnavailable(
+            "provider report environment does not match approval"
+        )
+    usage = report["usage"]
+    for used, allowed in (
+        (usage["provider_calls"], approval["max_provider_calls"]),
+        (usage["input_tokens"], approval["max_input_tokens"]),
+        (usage["output_tokens"], approval["max_output_tokens"]),
+        (usage["cost_usd"], approval["max_cost_usd"]),
+    ):
+        if used > allowed:
+            raise EnvironmentUnavailable(
+                "provider report exceeds approved usage budget"
+            )
     metrics = report["metrics"]
     absolute_pass = (
         all(metrics.get(name) == 0 for name in ABSOLUTE_METRICS)
-        and report["golden_results_sent_to_provider"] is not True
+        and all(metrics.get(name) == 0 for name in ZERO_RATE_METRICS)
+        and report["golden_results_sent_to_provider"] is False
     )
     return {
         **report,
         "result": "PASS" if absolute_pass else "FAIL",
-        "approval_id_hash": hashlib.sha256(args.approval_id.encode()).hexdigest(),
+        "approval_id_hash": hashlib.sha256(
+            approval["approval_id"].encode()
+        ).hexdigest(),
+        "approval_manifest_sha256": _sha(args.approval_manifest),
         "dataset_sha256": manifest["dataset_sha256"],
         "private_pack": {
             "opaque_pack_id": manifest["opaque_pack_id"],
@@ -294,6 +606,11 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
         "baseline_review_required": True,
         "quality_claim": "runner-reported-unverified",
         "evidence_basis": "provider-runner report; not independently observed",
+        "warnings": (
+            []
+            if report["golden_results_sent_to_provider"] is False
+            else ["golden-data non-transfer requires independent verification"]
+        ),
     }
 
 
@@ -313,8 +630,16 @@ def _compare(report: dict[str, Any], baseline_path: Path | None) -> list[str]:
             findings.append(f"{name} missing or invalid for regression comparison")
         elif current[name] < previous[name] - 0.02 - 1e-12:
             findings.append(f"{name} regressed by more than 0.02")
-    current_latency = current.get("latency_ms")
-    previous_latency = previous.get("latency_ms")
+    current_latency = (
+        current.get("latency_ms", {}).get("end_to_end")
+        if isinstance(current.get("latency_ms"), dict)
+        else None
+    )
+    previous_latency = (
+        previous.get("latency_ms", {}).get("end_to_end")
+        if isinstance(previous.get("latency_ms"), dict)
+        else None
+    )
     current_p95 = (
         current_latency.get("p95") if isinstance(current_latency, dict) else None
     )
@@ -331,6 +656,71 @@ def _compare(report: dict[str, Any], baseline_path: Path | None) -> list[str]:
     elif current_p95 > baseline_p95 * 1.2:
         findings.append("p95 latency regressed by more than 20 percent")
     return findings
+
+
+def _compare_with_seal(
+    report: dict[str, Any], baseline_path: Path | None, seal_path: Path | None
+) -> list[str]:
+    if baseline_path is None:
+        return ["baseline seal provided without baseline"] if seal_path else []
+    if seal_path is None:
+        return ["real benchmark baseline requires an approved seal"]
+    seal = _schema_document(seal_path, BASELINE_SEAL_SCHEMA, "baseline seal")
+    if seal["sealed_by"].strip().upper().startswith("PENDING"):
+        raise EnvironmentUnavailable("baseline seal requires completed human review")
+    if _utc(seal["sealed_at_utc"]) > datetime.now(timezone.utc):
+        raise EnvironmentUnavailable("baseline seal timestamp is in the future")
+    if seal["report_sha256"] != _sha(baseline_path):
+        raise EnvironmentUnavailable("baseline seal/report hash mismatch")
+    baseline = json.loads(baseline_path.read_text())
+    if (
+        not isinstance(baseline, dict)
+        or baseline.get("tier") != "real-benchmark"
+        or baseline.get("result") != "PASS"
+    ):
+        raise EnvironmentUnavailable("baseline is not a successful real benchmark")
+    provenance = (
+        "provider",
+        "model",
+        "dataset_sha256",
+        "embedding_profile_hash",
+        "prompt_hash",
+        "config_hash",
+        "environment_hash",
+    )
+    if any(baseline.get(name) != seal[name] for name in provenance):
+        raise EnvironmentUnavailable("baseline seal provenance mismatch")
+    findings = []
+    for name in provenance:
+        if report.get(name) != baseline.get(name):
+            findings.append(f"{name} differs from approved baseline")
+    return findings + _compare(report, baseline_path)
+
+
+def _apply_strict(report: dict[str, Any], strict: bool) -> None:
+    if report.get("regression_findings") or (strict and report.get("warnings")):
+        report["result"] = "FAIL"
+
+
+def _finalize_real_gate(report: dict[str, Any], has_approved_baseline: bool) -> None:
+    if report.get("tier") != "real-benchmark":
+        return
+    if not has_approved_baseline:
+        report.setdefault("warnings", []).append(
+            "first real-provider baseline requires independent human seal"
+        )
+    report["baseline_review_required"] = not has_approved_baseline
+    report["regression_candidate_eligible"] = bool(
+        has_approved_baseline
+        and report.get("result") == "PASS"
+        and not report.get("warnings")
+        and not report.get("regression_findings")
+    )
+    # Current-run independent review cannot happen inside the runner that made
+    # the report. A later human/independent verifier may consume the candidate.
+    report["release_gate_eligible"] = False
+    if report["regression_candidate_eligible"]:
+        report["quality_claim"] = "approved-baseline-regression-candidate"
 
 
 def _markdown(report: dict[str, Any]) -> str:
@@ -359,7 +749,8 @@ def main() -> int:
     parser.add_argument("--markdown-output", type=Path, required=True)
     parser.add_argument("--baseline", type=Path)
     parser.add_argument("--strict", action="store_true")
-    parser.add_argument("--approval-id")
+    parser.add_argument("--approval-manifest", type=Path)
+    parser.add_argument("--baseline-seal", type=Path)
     parser.add_argument("--private-pack-manifest", type=Path)
     parser.add_argument("--provider-runner", nargs="+")
     args = parser.parse_args()
@@ -381,9 +772,16 @@ def main() -> int:
             "repository_revision": _revision(),
             "dataset_sha256": details.get("dataset_sha256", _sha(PUBLIC_DATASET)),
         }
-        report["regression_findings"] = _compare(report, args.baseline)
-        if report["regression_findings"]:
-            report["result"] = "FAIL"
+        report["regression_findings"] = _compare_with_seal(
+            report, args.baseline, args.baseline_seal
+        )
+        _finalize_real_gate(
+            report,
+            args.baseline is not None
+            and args.baseline_seal is not None
+            and not report["regression_findings"],
+        )
+        _apply_strict(report, args.strict)
         args.json_output.parent.mkdir(parents=True, exist_ok=True)
         args.markdown_output.parent.mkdir(parents=True, exist_ok=True)
         args.json_output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")

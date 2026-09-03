@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "strict_contract_smoke": {"result": "PASS", "exit_code": 0},
+  "unapproved_real_benchmark": {
+    "result": "ENVIRONMENT_UNAVAILABLE",
+    "reason": "real-benchmark requires approval manifest, private manifest and provider runner",
+    "exit_code": 3,
+    "provider_invoked": false
+  },
+  "shell_wrapper_incident": {
+    "result": "FAIL",
+    "exit_code": 1,
+    "reason": "First wrapper used zsh read-only variable name status after the inner probe had already exited 3; rerun used cv_eval_exit and passed.",
+    "provider_invoked": false
+  },
+  "final_exact_source_rerun": {
+    "strict_contract_smoke": {"result": "PASS", "exit_code": 0},
+    "unapproved_real_benchmark": {
+      "result": "ENVIRONMENT_UNAVAILABLE",
+      "reason": "real-benchmark requires approval manifest, private manifest and provider runner",
+      "exit_code": 3,
+      "provider_invoked": false
+    }
+  },
+  "final_wrapper_incidents": {
+    "sandbox_rejected_cleanup_before_execution": true,
+    "wrong_virtualenv_path_exit_code": 127,
+    "reason": "The first final-probe wrapper was rejected before execution because it contained cleanup; the next used a repository-root .venv path that does not exist. The exact-source rerun used the backend locked environment and passed.",
+    "provider_invoked": false
+  }
+}

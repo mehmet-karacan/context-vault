@@ -1536,6 +1536,63 @@ Durum: **yerel admission regression PASS; A9 gerçek benchmark hâlâ BLOCKED**.
 
 ---
 
+### 16.11 A9 approval/budget/metric binding çalışma kaydı — 2026-09-03
+
+Başlangıç SHA: `518f7f694c83355ed483b062ce0331b6cd8048da`.
+Durum: **yerel approval/budget/provenance admission PASS; A9 gerçek koşu BLOCKED**.
+
+- Bağımsız alt ajan §16.10 admission patch'ini 41/41 test, CLI exit 3,
+  artifact/source hash'leriyle dar kapsamda `APPROVE` etti. A9 kapanışını, alt
+  ajanın owner/insan yerine onay vermesini ve A9 açıkken A11'e geçişi `REJECT`
+  etti. Bu karar insan onayı veya baseline seal değildir.
+- Ek bulgular: approval id yalnız nonblank; provider/model/private pack/
+  classification/bütçe/runner bağlamı yok; subprocess timeout ve kullanım tavanı
+  yok; zorunlu metrik seti eksik; baseline comparator seal/provenance/environment
+  bağlamıyor; `--strict` etkisiz.
+- Claim/kapsam: `scripts/run_eval.py`, A9 tier testleri, versioned approval/seal
+  şemaları, real-benchmark runbook'u ve yeni immutable receipt. Aynı kaynaklarda
+  başka çalışma gözlenmedi. Test-first, yalnız sentetik stub process; provider,
+  kullanıcı DB/MinIO veya remote etkisi yok.
+- Rollback: bu verifier/schema değişikliklerini revert et; hiçbir DB/object veya
+  eski receipt'i silme. A9 geçmeden A11'e başlanmaz.
+- İki bağımsız inceleme turunda ilk patch `REJECT` edildi: whitespace reviewer/
+  sealer, ters percentile, eksik first-rank/query breakdown, transitif runner,
+  self-reported environment, strict'in geçilememesi ve release-candidate/release
+  semantiği yeniden üretildi. Concurrent edit penceresindeki bağımsız ara koşu
+  70 PASS/8 FAIL; sabit bytes sonraki koşular 78 ve nihai **83/83 PASS**. Ara
+  başarısızlık gizlenmedi.
+- Versioned approval şeması private manifest dosya+dataset+classification'ı;
+  provider/model, tek doğrudan executable runner hash'i, wrapper-computed
+  Python/OS/machine/lock environment hash'i, expiry ve süre/call/input/output/USD
+  tavanlarına bağlar. Child yalnız açık credential allowlist'i ve bounded metadata
+  alır; ambient HOME/Codex/session ortamı aktarılmaz. Provider-side hard limit
+  ancak dış provider tarafından uygulanabilir; env+timeout+reported-usage kontrolü
+  defense-in-depth'tir ve daha geniş garanti değildir.
+- Private manifest records/query-types ile rapor breakdown seti ve toplamı exact
+  eşleşir. Retrieval/context/leakage/identifier/answerability/citation/unsupported
+  claim/contradiction/prompt injection; first-rank, retry/duplicate/orphan, nested
+  ingestion/retrieval/end-to-end ve queue/stage percentile, error distribution ve
+  provider call/token/cost alanları typed/bounded/finite kontrol edilir. Percentile
+  sırası zorunlu; golden transfer explicit `false` ve mutlak sızıntılar `0` değilse
+  sonuç PASS değildir.
+- Baseline comparator exact report hash'li insan seal'i ile provider/model/dataset/
+  profile/prompt/config/environment provenance eşliği ister. İlk candidate strict
+  modda seal uyarısıyla fail olur. Valid baseline yalnız
+  `regression_candidate_eligible` üretebilir; wrapper
+  `release_gate_eligible=false` bırakır ve bağımsız current-run review'ü uydurmaz.
+- Final exact-source doğrulaması: **699 backend PASS, 2 skip**, 1 Starlette/httpx
+  uyarısı; **83 tier PASS**; Ruff, MyPy strict 14 dosya, deterministic OpenAPI,
+  122-package offline lock ve diff-check PASS. Contract-smoke strict PASS; onaysız
+  real CLI probe exit 3 ve provider çağrısı 0. Kullanıcı DB/object verisi değişmedi.
+- Bağımsız alt ajan final stabilized source hash'lerinde yerel patch'i `APPROVE`
+  etti; A9 closure/owner approval/provider izni/baseline seal olmadığını ayrıca
+  kaydetti. Kanıt: `artifacts/evals/2026-09-03-a9-bindings/`.
+- A9'u kapatmak için hâlâ gerçek owner-reviewed private pack, exact provider/model,
+  gerçek credential/provider-side budget control, insan approval manifesti,
+  gerçek koşu ve ilk baseline insan seal'i gerekir. Bunları model/alt ajan üretemez.
+
+---
+
 ## 17. AŞAMA 10 — Frontend ve ürün sözleşmesi
 
 ### 17.1 Amaç

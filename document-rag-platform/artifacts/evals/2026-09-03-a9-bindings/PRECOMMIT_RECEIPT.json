@@ -1,0 +1,163 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "verify",
+  "operation_id": "cv3-a9-bindings-20260903-001",
+  "work_item_id": "CV3-A9-EVAL",
+  "attempt_id": "local-admission-bindings-001",
+  "actor": "codex-local-agent",
+  "tool_adapter": "local-cli-pytest-independent-review",
+  "started_at": "2026-09-03T01:54:04Z",
+  "finished_at": "2026-09-03T01:54:04Z",
+  "time_scope": "Receipt assembly timestamp; exact pytest durations and timestamps are in the redacted JUnit reports.",
+  "baseline_revision": "518f7f694c83355ed483b062ce0331b6cd8048da",
+  "result_revision": null,
+  "revision_note": "Pre-commit source hashes bind tested bytes; a follow-up receipt will bind the implementation commit.",
+  "scope_hash": "3196f0b51ad6d7ca94fc52ab1bdeb8b62e14fad35dc2f771f5d5daec6e3050bc",
+  "context_manifest_hash": "cbfca52d128343246a9128ce85af247b67c4450fc66fdb069231b21db3d1f0cd",
+  "idempotency_key_hash": null,
+  "commands": [
+    {
+      "command": "pytest -q tests/evals/test_tier_contracts.py --junitxml=reports/a9-bindings-final.xml",
+      "exit_code": 0,
+      "result": "83 passed"
+    },
+    {
+      "command": "pytest -q --junitxml=reports/a9-bindings-backend-final.xml with explicit isolated PostgreSQL/Redis/MinIO test endpoints",
+      "exit_code": 0,
+      "result": "699 passed, 2 skipped, 1 warning"
+    },
+    {
+      "command": "ruff check . ../../../scripts/run_eval.py; strict MyPy ratchet; OpenAPI deterministic check; uv lock --check --offline; git diff --check",
+      "exit_code": 0,
+      "result": "PASS; MyPy checked 14 source files and lock contained 122 packages"
+    },
+    {
+      "command": "run_eval.py --tier contract-smoke --strict",
+      "exit_code": 0,
+      "result": "PASS"
+    },
+    {
+      "command": "run_eval.py --tier real-benchmark --strict without admission manifests/runner",
+      "exit_code": 3,
+      "result": "Expected fail-closed before provider dispatch"
+    },
+    {
+      "command": "Independent subagent test/Ruff/diff-check and source review",
+      "exit_code": 0,
+      "result": "APPROVE for local patch only; 83/83 tests passed"
+    },
+    {
+      "command": "check_public_tree.py --repo . --json-output <evidence>/public-tree.json",
+      "exit_code": 0,
+      "result": "272 staged/tracked files checked; PASS"
+    }
+  ],
+  "exit_status": 0,
+  "tests": [
+    {
+      "name": "full backend",
+      "passed": 699,
+      "skipped": 2,
+      "failed": 0,
+      "warnings": 1,
+      "report": "backend-junit.xml"
+    },
+    {
+      "name": "A9 tier admission and regression contracts",
+      "passed": 83,
+      "failed": 0,
+      "report": "tier-junit.xml"
+    },
+    {
+      "name": "strict MyPy",
+      "result": "PASS",
+      "source_files": 14
+    },
+    {
+      "name": "Ruff/OpenAPI/lock/public tree/diff check",
+      "result": "PASS"
+    },
+    {
+      "name": "independent local patch review",
+      "result": "APPROVE",
+      "phase_closed": false
+    }
+  ],
+  "result": "PASS",
+  "phase_closed": false,
+  "scope": "Local A9 approval, budget, runner, environment, report, baseline-seal and release-candidate admission correctness only. No real-provider benchmark or A9 closure.",
+  "source_manifest": "SOURCE_MANIFEST.json",
+  "artifacts": [
+    {
+      "path": "CLI_PROBES.json",
+      "sha256": "693327af5694b0b779442a100a4420ebce4121200322a989c21514ecf0a44ed0",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "INDEPENDENT_REVIEW.json",
+      "sha256": "48400e5aad9af0d5d0e3ef5d68a02b9e08e94a2873d1cb6ebf2aea6e0406601f",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "SOURCE_MANIFEST.json",
+      "sha256": "3196f0b51ad6d7ca94fc52ab1bdeb8b62e14fad35dc2f771f5d5daec6e3050bc",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "backend-junit.xml",
+      "sha256": "e6e2f14e80c58acdccdde8f61006fb504fa4e630acc38350d356435d96d1f0af",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "tier-junit.xml",
+      "sha256": "8da68d5999ca26778492cb018491de290d854ddcb84952e8dc62d1ba8397249f",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "public-tree.json",
+      "sha256": "4f9f648c2125a2a63f7b361b0f5ac7cfc8200d323fb3b0a90a19803cacf990d0",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    }
+  ],
+  "security_redactions": [
+    "JUnit local hostname and absolute repository/temp paths removed",
+    "Provider child stdout/stderr and arbitrary report fields are not copied to public evidence",
+    "Only synthetic local runners and isolated test infrastructure were used"
+  ],
+  "intermediate_failures": [
+    "Independent concurrent-edit review saw 70 pass/8 fail; findings were fixed and rerun on stable bytes.",
+    "An earlier shell wrapper used zsh's read-only status variable after the inner expected exit 3.",
+    "The first final-probe wrapper was rejected before execution for cleanup syntax; the next used the wrong repository-root virtualenv path and exited 127. The exact-source backend-environment rerun passed."
+  ],
+  "rollback": {
+    "schema_change": false,
+    "data_reset_required": false,
+    "instruction": "Revert only this local evaluator admission patch if needed; preserve all databases, objects, prior evidence and fail-closed release decisions."
+  },
+  "data_safety": {
+    "user_data_mutated": false,
+    "isolated_test_infrastructure_used": true,
+    "real_provider_calls": 0,
+    "provider_credentials_read": false
+  },
+  "open_gates": [
+    "Human owner-reviewed private pack and classification",
+    "Explicit provider/model/runner/budget/credential/environment approval",
+    "Audited real-provider run with provider-side spend limits and non-transfer evidence",
+    "Human baseline seal and independent current-run release review",
+    "A11-A13, remote CI and final independent verification"
+  ],
+  "remote_actions": {
+    "provider_call": false,
+    "push": false,
+    "pull_request": false,
+    "merge": false,
+    "release": false
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "review_type": "independent_local_code_and_evidence_review",
+  "reviewer": "separate-codex-subagent",
+  "result": "APPROVE",
+  "scope": "Local A9 admission patch only; not A9 closure, owner approval, provider permission or baseline seal.",
+  "final_source_sha256": {
+    "scripts/run_eval.py": "20db5917837ebfa5c740aa4be4ada8d2b8bf4101926de4cd78eafcb38eb46557",
+    "document-rag-platform/services/backend/tests/evals/test_tier_contracts.py": "ad464d7f1a3936ffbfae1f635de1f877106281bd5273586d1ae9a8d848ca18ca",
+    "document-rag-platform/tests/evals/real_benchmark/README.md": "aa3bbb8bf17009e8e99569eb9d20b90d7b0bb72e44961a0dc9189771efd3dea5"
+  },
+  "verification": {"tier_tests_passed": 83, "ruff": "PASS", "diff_check": "PASS"},
+  "intermediate_failure": {"passed": 70, "failed": 8, "reason": "Concurrent edit window; findings drove further fixes and were rerun on stable bytes."},
+  "limitations": [
+    "Provider-side hard cap remains an external provider control; wrapper controls are defense in depth.",
+    "No provider, secret, user DB or object storage access was performed.",
+    "A model or subagent cannot replace owner/human authorization."
+  ]
+}
