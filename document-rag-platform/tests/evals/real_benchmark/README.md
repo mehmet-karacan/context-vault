@@ -64,6 +64,59 @@ regression comparison. `--strict` changes a warning-bearing candidate to FAIL; i
 does not affect clean contract/offline tiers. Neither an approval manifest nor a
 baseline seal may be created by the model/CLI itself.
 
+## Approval preparation (no provider effect)
+
+Prerequisites: use the same locked backend Python, machine/runtime and exact direct
+runner path intended for the benchmark. The private-pack manifest must already have
+completed owner review. Keep the manifest and both outputs outside the repository;
+the commands do not read credential values or execute the runner. Each JSON output
+must resolve outside the repository and be a new path; preparation uses exclusive,
+no-symlink creation with mode `0600` and refuses to overwrite any existing file.
+
+```sh
+cv_python="document-rag-platform/services/backend/.venv/bin/python"
+cv_private_manifest="/private/path/private-pack-manifest.json"
+cv_candidate_runner="/private/path/provider-runner"
+cv_preflight_output="/private/path/approval-preflight.json"
+
+"$cv_python" scripts/run_eval.py --approval-preflight \
+  --private-pack-manifest "$cv_private_manifest" \
+  --provider-runner "$cv_candidate_runner" \
+  --json-output "$cv_preflight_output"
+```
+
+Expected status is `HUMAN_APPROVAL_REQUIRED` with `provider_invoked=false` and
+`credential_values_read=false`. The bounded file contains only the exact private-manifest,
+dataset, runner-bundle and environment hashes/classification plus tool/repository
+revision. It deliberately omits approval identity/times, provider/model, credentials
+and budgets, so it is not an approval manifest. Stop if validation fails, the pack is
+not owner-reviewed, any hash is unexpected, or the intended runner/environment is not
+the one independently reviewed.
+
+An authorized human uses those fingerprints, the versioned approval schema and
+separately approved provider/model, credential-variable names, expiry and
+provider-side budgets to issue the approval manifest. Validate it without provider
+dispatch before any real run:
+
+```sh
+cv_human_approval="/private/path/benchmark-approval-manifest.json"
+cv_approval_check="/private/path/approval-check.json"
+
+"$cv_python" scripts/run_eval.py --check-approval \
+  --approval-manifest "$cv_human_approval" \
+  --private-pack-manifest "$cv_private_manifest" \
+  --provider-runner "$cv_candidate_runner" \
+  --json-output "$cv_approval_check"
+```
+
+Expected status is `APPROVAL_VALID_FOR_CURRENT_INPUTS`, again with
+`provider_invoked=false` and `credential_values_read=false`. Any manifest, runner path/byte,
+lock/runtime/machine, dataset/classification or expiry drift is a stop condition and
+requires a fresh preflight plus human approval. Retain private preflight/check/approval
+files under the applicable private evidence policy; never commit them or their raw
+paths. A successful check only validates binding—it does not authorize the CLI/model
+to choose a provider, spend budget, execute the run or seal a baseline.
+
 Example shape only (paths remain outside public evidence when private):
 
 ```sh

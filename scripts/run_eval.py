@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-TOOL_VERSION = "1.2.0"
+TOOL_VERSION = "1.3.0"
 DETERMINISTIC_SEED = 20260902
 REPO = Path(__file__).resolve().parents[1]
 BACKEND = REPO / "document-rag-platform/services/backend"
@@ -231,6 +231,8 @@ def _private_manifest(path: Path) -> dict[str, Any]:
         raise EnvironmentUnavailable("private pack manifest requires nonblank review")
     if manifest["reviewed_by"].upper().startswith("PENDING"):
         raise EnvironmentUnavailable("private pack manifest requires completed review")
+    if _utc(manifest["approved_at_utc"]) > datetime.now(timezone.utc):
+        raise EnvironmentUnavailable("private pack review timestamp is in the future")
     return manifest
 
 
@@ -254,10 +256,12 @@ def _runner_bundle_sha256(command: list[str]) -> str:
         candidate = Path(resolved) if resolved else Path(argument)
         if not candidate.is_absolute():
             candidate = REPO / candidate
-        if candidate.is_file():
+        if candidate.is_file() and os.access(candidate, os.X_OK):
             digest.update(bytes.fromhex(_sha(candidate)))
         else:
-            raise EnvironmentUnavailable("provider runner entrypoint is not a file")
+            raise EnvironmentUnavailable(
+                "provider runner entrypoint is not an executable file"
+            )
         digest.update(b"\0")
     return digest.hexdigest()
 
@@ -303,6 +307,122 @@ def _approval_manifest(
     if approval["environment_hash"] != _environment_sha256():
         raise EnvironmentUnavailable("benchmark approval/environment hash mismatch")
     return approval
+
+
+def _bound_approval(
+    approval_path: Path, private_path: Path, command: list[str]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    manifest = _private_manifest(private_path)
+    approval = _approval_manifest(approval_path, private_path, command)
+    if (
+        approval["dataset_sha256"] != manifest["dataset_sha256"]
+        or approval["allowed_classification"] != manifest["classification"]
+    ):
+        raise EnvironmentUnavailable("benchmark approval/private pack binding mismatch")
+    return manifest, approval
+
+
+def _approval_preflight(private_path: Path, command: list[str]) -> dict[str, Any]:
+    """Produce bounded fingerprints for a later human approval, without effects."""
+    manifest = _private_manifest(private_path)
+    runner_hash = _runner_bundle_sha256(command)
+    environment_hash = _environment_sha256()
+    repository_revision = _revision()
+    return {
+        "schema_version": "1.0",
+        "request_type": "real-benchmark-approval-preflight",
+        "status": "HUMAN_APPROVAL_REQUIRED",
+        "repository_revision": repository_revision,
+        "tool_version": TOOL_VERSION,
+        "private_pack_sha256": _sha(private_path),
+        "dataset_sha256": manifest["dataset_sha256"],
+        "allowed_classification": manifest["classification"],
+        "runner_bundle_sha256": runner_hash,
+        "environment_hash": environment_hash,
+        "provider_invoked": False,
+        "credential_values_read": False,
+        "human_decisions_required": [
+            "approval_id",
+            "approved_by",
+            "approved_at_utc",
+            "expires_at_utc",
+            "provider",
+            "model",
+            "credential_env_names",
+            "max_duration_seconds",
+            "max_provider_calls",
+            "max_input_tokens",
+            "max_output_tokens",
+            "max_cost_usd",
+        ],
+    }
+
+
+def _check_approval(
+    approval_path: Path, private_path: Path, command: list[str]
+) -> dict[str, Any]:
+    """Validate a human approval against current bytes without provider dispatch."""
+    manifest, approval = _bound_approval(approval_path, private_path, command)
+    return {
+        "schema_version": "1.0",
+        "request_type": "real-benchmark-approval-check",
+        "status": "APPROVAL_VALID_FOR_CURRENT_INPUTS",
+        "repository_revision": _revision(),
+        "tool_version": TOOL_VERSION,
+        "approval_manifest_sha256": _sha(approval_path),
+        "approval_id_hash": hashlib.sha256(
+            approval["approval_id"].encode()
+        ).hexdigest(),
+        "private_pack_sha256": _sha(private_path),
+        "dataset_sha256": manifest["dataset_sha256"],
+        "allowed_classification": manifest["classification"],
+        "runner_bundle_sha256": _runner_bundle_sha256(command),
+        "environment_hash": _environment_sha256(),
+        "provider_invoked": False,
+        "credential_values_read": False,
+    }
+
+
+def _validate_approval_output_path(path: Path) -> None:
+    try:
+        path.resolve().relative_to(REPO.resolve())
+    except ValueError:
+        pass
+    else:
+        raise EnvironmentUnavailable(
+            "approval preparation output must remain outside the repository"
+        )
+    if path.exists() or path.is_symlink():
+        raise EnvironmentUnavailable("approval preparation output must be a new file")
+
+
+def _write_approval_output(path: Path, report: dict[str, Any]) -> None:
+    _validate_approval_output_path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags, 0o600)
+    except FileExistsError as exc:
+        raise EnvironmentUnavailable(
+            "approval preparation output must be a new file"
+        ) from exc
+    except OSError as exc:
+        raise EnvironmentUnavailable(
+            "approval preparation output could not be securely created"
+        ) from exc
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            os.fchmod(handle.fileno(), 0o600)
+            json.dump(report, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+    except OSError as exc:
+        raise EnvironmentUnavailable(
+            "approval preparation output could not be securely written"
+        ) from exc
 
 
 def _finite_number(
@@ -503,15 +623,9 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
         raise EnvironmentUnavailable(
             "real-benchmark requires approval manifest, private manifest and provider runner"
         )
-    manifest = _private_manifest(args.private_pack_manifest)
-    approval = _approval_manifest(
+    manifest, approval = _bound_approval(
         args.approval_manifest, args.private_pack_manifest, args.provider_runner
     )
-    if (
-        approval["dataset_sha256"] != manifest["dataset_sha256"]
-        or approval["allowed_classification"] != manifest["classification"]
-    ):
-        raise EnvironmentUnavailable("benchmark approval/private pack binding mismatch")
     output = work / "provider-report.json"
     credential_env = {}
     for name in approval["credential_env_names"]:
@@ -740,13 +854,15 @@ def _markdown(report: dict[str, Any]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument(
         "--tier",
-        required=True,
         choices=("contract-smoke", "offline-e2e", "real-benchmark"),
     )
+    mode.add_argument("--approval-preflight", action="store_true")
+    mode.add_argument("--check-approval", action="store_true")
     parser.add_argument("--json-output", type=Path, required=True)
-    parser.add_argument("--markdown-output", type=Path, required=True)
+    parser.add_argument("--markdown-output", type=Path)
     parser.add_argument("--baseline", type=Path)
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--approval-manifest", type=Path)
@@ -755,6 +871,51 @@ def main() -> int:
     parser.add_argument("--provider-runner", nargs="+")
     args = parser.parse_args()
     try:
+        if args.approval_preflight or args.check_approval:
+            if not args.private_pack_manifest or not args.provider_runner:
+                raise EnvironmentUnavailable(
+                    "approval preparation requires private manifest and provider runner"
+                )
+            if args.baseline or args.baseline_seal or args.strict:
+                raise EnvironmentUnavailable(
+                    "approval preparation does not accept eval or baseline gates"
+                )
+            if args.markdown_output:
+                raise EnvironmentUnavailable(
+                    "approval preparation emits only bounded JSON"
+                )
+            _validate_approval_output_path(args.json_output)
+            if args.approval_preflight:
+                if args.approval_manifest:
+                    raise EnvironmentUnavailable(
+                        "approval preflight cannot consume or create an approval"
+                    )
+                report = _approval_preflight(
+                    args.private_pack_manifest, args.provider_runner
+                )
+            else:
+                if not args.approval_manifest:
+                    raise EnvironmentUnavailable(
+                        "approval check requires a human approval manifest"
+                    )
+                report = _check_approval(
+                    args.approval_manifest,
+                    args.private_pack_manifest,
+                    args.provider_runner,
+                )
+            _write_approval_output(args.json_output, report)
+            print(
+                json.dumps(
+                    {
+                        "request_type": report["request_type"],
+                        "status": report["status"],
+                        "provider_invoked": False,
+                    }
+                )
+            )
+            return 0
+        if args.markdown_output is None:
+            raise EnvironmentUnavailable("eval tier requires markdown output")
         with tempfile.TemporaryDirectory(prefix="cv-eval-") as directory:
             work = Path(directory)
             if args.tier == "contract-smoke":
@@ -789,17 +950,25 @@ def main() -> int:
         print(json.dumps({"tier": args.tier, "result": report["result"]}))
         return 0 if report["result"] == "PASS" else 1
     except (OSError, ValueError, ImportError, EnvironmentUnavailable) as exc:
-        print(
-            json.dumps(
-                {
-                    "tier": args.tier,
-                    "result": "ENVIRONMENT_UNAVAILABLE",
-                    "reason": str(exc)
-                    if isinstance(exc, EnvironmentUnavailable)
-                    else "eval input/output or tooling unavailable",
-                }
-            )
+        mode_name = (
+            "real-benchmark-approval-preflight"
+            if args.approval_preflight
+            else "real-benchmark-approval-check"
+            if args.check_approval
+            else None
         )
+        failure: dict[str, Any] = {
+            "result": "ENVIRONMENT_UNAVAILABLE",
+            "reason": str(exc)
+            if isinstance(exc, EnvironmentUnavailable)
+            else "eval input/output or tooling unavailable",
+        }
+        if mode_name:
+            failure["request_type"] = mode_name
+            failure["provider_invoked"] = False
+        else:
+            failure["tier"] = args.tier
+        print(json.dumps(failure))
         return 3
 
 

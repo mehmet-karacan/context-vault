@@ -1591,6 +1591,57 @@ Durum: **yerel approval/budget/provenance admission PASS; A9 gerçek koşu BLOCK
   gerçek credential/provider-side budget control, insan approval manifesti,
   gerçek koşu ve ilk baseline insan seal'i gerekir. Bunları model/alt ajan üretemez.
 
+### 16.12 A9 no-effect approval preflight çalışma kaydı — 2026-09-03
+
+Başlangıç SHA: `f25dbbf653720ae12ea153514bd34ea0fa6447a7`.
+Durum: **yerel operator-preparation PASS; A9 gerçek koşu BLOCKED**.
+
+- Kullanıcının devam talebi üzerine dış insan/provider kapısı atlanmadı. Salt-okunur
+  aramada repository, `/Users/mkaracan/Projeler` ve Downloads altında gerçek private
+  pack/approval/baseline seal/provider runner bulunmadı; bilinen provider credential
+  environment adlarının tamamı absent kaldı. A11'e geçilmedi.
+- Bağımsız alt ajan mevcut operator readiness'i `REJECT` etti: standart dosya SHA'sı
+  alınabilse de custom runner-bundle ve wrapper-computed environment hash'lerini
+  üreten desteklenen public komut, ayrıca provider dispatch yapmadan approval
+  drift/expiry kontrolü yoktu.
+- Test-first yeniden üretimde yeni beş sözleşme testi **5 FAIL/83 PASS** verdi.
+  `approval-preflight` artık owner-reviewed private manifest ile exact manifest,
+  dataset/classification, executable runner bundle, environment, tool ve repository
+  hash'lerini bounded JSON'a çıkarır. Approval kimliği/zamanı, provider/model,
+  credential veya bütçe kararı üretmez; sonuç açıkça `HUMAN_APPROVAL_REQUIRED`,
+  `provider_invoked=false` ve `credential_values_read=false` kalır.
+- `check-approval` insanın verdiği approval şemasını, expiry ve private manifest/
+  dataset/classification/runner/environment drift'ini salt-okunur doğrular. Runner'ı
+  çalıştırmaz, credential environment değerlerine bakmaz ve yalnız bounded hash/
+  status çıktısı verir. Private pack review timestamp'inin gelecekte olması da
+  preflight öncesinde fail-closed reddedilir.
+- Hazırlık çıktısı repository dışına resolve olmak ve yeni dosya olmak zorundadır;
+  `O_EXCL`/`O_NOFOLLOW`, `0600` ve `fsync` kullanır. Bağımsız kırma testinde ilk
+  patch executable biti olmayan `0600` runner'ı kabul etti ve dangling symlink yeni
+  çıktı kontrolünü aştı; ikisi de düzeltildi. Stabilized bağımsız yeniden üretimde
+  non-executable runner ile dangling symlink fail-closed, symlink target oluşmadı ve
+  valid yeni çıktı `0600` oldu.
+- Başarısızlıklar saklandı: ilk test-first 5 FAIL; ilk format kapısında bir dosya
+  reformat ihtiyacı; local ara koşuda test mock sıralaması nedeniyle 2 FAIL/91 PASS;
+  bağımsız concurrent edit penceresinde field-rename uyuşmazlığıyla 87 PASS/4 FAIL.
+  İlk manual eksik-girdi CLI probe'u hazırlık hatasını `tier:null` diye etiketledi;
+  bounded hata envelope'u `request_type` ve `provider_invoked=false` taşıyacak
+  şekilde düzeltildi. Sabit kaynaklarda bütün bu bulguların regresyonları
+  **94/94 PASS** oldu.
+- Final exact-source doğrulaması: izole PostgreSQL/Redis/MinIO ile **710 backend
+  PASS, 2 skip**, 1 Starlette/httpx uyarısı; **94 tier PASS**. Ruff format/check,
+  MyPy strict 14 dosya, deterministic OpenAPI, 122-package offline lock ve
+  diff-check PASS. Kullanıcı DB/MinIO/object verisi veya gerçek provider
+  kullanılmadı; remote push/PR/merge/release yapılmadı.
+- Bağımsız alt ajan stabilized kaynaklarda yerel operator-preparation patch'ini
+  `APPROVE` etti ve somut kalan yerel admission açığı bulmadı. Bu karar owner
+  approval/provider izni değildir ve A9'u kapatmaz.
+- Public-safe kanıt: `artifacts/evals/2026-09-03-a9-preflight/`.
+- Açık kapı değişmedi: gerçek owner-reviewed private pack, exact provider/model ve
+  provider-side budget kararı, insan approval manifesti, gerçek provider koşusu,
+  bağımsız request/non-transfer kanıtı ve ilk baseline insan seal'i gerekir. Bunlar
+  gelmeden A11 başlatılmaz.
+
 ---
 
 ## 17. AŞAMA 10 — Frontend ve ürün sözleşmesi

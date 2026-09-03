@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -600,3 +601,245 @@ def test_transitive_shell_or_module_runner_is_rejected_before_dispatch(
     with pytest.raises(run_eval.EnvironmentUnavailable, match="one directly hashed"):
         run_eval._real_benchmark(args, tmp_path)
     runner.assert_not_called()
+
+
+def test_approval_preflight_is_bounded_deterministic_and_has_no_effect(
+    tmp_path, monkeypatch
+):
+    args, manifest, _, runner = benchmark_fixture(tmp_path, monkeypatch)
+    manifest["secret_store_reference"] = "PRIVATE-SECRET-REFERENCE"
+    args.private_pack_manifest.write_text(json.dumps(manifest))
+    monkeypatch.setattr(run_eval, "_revision", lambda: "f" * 40)
+
+    first = run_eval._approval_preflight(
+        args.private_pack_manifest, args.provider_runner
+    )
+    second = run_eval._approval_preflight(
+        args.private_pack_manifest, args.provider_runner
+    )
+
+    assert first == second
+    assert set(first) == {
+        "schema_version",
+        "request_type",
+        "status",
+        "repository_revision",
+        "tool_version",
+        "private_pack_sha256",
+        "dataset_sha256",
+        "allowed_classification",
+        "runner_bundle_sha256",
+        "environment_hash",
+        "provider_invoked",
+        "credential_values_read",
+        "human_decisions_required",
+    }
+    assert first["status"] == "HUMAN_APPROVAL_REQUIRED"
+    assert first["provider_invoked"] is False
+    assert first["credential_values_read"] is False
+    output = json.dumps(first)
+    assert "PRIVATE-SECRET-REFERENCE" not in output
+    assert str(args.private_pack_manifest) not in output
+    assert str(args.provider_runner[0]) not in output
+    assert manifest["reviewed_by"] not in output
+    runner.assert_not_called()
+
+
+def test_approval_preflight_fingerprints_manifest_runner_and_environment(
+    tmp_path, monkeypatch
+):
+    args, manifest, _, runner = benchmark_fixture(tmp_path, monkeypatch)
+    monkeypatch.setattr(run_eval, "_revision", lambda: "f" * 40)
+    first = run_eval._approval_preflight(
+        args.private_pack_manifest, args.provider_runner
+    )
+
+    manifest["records"] = 2
+    args.private_pack_manifest.write_text(json.dumps(manifest))
+    manifest_changed = run_eval._approval_preflight(
+        args.private_pack_manifest, args.provider_runner
+    )
+    assert manifest_changed["private_pack_sha256"] != first["private_pack_sha256"]
+
+    Path(args.provider_runner[0]).write_text("#!/bin/sh\nexit 98\n")
+    runner_changed = run_eval._approval_preflight(
+        args.private_pack_manifest, args.provider_runner
+    )
+    assert runner_changed["runner_bundle_sha256"] != first["runner_bundle_sha256"]
+
+    monkeypatch.setattr(run_eval.platform, "machine", lambda: "changed-machine")
+    environment_changed = run_eval._approval_preflight(
+        args.private_pack_manifest, args.provider_runner
+    )
+    assert environment_changed["environment_hash"] != first["environment_hash"]
+    runner.assert_not_called()
+
+
+def test_check_approval_validates_bindings_without_runner_or_credentials(
+    tmp_path, monkeypatch
+):
+    args, _, _, runner = benchmark_fixture(tmp_path, monkeypatch)
+    monkeypatch.setattr(run_eval, "_revision", lambda: "f" * 40)
+    monkeypatch.delenv("SYNTHETIC_PROVIDER_KEY")
+
+    result = run_eval._check_approval(
+        args.approval_manifest,
+        args.private_pack_manifest,
+        args.provider_runner,
+    )
+
+    assert result["status"] == "APPROVAL_VALID_FOR_CURRENT_INPUTS"
+    assert result["provider_invoked"] is False
+    assert result["credential_values_read"] is False
+    assert "SYNTHETIC_PROVIDER_KEY" not in json.dumps(result)
+    runner.assert_not_called()
+
+
+def test_check_approval_rejects_private_binding_drift_without_effect(
+    tmp_path, monkeypatch
+):
+    args, _, _, runner = benchmark_fixture(tmp_path, monkeypatch)
+    approval = json.loads(args.approval_manifest.read_text())
+    approval["dataset_sha256"] = "0" * 64
+    args.approval_manifest.write_text(json.dumps(approval))
+
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="binding mismatch"):
+        run_eval._check_approval(
+            args.approval_manifest,
+            args.private_pack_manifest,
+            args.provider_runner,
+        )
+    runner.assert_not_called()
+
+
+def test_private_pack_future_review_is_rejected_before_preflight(tmp_path, monkeypatch):
+    args, manifest, _, runner = benchmark_fixture(tmp_path, monkeypatch)
+    manifest["approved_at_utc"] = "2999-01-01T00:00:00Z"
+    args.private_pack_manifest.write_text(json.dumps(manifest))
+
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="future"):
+        run_eval._approval_preflight(args.private_pack_manifest, args.provider_runner)
+    runner.assert_not_called()
+
+
+def test_approval_preflight_and_check_are_supported_no_effect_cli_modes(
+    tmp_path, monkeypatch
+):
+    args, _, _, runner = benchmark_fixture(tmp_path, monkeypatch)
+    monkeypatch.setattr(run_eval, "_revision", lambda: "f" * 40)
+    preflight_output = tmp_path / "preflight.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_eval.py",
+            "--approval-preflight",
+            "--private-pack-manifest",
+            str(args.private_pack_manifest),
+            "--provider-runner",
+            args.provider_runner[0],
+            "--json-output",
+            str(preflight_output),
+        ],
+    )
+    assert run_eval.main() == 0
+    assert json.loads(preflight_output.read_text())["status"] == (
+        "HUMAN_APPROVAL_REQUIRED"
+    )
+
+    monkeypatch.delenv("SYNTHETIC_PROVIDER_KEY")
+    check_output = tmp_path / "approval-check.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_eval.py",
+            "--check-approval",
+            "--approval-manifest",
+            str(args.approval_manifest),
+            "--private-pack-manifest",
+            str(args.private_pack_manifest),
+            "--provider-runner",
+            args.provider_runner[0],
+            "--json-output",
+            str(check_output),
+        ],
+    )
+    assert run_eval.main() == 0
+    checked = json.loads(check_output.read_text())
+    assert checked["status"] == "APPROVAL_VALID_FOR_CURRENT_INPUTS"
+    assert checked["credential_values_read"] is False
+    assert preflight_output.stat().st_mode & 0o777 == 0o600
+    runner.assert_not_called()
+
+
+def test_approval_preparation_never_overwrites_an_existing_file(tmp_path, monkeypatch):
+    args, _, _, runner = benchmark_fixture(tmp_path, monkeypatch)
+    original = args.private_pack_manifest.read_bytes()
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_eval.py",
+            "--approval-preflight",
+            "--private-pack-manifest",
+            str(args.private_pack_manifest),
+            "--provider-runner",
+            args.provider_runner[0],
+            "--json-output",
+            str(args.private_pack_manifest),
+        ],
+    )
+
+    assert run_eval.main() == 3
+    assert args.private_pack_manifest.read_bytes() == original
+    runner.assert_not_called()
+
+
+def test_approval_preparation_output_must_remain_outside_repository():
+    repository_output = REPO / ".approval-preflight-must-not-be-created.json"
+
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="outside"):
+        run_eval._validate_approval_output_path(repository_output)
+    assert not repository_output.exists()
+
+
+def test_approval_preflight_rejects_non_executable_runner(tmp_path, monkeypatch):
+    args, _, _, runner = benchmark_fixture(tmp_path, monkeypatch)
+    Path(args.provider_runner[0]).chmod(0o600)
+
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="executable"):
+        run_eval._approval_preflight(args.private_pack_manifest, args.provider_runner)
+    runner.assert_not_called()
+
+
+def test_approval_output_rejects_dangling_symlink_without_creating_target(tmp_path):
+    target = tmp_path / "must-not-be-created.json"
+    output = tmp_path / "dangling-output.json"
+    output.symlink_to(target)
+
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="new file"):
+        run_eval._write_approval_output(output, {"bounded": True})
+    assert output.is_symlink()
+    assert not target.exists()
+
+
+def test_approval_preflight_failure_envelope_is_not_a_null_eval_tier(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_eval.py",
+            "--approval-preflight",
+            "--json-output",
+            str(tmp_path / "not-created.json"),
+        ],
+    )
+
+    assert run_eval.main() == 3
+    failure = json.loads(capsys.readouterr().out)
+    assert failure["request_type"] == "real-benchmark-approval-preflight"
+    assert failure["provider_invoked"] is False
+    assert "tier" not in failure

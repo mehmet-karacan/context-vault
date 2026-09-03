@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "scope": "A9 no-provider-effect approval preflight and approval drift check",
+  "baseline_revision": "f25dbbf653720ae12ea153514bd34ea0fa6447a7",
+  "initial_operator_readiness": "REJECT",
+  "initial_findings": [
+    "No supported CLI exposed the custom runner-bundle fingerprint.",
+    "No supported CLI exposed the wrapper-computed environment fingerprint.",
+    "No no-effect CLI validated a human approval against current bytes, expiry and provenance."
+  ],
+  "test_first_result": {"passed": 83, "failed": 5},
+  "independent_break_findings": [
+    "A mode-0600 non-executable file was initially accepted as a runner.",
+    "A dangling output symlink initially bypassed a non-atomic existence check."
+  ],
+  "fixes": [
+    "Added bounded approval-preflight fingerprints without approval decisions or provider dispatch.",
+    "Added no-effect approval schema/expiry/private-pack/runner/environment drift validation.",
+    "Required an executable direct runner.",
+    "Required repository-external new output with O_EXCL/O_NOFOLLOW, mode 0600 and fsync.",
+    "Added bounded preparation failure envelopes without tier:null."
+  ],
+  "final_result": {
+    "tier_tests": {"passed": 94, "failed": 0},
+    "backend_tests": {"passed": 710, "skipped": 2, "failed": 0, "warnings": 1},
+    "independent_review": "APPROVE_LOCAL_PATCH_ONLY",
+    "provider_invoked": false,
+    "credential_values_read_by_preflight_or_check": false,
+    "user_data_mutated": false
+  },
+  "phase_closed": false,
+  "remaining_external_gates": [
+    "Owner-reviewed real private pack",
+    "Human provider/model/credential-name/provider-side-budget approval",
+    "Real provider run and independent request/non-transfer evidence",
+    "Human baseline seal"
+  ]
+}
