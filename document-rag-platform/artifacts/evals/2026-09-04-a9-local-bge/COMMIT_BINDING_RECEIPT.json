@@ -1,0 +1,70 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "verify",
+  "operation_id": "cv3-a9-local-bge-20260904-002",
+  "work_item_id": "CV3-A9-EVAL",
+  "attempt_id": "post-commit-binding-001",
+  "actor": "codex-local-agent",
+  "tool_adapter": "local-cli-git-pytest",
+  "started_at": "2026-09-04T20:47:14Z",
+  "finished_at": "2026-09-04T20:47:16Z",
+  "time_scope": "Evidence-binding interval; post-commit focused pytest and source verification completed immediately before receipt assembly.",
+  "baseline_revision": "fb9fabef2480d3a2da5d2cf1277d01c0222d9888",
+  "result_revision": "70d088cb34af8cf87c2057f7de43f7ce42373fb8",
+  "scope_hash": "749ff8d40d40a0910d60c91c87001437212058153bc377624a025431f82d615a",
+  "idempotency_key_hash": null,
+  "commands": [
+    {
+      "command": "pytest -q document-rag-platform/services/backend/tests/evals/test_local_bge_runtime.py document-rag-platform/services/backend/tests/evals/test_tier_contracts.py",
+      "exit_code": 0,
+      "result": "140 passed"
+    },
+    {
+      "command": "Verify seven SOURCE_MANIFEST hashes against checked-out implementation commit; git status --short",
+      "exit_code": 0,
+      "result": "PASS; worktree clean before this receipt"
+    }
+  ],
+  "exit_status": 0,
+  "tests": [
+    {"name": "post-commit local BGE and A9 tier contracts", "passed": 140, "failed": 0},
+    {"name": "source fingerprint binding", "result": "PASS", "files": 7},
+    {
+      "name": "full backend, runtime, security and independent review gates",
+      "source": "PRECOMMIT_RECEIPT.json",
+      "binding": "Exact tested source bytes match implementation commit 70d088cb34af8cf87c2057f7de43f7ce42373fb8."
+    }
+  ],
+  "artifacts": [
+    {"path": "INDEPENDENT_REVIEW.json", "sha256": "489e37ff559fc268babed710581cc5504a8fdd463c50e815c6f33dccab6aecbf", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "PRECOMMIT_RECEIPT.json", "sha256": "4c6b15b856856768a3583de563bd99213db0ada238e11acec38b07e9347183da", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "SOURCE_MANIFEST.json", "sha256": "749ff8d40d40a0910d60c91c87001437212058153bc377624a025431f82d615a", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "LOCAL_BGE_CPU.json", "sha256": "4f2b392cec4243a4066a736db1b74bbd51b386ba0e40ad16c1c9cba893bbd586", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "LOCAL_BGE_MPS.json", "sha256": "d4613ed3515f698d3b864713971440ae5a3728953979e947b22116f84a91bf73", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "BACKEND_JUNIT.xml", "sha256": "5e08c652c47803ad7e285661a202ea46aebf9f25cdb505eb3ef8375a06c58e51", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "TIER_JUNIT.xml", "sha256": "bd7c97fb194a90a307021941a11e9bee1c93301899dcbbde6a8a9ac5bf664eb9", "classification": "public-synthetic", "retention": "versioned evidence"}
+  ],
+  "security_redactions": [
+    "JUnit local hostname and absolute paths removed",
+    "No model weights, private path, credential value, benchmark prompt or provider output recorded",
+    "Synthetic isolated infrastructure and local model inference only"
+  ],
+  "rollback": {
+    "schema_change": false,
+    "data_reset_required": false,
+    "instruction": "Revert this receipt-only commit if needed; leave application data, model cache, prior receipts and fail-closed A9 decisions unchanged."
+  },
+  "result": "PASS",
+  "phase_closed": false,
+  "independent_review": true,
+  "scope": "Exact local BAAI/bge-m3 embedding runtime admission and implementation-revision binding only; not generation approval, private benchmark, human baseline approval or A9 closure.",
+  "open_gates": [
+    "Versioned split embedding/generation provider-model approval and result bindings",
+    "Exact local generation runtime",
+    "Human owner-reviewed private candidate pack",
+    "Real production-path benchmark with independent request/non-transfer evidence",
+    "Human baseline seal",
+    "A11-A13, remote CI and final independent verification"
+  ],
+  "remote_actions": {"provider_call": false, "push": false, "pull_request": false, "merge": false, "release": false}
+}
