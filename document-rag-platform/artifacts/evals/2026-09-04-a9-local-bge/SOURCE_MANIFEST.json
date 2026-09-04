@@ -1,0 +1,30 @@
+[
+  {
+    "path": "AKTIF_GOREV.md",
+    "sha256": "f3b99b414baeeb03606d83e1878d2f0dfde3ea9250e5c664cab5651388f72f94"
+  },
+  {
+    "path": ".github/workflows/ci-security.yml",
+    "sha256": "21c3e498021bcea77bf4f6f4bb368df1f712e41e1fa09d54841573e98cab58e8"
+  },
+  {
+    "path": "scripts/verify_local_bge.py",
+    "sha256": "287ef26695b7de2d3d3d17c85ccd8fa213722be92b65fbea48e224668ccaa9bc"
+  },
+  {
+    "path": "document-rag-platform/services/backend/pyproject.toml",
+    "sha256": "eca3a0641528b5402bdfc55d227302048c6f8e59dd31d67917956664213f915e"
+  },
+  {
+    "path": "document-rag-platform/services/backend/uv.lock",
+    "sha256": "cd2cf599f7a8ea91acaab882f31189f316f5797943fb88035be97acaad36a4ad"
+  },
+  {
+    "path": "document-rag-platform/services/backend/tests/evals/test_local_bge_runtime.py",
+    "sha256": "c496a5119ee42b4f269fa7e0838d6e90cbc2f04dca3fb90fdd1f947a61efcfe3"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/real_benchmark/README.md",
+    "sha256": "8145acd4adbbc55a77d7b4f0748f92ccfed025b408430c1df238dfaf9894b90f"
+  }
+]

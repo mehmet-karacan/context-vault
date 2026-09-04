@@ -1,0 +1,38 @@
+{
+  "cosine": 0.508589,
+  "dependency_lock_sha256": "cd2cf599f7a8ea91acaab882f31189f316f5797943fb88035be97acaad36a4ad",
+  "device": "cpu",
+  "embedding_dimension": 1024,
+  "encode_seconds": 3.038,
+  "finite": true,
+  "library_offline_mode": true,
+  "load_seconds": 1.566,
+  "local_model_invoked": true,
+  "model": "BAAI/bge-m3",
+  "model_bundle_bytes": 2293331623,
+  "model_bundle_files": 11,
+  "model_bundle_sha256": "d87c47601ade6251c7e0c236d4b863b797bfd280f94ac09be9cc7fbeede74668",
+  "model_revision": "5617a9f61b028005a4858fdac845db406aefb181",
+  "network_isolation_verified": false,
+  "network_policy": "huggingface-local-files-only",
+  "norms": [
+    1.0,
+    1.0
+  ],
+  "remote_provider_invoked": false,
+  "repository_revision": "fb9fabef2480d3a2da5d2cf1277d01c0222d9888",
+  "request_type": "local-bge-runtime-verification",
+  "result": "PASS",
+  "runtime_versions": {
+    "python": "3.12.14",
+    "sentence_transformers": "6.0.1",
+    "torch": "2.14.0"
+  },
+  "schema_version": "1.0",
+  "shape": [
+    2,
+    1024
+  ],
+  "tool_version": "1.0.0",
+  "verifier_sha256": "287ef26695b7de2d3d3d17c85ccd8fa213722be92b65fbea48e224668ccaa9bc"
+}

@@ -135,3 +135,42 @@ seal. A later regression with that valid seal and an explicit false golden-trans
 assertion may pass strict validation, but remains only an independently reviewable
 candidate. Do not put any of these
 private paths, credentials, runner output or raw provider payloads into Git.
+
+## Local BGE runtime admission
+
+`BAAI/bge-m3` may be admitted as the embedding side of a local benchmark only
+when an exact local Hugging Face snapshot is supplied. The optional runtime is
+kept out of normal backend/CI installs:
+
+```sh
+cd document-rag-platform/services/backend
+uv sync --locked --all-groups --extra local-eval
+```
+
+The verifier hashes every resolved snapshot file, rejects cache-root symlink
+escapes, loads with Hugging Face/Transformers offline guards and
+`local_files_only=True`, performs real normalized inference, then repeats the
+full snapshot validation to detect byte or symlink drift during inference. Its
+JSON output is created as a new mode-0600 file and is never overwritten:
+
+```sh
+services/backend/.venv/bin/python ../scripts/verify_local_bge.py \
+  --snapshot /local/huggingface/models--BAAI--bge-m3/snapshots/<revision> \
+  --expected-model BAAI/bge-m3 \
+  --expected-revision <revision> \
+  --expected-bundle-sha256 <sha256> \
+  --device cpu \
+  --json-output /new/private/path/local-bge-runtime.json
+```
+
+The report binds the repository revision, verifier bytes, dependency lock and
+model bundle. `library_offline_mode=true` is not an operating-system network
+sandbox; the report therefore retains `network_isolation_verified=false`.
+Run the benchmark host under an independently observed egress deny policy when
+that stronger claim is required.
+
+BGE-M3 is an embedding model, not a generation model. A passing local-BGE
+runtime report cannot satisfy the approved real-provider tier by itself. The
+approval, provider report and baseline seal must separately bind the exact
+embedding and generation providers/models before the first real benchmark can
+be sealed.

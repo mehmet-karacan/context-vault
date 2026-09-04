@@ -1,0 +1,116 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "verify",
+  "operation_id": "cv3-a9-local-bge-20260904-001",
+  "work_item_id": "CV3-A9-EVAL",
+  "attempt_id": "local-bge-admission-001",
+  "actor": "codex-local-agent",
+  "tool_adapter": "local-cli-pytest-runtime-independent-review",
+  "started_at": "2026-09-04T20:34:26Z",
+  "finished_at": "2026-09-04T20:45:00Z",
+  "time_scope": "The interval starts at the earliest retained final evidence mtime. Earlier test-first runs are ordered but were not assigned invented timestamps; exact test durations and runtime timings are retained in the redacted JUnit and local runtime reports.",
+  "baseline_revision": "fb9fabef2480d3a2da5d2cf1277d01c0222d9888",
+  "result_revision": null,
+  "revision_note": "Pre-commit source hashes bind tested bytes; a follow-up receipt will bind the implementation commit.",
+  "scope_hash": "749ff8d40d40a0910d60c91c87001437212058153bc377624a025431f82d615a",
+  "idempotency_key_hash": null,
+  "commands": [
+    {
+      "command": "pytest -q tests/evals/test_local_bge_runtime.py before implementation",
+      "exit_code": 1,
+      "result": "7 failed; the local BGE verifier did not exist"
+    },
+    {
+      "command": "Focused test-first reproductions after independent review findings",
+      "exit_code": 1,
+      "result": "Symlink escape, honest network reporting, TOCTOU, secure output, same-byte symlink retarget, locked provenance and security-CI scope regressions reproduced before fixes"
+    },
+    {
+      "command": "pytest -q tests/evals/test_local_bge_runtime.py tests/evals/test_tier_contracts.py --junitxml=<evidence>/TIER_JUNIT.xml",
+      "exit_code": 0,
+      "result": "140 passed"
+    },
+    {
+      "command": "pytest -q tests --junitxml=<evidence>/BACKEND_JUNIT.xml with a newly created isolated PostgreSQL database upgraded to cv3_00000006 and isolated Redis/MinIO endpoints",
+      "exit_code": 0,
+      "result": "756 passed, 2 skipped, 1 warning"
+    },
+    {
+      "command": "verify_local_bge.py --device cpu with locked local-eval runtime and exact local snapshot",
+      "exit_code": 0,
+      "result": "PASS; 2x1024 finite normalized embeddings, no remote provider invoked"
+    },
+    {
+      "command": "verify_local_bge.py --device mps with locked local-eval runtime and exact local snapshot",
+      "exit_code": 0,
+      "result": "PASS; 2x1024 finite normalized embeddings, no remote provider invoked"
+    },
+    {
+      "command": "pip-audit against the frozen local-eval environment",
+      "exit_code": 0,
+      "result": "No known vulnerabilities found"
+    },
+    {
+      "command": "ruff format --check; ruff check; strict MyPy ratchet; OpenAPI deterministic check; uv lock --check --offline; workflow YAML parse; git diff --check",
+      "exit_code": 0,
+      "result": "PASS; MyPy checked 14 source files and lock resolved 163 packages"
+    },
+    {
+      "command": "Independent multi-round break/review on stabilized exact source and evidence bytes",
+      "exit_code": 0,
+      "result": "APPROVE for the local BGE admission package only after all rejection findings were fixed"
+    }
+  ],
+  "exit_status": 0,
+  "tests": [
+    {"name": "local BGE and A9 tier contracts", "passed": 140, "failed": 0, "report": "TIER_JUNIT.xml"},
+    {"name": "full backend", "passed": 756, "skipped": 2, "failed": 0, "warnings": 1, "report": "BACKEND_JUNIT.xml"},
+    {"name": "exact local BGE CPU runtime", "result": "PASS", "report": "LOCAL_BGE_CPU.json"},
+    {"name": "exact local BGE MPS runtime", "result": "PASS", "report": "LOCAL_BGE_MPS.json"},
+    {"name": "dependency vulnerability audit", "result": "PASS", "known_vulnerabilities": 0},
+    {"name": "independent local admission review", "result": "APPROVE", "phase_closed": false}
+  ],
+  "result": "PASS",
+  "phase_closed": false,
+  "scope": "Exact local BAAI/bge-m3 embedding runtime admission only. No generation model, private benchmark, human approval, baseline seal or A9 closure.",
+  "source_manifest": "SOURCE_MANIFEST.json",
+  "artifacts": [
+    {"path": "BACKEND_JUNIT.xml", "sha256": "5e08c652c47803ad7e285661a202ea46aebf9f25cdb505eb3ef8375a06c58e51", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "INDEPENDENT_REVIEW.json", "sha256": "489e37ff559fc268babed710581cc5504a8fdd463c50e815c6f33dccab6aecbf", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "LOCAL_BGE_CPU.json", "sha256": "4f2b392cec4243a4066a736db1b74bbd51b386ba0e40ad16c1c9cba893bbd586", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "LOCAL_BGE_MPS.json", "sha256": "d4613ed3515f698d3b864713971440ae5a3728953979e947b22116f84a91bf73", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "PUBLIC_TREE.json", "sha256": "8e6955c2fddf6bf953c19e4850282f79acad98ecdc0666977983e4284f7777d2", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "PYTHON_AUDIT.json", "sha256": "ada26b8d2dd0b79eda0642510050e052ecc1407f192b03d1231c2b39533d76d2", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "PYTHON_LICENSES.json", "sha256": "ec702cab9f448aa499debcfe9e7fc43e8b130bb9355277ed427343f5bc73a29d", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "PYTHON_SBOM.cdx.json", "sha256": "1c59f137d2d1f2958df9cf363be14f982a62084a5845796cb3c1ab04baa6d609", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "README.md", "sha256": "8b82c0191f69296f8c762aab562f1103a5b16b1ea7519a3858b95d5a53fef7ba", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "REPRODUCTION_SUMMARY.json", "sha256": "7eb6192e69607fec48113e046c47f2390a9bf75de55f5e98b2bcce19c25f75ae", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "SOURCE_MANIFEST.json", "sha256": "749ff8d40d40a0910d60c91c87001437212058153bc377624a025431f82d615a", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "TIER_JUNIT.xml", "sha256": "bd7c97fb194a90a307021941a11e9bee1c93301899dcbbde6a8a9ac5bf664eb9", "classification": "public-synthetic", "retention": "versioned evidence"}
+  ],
+  "security_redactions": [
+    "JUnit local hostname and absolute repository paths removed",
+    "No model weights, private path, credential value, benchmark prompt or provider output recorded",
+    "Only isolated synthetic test infrastructure and local model inference were used"
+  ],
+  "intermediate_failures": [
+    "The initial local verifier test-first run failed seven tests.",
+    "Three independent review rounds rejected TOCTOU/output/CI-scope, symlink/provenance and invalid-JUnit-redaction defects before final approval.",
+    "The first full-suite run exposed an older isolated database at cv3_00000003; it was preserved, and a new empty database was upgraded to cv3_00000006 for the successful rerun.",
+    "The initial sentence-transformers 5.1.0 candidate exposed six known vulnerabilities; the frozen runtime was upgraded and re-audited before acceptance."
+  ],
+  "rollback": {
+    "schema_change": false,
+    "data_reset_required": false,
+    "instruction": "Revert only this local evaluator/dependency/CI/evidence patch if needed; preserve databases, object storage, model cache, prior evidence and fail-closed A9 decisions."
+  },
+  "data_safety": {
+    "user_data_mutated": false,
+    "existing_database_migrated_or_reset": false,
+    "new_isolated_test_database_created": true,
+    "real_provider_calls": 0,
+    "provider_credential_values_read": false,
+    "model_weights_committed": false
+  },
+  "remote_actions": {"provider_call": false, "push": false, "pull_request": false, "merge": false, "release": false}
+}

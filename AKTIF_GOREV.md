@@ -1731,6 +1731,57 @@ gerçek koşu BLOCKED**.
   insan approval manifesti, gerçek provider koşusu, bağımsız request/non-transfer
   kanıtı ve ilk baseline insan seal'i gerekir. Bunlar gelmeden A11 başlatılmaz.
 
+### 16.15 A9 yerel BGE runtime admission çalışma kaydı — 2026-09-04
+
+Başlangıç SHA: `fb9fabef2480d3a2da5d2cf1277d01c0222d9888`.
+Durum: **exact yerel BGE embedding runtime/admission PASS; generation ve A9 gerçek
+benchmark kapısı AÇIK**.
+
+- Kullanıcının MacBook üzerinde yerel BGE kullanma kararıyla cache'teki
+  `BAAI/bge-m3` snapshot'ı bulundu. Exact revision
+  `5617a9f61b028005a4858fdac845db406aefb181`; 11 resolved dosya,
+  2.293.331.623 byte ve bundle SHA
+  `d87c47601ade6251c7e0c236d4b863b797bfd280f94ac09be9cc7fbeede74668`.
+- Ayrı runtime smoke'u gerçek `[2,1024]` finite ve normalize vektör üretti.
+  Runtime kalıcı olarak opt-in `local-eval` extra'sına bağlandı:
+  `sentence-transformers==6.0.1`, `transformers==5.15.1` ve `torch==2.14.0`;
+  `uv.lock` 163 paket çözer. Extra normal `--all-groups` backend/RAG CI
+  kurulumuna girmez; security CI onu açıkça kurup audit/SBOM/license kapsamına
+  alır. İlk `transformers==4.57.6` adayında `pip-audit` 6 bulguyla beklendiği
+  gibi FAIL oldu; yükseltilen final lock'ta bilinen zafiyet sayısı **0**.
+- Test-first ilk koşu eksik verifier nedeniyle **7 FAIL** verdi. Snapshot
+  identity/revision/bundle doğrulaması, model-root dışına symlink kaçışı,
+  byte-sensitive hash, 1024 dimension/finite/norm kapısı ve local/remote ayrımı
+  eklendi. İlk bağımsız kırma TOCTOU ve output symlink overwrite açıklarını;
+  ikinci kırma aynı-bayt symlink retarget yarışını buldu. Düzeltmeden sonra
+  pre/post full validation, exact bundle eşitliği, `O_EXCL`/`O_NOFOLLOW`, mode
+  `0600` ve `fsync` regresyonlarla korunuyor.
+- Rapor `repository_revision`, verifier SHA, dependency-lock SHA ve model bundle
+  SHA taşır. Hugging Face/Transformers offline guard ile
+  `local_files_only=True` kullanılır; OS seviyesinde ağ sandbox'ı kanıtlanmadığı
+  dürüstçe `network_isolation_verified=false` olarak raporlanır.
+- Exact snapshot locked runtime ile CPU ve Apple MPS üzerinde PASS oldu. Küçük
+  smoke'ta CPU encode 3.038 saniye, MPS encode 9.012 saniye verdi; bu yalnız
+  smoke gözlemidir, genel performans iddiası değildir.
+- Odaklı final doğrulama **140/140 PASS**, Ruff/format, offline lock ve diff-check
+  PASS. İlk full-suite koşusu yanlışlıkla eski izole `cv3_00000003` DB'sine
+  bağlandığı için **741 PASS/21 FAIL/1 skip** ile schema drift'i doğru yakaladı.
+  Mevcut DB migrate/reset edilmedi; yeni boş `cv3_a9_local_bge_verify` DB'si
+  oluşturulup `cv3_00000006` head'e getirildi. Aynı PostgreSQL/Redis/MinIO test
+  altyapısında final exact-source backend **756 PASS, 2 skip**, bir bilinen
+  Starlette/httpx uyarısıdır. Kullanıcı DB/MinIO/object verisi silinmedi veya
+  yeniden kurulmadı.
+- Bağımsız alt ajan stabilized local verifier kaynaklarını **APPROVE** etti;
+  exact hashleri eşledi ve aynı-byte symlink retarget saldırısının fail-closed
+  olduğunu doğruladı. Bu karar insan/provider onayı veya A9 kapanışı değildir.
+- Public-safe kanıt: `artifacts/evals/2026-09-04-a9-local-bge/`.
+- Açık kapı: BGE-M3 yalnız embedding modelidir. §16.2'nin gerçek embedding **ve**
+  generation şartı için approval/report/baseline sözleşmesindeki tekil
+  `provider/model` kimliği iki ayrı provider/model kimliğine ayrılmalı; sonra
+  owner-reviewed private pack, exact local generation modeli, gerçek production
+  pipeline koşusu, bağımsız request/non-transfer kanıtı ve ilk insan baseline
+  seal'i gerekir. Bunlar tamamlanmadan A11 başlatılmaz.
+
 ---
 
 ## 17. AŞAMA 10 — Frontend ve ürün sözleşmesi

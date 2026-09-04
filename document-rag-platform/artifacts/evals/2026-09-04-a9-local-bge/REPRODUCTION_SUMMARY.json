@@ -1,0 +1,78 @@
+{
+  "schema_version": "1.0",
+  "work_item": "CV3-A9-LOCAL-BGE-ADMISSION",
+  "baseline_revision": "fb9fabef2480d3a2da5d2cf1277d01c0222d9888",
+  "model": "BAAI/bge-m3",
+  "model_revision": "5617a9f61b028005a4858fdac845db406aefb181",
+  "model_bundle_sha256": "d87c47601ade6251c7e0c236d4b863b797bfd280f94ac09be9cc7fbeede74668",
+  "model_bundle_files": 11,
+  "model_bundle_bytes": 2293331623,
+  "test_first": [
+    {
+      "result": "FAIL",
+      "failed": 7,
+      "passed": 0,
+      "reason": "Local BGE verifier did not exist."
+    },
+    {
+      "result": "FAIL",
+      "failed": 2,
+      "passed": 6,
+      "reason": "Symlink escape and honest network-isolation reporting regressions were reproduced."
+    },
+    {
+      "result": "FAIL",
+      "failed": 2,
+      "passed": 9,
+      "reason": "Post-inference TOCTOU and secure output creation regressions were reproduced."
+    },
+    {
+      "result": "FAIL",
+      "failed": 2,
+      "passed": 10,
+      "reason": "Same-byte symlink retarget and missing locked provenance were reproduced."
+    },
+    {
+      "result": "FAIL",
+      "failed": 1,
+      "passed": 12,
+      "reason": "The local-eval extra was not yet included in supply-chain scanning."
+    }
+  ],
+  "runtime": {
+    "cpu": "PASS",
+    "mps": "PASS",
+    "embedding_dimension": 1024,
+    "finite": true,
+    "normalized": true,
+    "remote_provider_invoked": false,
+    "library_offline_mode": true,
+    "network_isolation_verified": false
+  },
+  "dependency_security": {
+    "initial_candidate": {
+      "sentence_transformers": "5.1.0",
+      "transformers": "4.57.6",
+      "pip_audit_result": "FAIL",
+      "known_vulnerabilities": 6
+    },
+    "final": {
+      "sentence_transformers": "6.0.1",
+      "transformers": "5.15.1",
+      "torch": "2.14.0",
+      "locked_packages": 163,
+      "pip_audit_result": "PASS",
+      "known_vulnerabilities": 0
+    }
+  },
+  "database_verification": {
+    "initial_result": "FAIL",
+    "initial_tests": "741 passed, 21 failed, 1 skipped",
+    "cause": "The selected isolated database was at cv3_00000003 while the code requires cv3_00000006.",
+    "recovery": "Existing database preserved; a new empty cv3_a9_local_bge_verify database was created and upgraded to cv3_00000006.",
+    "final_tests": "756 passed, 2 skipped, 1 warning"
+  },
+  "final_tier_tests": "140 passed",
+  "quality_scope": "Runtime admission only; no retrieval/answer quality score and no A9 closure.",
+  "remaining_gate": "BGE-M3 supplies embeddings only. Exact local generation, split provider/model approval bindings, private pack, real production-path run, independent non-transfer evidence and human baseline seal remain required."
+}

@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "review_type": "independent_local_bge_runtime_admission_review",
+  "reviewer": "separate-codex-subagent",
+  "result": "APPROVE",
+  "scope": "Exact local BAAI/bge-m3 embedding runtime and admission package only; not owner review, generation-model approval, private benchmark execution, baseline seal or A9 closure.",
+  "verification": {
+    "focused_tests_passed": 140,
+    "full_backend_passed": 756,
+    "full_backend_skipped": 2,
+    "ruff_check": "PASS",
+    "ruff_format_check": "PASS",
+    "offline_lock_check": "PASS",
+    "locked_packages": 163,
+    "pip_audit": "PASS",
+    "known_vulnerabilities": 0,
+    "cpu_runtime": "PASS",
+    "mps_runtime": "PASS",
+    "embedding_dimension": 1024,
+    "source_manifest": "PASS",
+    "junit_xml_parse": "PASS",
+    "secret_and_absolute_path_scan": "PASS",
+    "normal_ci_excludes_local_eval_extra": true,
+    "security_ci_includes_local_eval_extra": true
+  },
+  "prior_review_results": [
+    {
+      "result": "REJECT",
+      "findings": [
+        "Post-hash inference-time model mutation was not initially revalidated.",
+        "A pre-existing output symlink could initially be overwritten.",
+        "The local evaluator was initially placed in a dependency group installed by normal --all-groups CI."
+      ]
+    },
+    {
+      "result": "REJECT",
+      "findings": [
+        "A same-byte symlink retarget during inference could initially evade a plain post-inference byte rehash.",
+        "Runtime reports initially omitted exact dependency-lock and verifier provenance."
+      ]
+    },
+    {
+      "result": "REJECT",
+      "findings": [
+        "Literal <REPO> redaction markers initially made the stored JUnit XML invalid."
+      ]
+    }
+  ],
+  "final_source_sha256": {
+    "AKTIF_GOREV.md": "f3b99b414baeeb03606d83e1878d2f0dfde3ea9250e5c664cab5651388f72f94",
+    ".github/workflows/ci-security.yml": "21c3e498021bcea77bf4f6f4bb368df1f712e41e1fa09d54841573e98cab58e8",
+    "scripts/verify_local_bge.py": "287ef26695b7de2d3d3d17c85ccd8fa213722be92b65fbea48e224668ccaa9bc",
+    "document-rag-platform/services/backend/pyproject.toml": "eca3a0641528b5402bdfc55d227302048c6f8e59dd31d67917956664213f915e",
+    "document-rag-platform/services/backend/uv.lock": "cd2cf599f7a8ea91acaab882f31189f316f5797943fb88035be97acaad36a4ad",
+    "document-rag-platform/services/backend/tests/evals/test_local_bge_runtime.py": "c496a5119ee42b4f269fa7e0838d6e90cbc2f04dca3fb90fdd1f947a61efcfe3",
+    "document-rag-platform/tests/evals/real_benchmark/README.md": "8145acd4adbbc55a77d7b4f0748f92ccfed025b408430c1df238dfaf9894b90f"
+  },
+  "runtime_identity": {
+    "model": "BAAI/bge-m3",
+    "revision": "5617a9f61b028005a4858fdac845db406aefb181",
+    "bundle_sha256": "d87c47601ade6251c7e0c236d4b863b797bfd280f94ac09be9cc7fbeede74668",
+    "network_isolation_verified": false,
+    "remote_provider_invoked": false
+  },
+  "limitations": [
+    "Library offline mode and local_files_only were verified, but OS-level network isolation was not.",
+    "BGE-M3 is an embedding model and cannot satisfy the generation half of the real-provider benchmark.",
+    "No human owner approval, private candidate-pack review, real production-path benchmark or baseline seal is represented by this review."
+  ],
+  "phase_closed": false
+}
