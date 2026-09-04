@@ -424,6 +424,135 @@ def test_regression_comparator_enforces_quality_and_latency_budgets(tmp_path):
     assert "p95 latency regressed by more than 20 percent" in findings
 
 
+def test_runner_source_sidecar_binds_full_declared_closure(tmp_path, monkeypatch):
+    monkeypatch.setattr(run_eval, "REPO", tmp_path)
+    entrypoint = tmp_path / "runner"
+    entrypoint.write_text("#!/bin/sh\nexit 0\n")
+    entrypoint.chmod(0o700)
+    source_root = tmp_path / "src"
+    source_root.mkdir()
+    source = source_root / "service.py"
+    source.write_text("VALUE = 1\n")
+    fixed = tmp_path / "uv.lock"
+    fixed.write_text("version = 1\n")
+    sidecar = entrypoint.with_name(f"{entrypoint.name}.sources.json")
+    sidecar.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "python_roots": ["src"],
+                "files": ["uv.lock"],
+            }
+        )
+    )
+
+    first = run_eval._runner_bundle_sha256([str(entrypoint)])
+    source.write_text("VALUE = 2\n")
+    assert run_eval._runner_bundle_sha256([str(entrypoint)]) != first
+    source.write_text("VALUE = 1\n")
+    (source_root / "new_module.py").write_text("NEW = True\n")
+    assert run_eval._runner_bundle_sha256([str(entrypoint)]) != first
+
+
+@pytest.mark.parametrize(
+    "escape_kind", ["file", "python_root", "symlink", "nested_directory_symlink"]
+)
+def test_runner_source_sidecar_rejects_escape_or_symlink(
+    tmp_path, monkeypatch, escape_kind
+):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    monkeypatch.setattr(run_eval, "REPO", repo)
+    entrypoint = repo / "runner"
+    entrypoint.write_text("#!/bin/sh\nexit 0\n")
+    entrypoint.chmod(0o700)
+    outside = tmp_path / "outside.py"
+    outside.write_text("SECRET = True\n")
+    sidecar = entrypoint.with_name(f"{entrypoint.name}.sources.json")
+    if escape_kind == "file":
+        payload = {
+            "schema_version": "1.0",
+            "python_roots": [],
+            "files": ["../outside.py"],
+        }
+    elif escape_kind == "python_root":
+        payload = {
+            "schema_version": "1.0",
+            "python_roots": [".."],
+            "files": [],
+        }
+    elif escape_kind == "symlink":
+        linked = repo / "linked.py"
+        linked.symlink_to(outside)
+        payload = {
+            "schema_version": "1.0",
+            "python_roots": [],
+            "files": ["linked.py"],
+        }
+    else:
+        source_root = repo / "src"
+        source_root.mkdir()
+        (source_root / "visible.py").write_text("VALUE = 0\n")
+        outside_root = tmp_path / "outside"
+        outside_root.mkdir()
+        (outside_root / "hidden.py").write_text("VALUE = 1\n")
+        (source_root / "nested_link").symlink_to(outside_root, target_is_directory=True)
+        payload = {
+            "schema_version": "1.0",
+            "python_roots": ["src"],
+            "files": [],
+        }
+    sidecar.write_text(json.dumps(payload))
+    expected = (
+        "contains a symlink"
+        if escape_kind == "nested_directory_symlink"
+        else "source closure"
+    )
+    with pytest.raises(run_eval.EnvironmentUnavailable, match=expected):
+        run_eval._runner_bundle_sha256([str(entrypoint)])
+
+
+@pytest.mark.parametrize(
+    "relative_artifact",
+    [
+        "module.pyc",
+        "module.pyo",
+        "module.so",
+        "module.pyd",
+        "module.dylib",
+        "module.dll",
+        "__pycache__/module.pyc",
+    ],
+)
+def test_runner_source_sidecar_rejects_importable_non_source_artifacts(
+    tmp_path, monkeypatch, relative_artifact
+):
+    monkeypatch.setattr(run_eval, "REPO", tmp_path)
+    entrypoint = tmp_path / "runner"
+    entrypoint.write_text("#!/bin/sh\nexit 0\n")
+    entrypoint.chmod(0o700)
+    source_root = tmp_path / "src"
+    source_root.mkdir()
+    (source_root / "visible.py").write_text("VALUE = 0\n")
+    artifact = source_root / relative_artifact
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_bytes(b"unbound import artifact")
+    entrypoint.with_name(f"{entrypoint.name}.sources.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "python_roots": ["src"],
+                "files": [],
+            }
+        )
+    )
+
+    with pytest.raises(
+        run_eval.EnvironmentUnavailable, match="non-source import artifact"
+    ):
+        run_eval._runner_bundle_sha256([str(entrypoint)])
+
+
 def benchmark_fixture(tmp_path, monkeypatch):
     monkeypatch.setenv("SYNTHETIC_PROVIDER_KEY", "memory-only-test-key")
     manifest = {
@@ -791,7 +920,158 @@ def test_golden_transfer_is_a_failure_and_unknown_fields_never_escape(
     assert child_env["CV_EVAL_GENERATION_MODEL"] == report["generation_model"]
     assert "CV_EVAL_PROVIDER" not in child_env and "CV_EVAL_MODEL" not in child_env
     assert child_env["CV_EVAL_ENVIRONMENT_HASH"] == report["environment_hash"]
+    assert child_env["CV_EVAL_DATASET_SHA256"] == manifest["dataset_sha256"]
+    assert child_env["CV_EVAL_PRIVATE_PACK_MANIFEST_SHA256"] == run_eval._sha(
+        args.private_pack_manifest
+    )
+    assert child_env["CV_EVAL_PRIVATE_PACK_RECORDS"] == str(manifest["records"])
+    assert (
+        child_env["CV_EVAL_PRIVATE_PACK_CLASSIFICATION"] == manifest["classification"]
+    )
+    assert (
+        json.loads(child_env["CV_EVAL_PRIVATE_PACK_QUERY_TYPES"])
+        == manifest["query_types"]
+    )
+    assert child_env["CV_EVAL_RUNNER_BUNDLE_SHA256"] == run_eval._runner_bundle_sha256(
+        args.provider_runner
+    )
+    assert child_env["PATH"] == run_eval._runner_path()
+    assert child_env["PYTHONDONTWRITEBYTECODE"] == "1"
+    assert child_env["PYTHONNOUSERSITE"] == "1"
     assert "HOME" not in child_env and "CODEX_SESSION_ID" not in child_env
+
+
+def test_real_benchmark_normalizes_ambient_path_before_dispatch(tmp_path, monkeypatch):
+    args, _, _, runner = benchmark_fixture(tmp_path, monkeypatch)
+    monkeypatch.setenv("PATH", "/unbound/ambient/path")
+
+    run_eval._real_benchmark(args, tmp_path)
+
+    child_env = runner.call_args.kwargs["env"]
+    assert child_env["PATH"] == run_eval._runner_path()
+    assert "/unbound/ambient/path" not in child_env["PATH"]
+
+
+def test_runner_path_selects_current_locked_python_environment(tmp_path):
+    entrypoint = tmp_path / "python-runner"
+    entrypoint.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json, sys\n"
+        'print(json.dumps({"executable": sys.executable, "prefix": sys.prefix}))\n'
+    )
+    entrypoint.chmod(0o700)
+
+    completed = subprocess.run(
+        [str(entrypoint)],
+        check=True,
+        capture_output=True,
+        text=True,
+        env={
+            "PATH": run_eval._runner_path(),
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONNOUSERSITE": "1",
+        },
+    )
+    identity = json.loads(completed.stdout)
+    assert Path(identity["executable"]).samefile(Path(sys.executable))
+    assert Path(identity["prefix"]).samefile(Path(sys.prefix))
+    selected = run_eval._runner_python_identities()["python3"]
+    assert Path(selected["path"]).samefile(Path(sys.executable))
+    assert selected["sha256"] == run_eval._sha(Path(selected["resolved_path"]))
+
+
+def test_environment_identity_rejects_runner_python_retarget(tmp_path, monkeypatch):
+    unapproved = tmp_path / "python3"
+    unapproved.write_text("#!/bin/sh\nexit 0\n")
+    unapproved.chmod(0o700)
+    real_which = run_eval.shutil.which
+
+    def retargeted_which(command, *, path=None):
+        if command == "python3":
+            return str(unapproved)
+        return real_which(command, path=path)
+
+    monkeypatch.setattr(run_eval.shutil, "which", retargeted_which)
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="does not match"):
+        run_eval._environment_sha256()
+
+
+def test_approval_cannot_claim_reserved_runner_environment_name(tmp_path, monkeypatch):
+    args, _, _, runner = benchmark_fixture(tmp_path, monkeypatch)
+    approval = json.loads(args.approval_manifest.read_text())
+    approval["credential_env_names"].append("CV_EVAL_DATASET_SHA256")
+    args.approval_manifest.write_text(json.dumps(approval))
+    monkeypatch.setenv("CV_EVAL_DATASET_SHA256", "0" * 64)
+
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="reserved"):
+        run_eval._real_benchmark(args, tmp_path)
+    runner.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "PATH",
+        "LANG",
+        "LC_ALL",
+        "PYTHONPATH",
+        "PYTHONHOME",
+        "LD_PRELOAD",
+        "DYLD_INSERT_LIBRARIES",
+        "VIRTUAL_ENV",
+        "BASH_ENV",
+        "HTTP_PROXY",
+        "SSL_CERT_FILE",
+    ],
+)
+def test_approval_rejects_execution_control_environment_names(
+    tmp_path, monkeypatch, name
+):
+    args, _, _, runner = benchmark_fixture(tmp_path, monkeypatch)
+    approval = json.loads(args.approval_manifest.read_text())
+    approval["credential_env_names"].append(name)
+    args.approval_manifest.write_text(json.dumps(approval))
+    monkeypatch.setenv(name, "/attacker/unbound-value")
+
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="execution-control"):
+        run_eval._real_benchmark(args, tmp_path)
+    runner.assert_not_called()
+
+
+@pytest.mark.parametrize("mutated", ["runner", "private_manifest"])
+def test_real_benchmark_rejects_admission_input_drift_during_runner(
+    tmp_path, monkeypatch, mutated
+):
+    args, _, report, _ = benchmark_fixture(tmp_path, monkeypatch)
+
+    def mutating_runner(*_args, **_kwargs):
+        (tmp_path / "provider-report.json").write_text(json.dumps(report))
+        target = (
+            Path(args.provider_runner[0])
+            if mutated == "runner"
+            else args.private_pack_manifest
+        )
+        target.write_text(target.read_text() + "\n")
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(run_eval.subprocess, "run", mutating_runner)
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="changed during"):
+        run_eval._real_benchmark(args, tmp_path)
+
+
+def test_real_benchmark_rejects_environment_drift_during_runner(tmp_path, monkeypatch):
+    args, _, _, _ = benchmark_fixture(tmp_path, monkeypatch)
+    approved_hash = run_eval._environment_sha256()
+    calls = 0
+
+    def changing_environment_hash():
+        nonlocal calls
+        calls += 1
+        return approved_hash if calls < 3 else "0" * 64
+
+    monkeypatch.setattr(run_eval, "_environment_sha256", changing_environment_hash)
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="changed during"):
+        run_eval._real_benchmark(args, tmp_path)
 
 
 @pytest.mark.parametrize(

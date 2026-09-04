@@ -1,0 +1,73 @@
+{
+  "schema_version": "1.0",
+  "work_item": "CV3-A9-RUNNER-ADMISSION-HARDENING",
+  "baseline_revision": "4d0354ab4052071d9092ebaa4c931fe58642b148",
+  "test_first": [
+    {
+      "result": "FAIL",
+      "reason": "Validated private-pack bindings and runner source-closure metadata were absent from the child contract."
+    },
+    {
+      "result": "FAIL",
+      "reason": "A nested directory symlink was invisible to the Python-only glob; the corrected regression first removed an accidental empty-member false positive."
+    },
+    {
+      "result": "FAIL",
+      "failed": 11,
+      "reason": "PATH, locale, Python, loader and transport execution-control names were accepted as credential variables."
+    },
+    {
+      "result": "FAIL",
+      "failed": 7,
+      "reason": "Unchecked bytecode and native import artifacts under declared Python roots were not rejected or hashed."
+    },
+    {
+      "result": "FAIL",
+      "reason": "Ambient PATH drift could change child execution after approval; an os.defpath-only repair then selected the host system Python instead of the locked environment."
+    },
+    {
+      "result": "FAIL",
+      "reason": "The python3 entry selected by the deterministic child PATH could be retargeted independently from sys.executable without changing the environment hash."
+    }
+  ],
+  "final": {
+    "focused_tier": "188 passed",
+    "full_backend": "859 passed, 2 skipped, 1 warning",
+    "ruff": "PASS",
+    "mypy_strict_ratchet": "PASS; 14 source files",
+    "openapi_deterministic": "PASS",
+    "offline_lock": "PASS; 163 packages",
+    "pip_audit": "PASS; 141 dependencies, 0 known vulnerabilities",
+    "git_diff_check": "PASS",
+    "independent_review": "APPROVE for this bounded local admission-hardening package"
+  },
+  "admitted_contract": {
+    "tool_version": "1.7.0",
+    "reserved_pack_bindings": true,
+    "runner_source_sidecar": "<runner>.sources.json",
+    "source_members_maximum": 1000,
+    "python_roots_maximum": 20,
+    "fixed_files_maximum": 200,
+    "nested_symlinks_rejected": true,
+    "bytecode_and_native_import_artifacts_rejected": true,
+    "execution_control_credentials_rejected": true,
+    "deterministic_runner_path": true,
+    "runner_selected_python_samefile_required": true,
+    "runner_selected_python_binary_sha_bound": true,
+    "pre_and_post_execution_identity_checks": true
+  },
+  "data_safety": {
+    "user_data_mutated": false,
+    "database_migrated_or_reset": false,
+    "remote_provider_calls": 0,
+    "credential_values_recorded": false,
+    "model_weights_changed_or_committed": false,
+    "push_or_release": false
+  },
+  "limitations": [
+    "Trusted-local operator boundary; no cryptographic same-user race protection is claimed.",
+    "No private pack location or private record is transferred by this metadata-only admission patch.",
+    "No owner review, human approval, production benchmark, request/non-transfer proof or baseline seal is represented."
+  ],
+  "remaining_gate": "Owner-reviewed private pack, exact local BGE plus generation production-path benchmark, independent request/non-transfer evidence and first human baseline seal remain required."
+}

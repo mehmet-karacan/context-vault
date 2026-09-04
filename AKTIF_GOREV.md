@@ -1876,6 +1876,53 @@ ve A9 kapısı AÇIK**.
   request/non-transfer kanıtı ve ilk insan baseline seal'i gerekir. Bu yerel
   runtime admission tek başına §16.8'i veya A9'u kapatmaz; A11 başlatılmaz.
 
+### 16.18 A9 local production-runner admission hardening kaydı — 2026-09-05
+
+Başlangıç SHA: `4d0354ab4052071d9092ebaa4c931fe58642b148`.
+Durum: **yerel runner input/source/runtime admission PASS; production benchmark
+ve A9 kapısı AÇIK**.
+
+- `scripts/run_eval.py` tool contract'ı `1.7.0` oldu. Doğrulanmış private-pack
+  dataset/manifest SHA'ları, classification, record/query-type kapsamı ve exact
+  runner bundle SHA'sı child'a yalnız reserved `CV_EVAL_*` alanlarıyla aktarılır.
+  Onay manifesti bu adları credential olarak talep edemez.
+- Opsiyonel `<runner>.sources.json` sidecar'ı repo-relative `python_roots` ve
+  fixed `files` kapanımını runner bundle'a bağlar. Sidecar/üyeler için kaçış,
+  duplicate, limit, eksik dosya ve symlink kontrolleri fail-closed'dur; nested
+  directory symlink'leri ile `__pycache__`, `.pyc/.pyo` ve import edilebilir
+  native artifact'lar kabul edilmez. Runner ve private manifest koşu sonrasında
+  yeniden hashlenir.
+- Credential kanalı `PATH`, locale, Python, dynamic-loader, proxy/certificate ve
+  diğer execution-control ortam adlarını dispatch öncesi reddeder. Child `PATH`,
+  mevcut locked interpreter dizini + `os.defpath` olarak deterministik kurulur;
+  `PYTHONDONTWRITEBYTECODE=1` ve `PYTHONNOUSERSITE=1` sabittir.
+- Environment identity; lexical/resolved parent interpreter yolu, binary SHA,
+  `sys.prefix`, lock SHA, exact runner PATH ve bu PATH'in seçtiği `python3`/varsa
+  `python` lexical+resolved yol/binary SHA kimliğini bağlar. PATH seçimi her
+  kontrolde `sys.executable` ile `samefile` olmak zorundadır. Environment koşu
+  öncesi ve sonrasında tekrar doğrulanır.
+- Test-first kırmızı kanıtlar nested directory symlink görünmezliğini,
+  execution-control credential override'ını, unchecked bytecode/native import
+  artifact'larını, ambient PATH drift'ini ve `python3` symlink retarget'ini
+  yeniden üretti. Tüm bulgular ayrı regresyonlarla kapatıldı.
+- Final doğrulama: A9 tier contract **188/188 PASS**; doğru izole PostgreSQL,
+  Redis ve MinIO ortamıyla tam backend **859 PASS, 2 SKIP, 1 bilinen uyarı**;
+  Ruff, strict MyPy ratchet (14 kaynak), deterministic OpenAPI, offline lock
+  (163 paket), pip-audit ve `git diff --check` PASS.
+- Bağımsız alt ajan birkaç turda nested symlink, execution-control env, bytecode,
+  ambient PATH ve runner-selected interpreter açıklarını ayrı ayrı `REJECT`
+  etti. Stabilize güncel kaynak hashleri üzerinde yalnız bu bounded local
+  admission-hardening paketini **APPROVE** etti. Bu karar insan/owner onayı,
+  private-pack review'u, gerçek benchmark veya baseline seal değildir.
+- Kullanıcı DB/MinIO/embedding index/proje dosyaları ve model cache'i
+  değiştirilmedi. Provider çağrısı, migration/reset, push, PR, merge veya release
+  yapılmadı. Public-safe kanıt:
+  `artifacts/evals/2026-09-05-a9-runner-admission/`.
+- Açık kapı değişmedi: gerçek owner-reviewed private pack; exact yerel BGE ve
+  generation ile production ingestion/retrieval/answer benchmarkı; bağımsız
+  request/non-transfer kanıtı ve ilk insan baseline seal'i gerekir. Bunlar
+  tamamlanmadan A9 kapatılmaz ve A11 başlatılmaz.
+
 ---
 
 ## 17. AŞAMA 10 — Frontend ve ürün sözleşmesi

@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-TOOL_VERSION = "1.6.0"
+TOOL_VERSION = "1.7.0"
 DETERMINISTIC_SEED = 20260902
 REPO = Path(__file__).resolve().parents[1]
 BACKEND = REPO / "document-rag-platform/services/backend"
@@ -100,6 +100,66 @@ PROVIDER_MODEL_FIELDS = (
     "embedding_model",
     "generation_provider",
     "generation_model",
+)
+RESERVED_RUNNER_ENV_PREFIX = "CV_EVAL_"
+EXECUTION_CONTROL_ENV_NAMES = frozenset(
+    {
+        "ALL_PROXY",
+        "BASH_ENV",
+        "CDPATH",
+        "CLASSPATH",
+        "CURL_CA_BUNDLE",
+        "ENV",
+        "GLOBIGNORE",
+        "HOME",
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "IFS",
+        "LANG",
+        "LANGUAGE",
+        "LOGNAME",
+        "NO_PROXY",
+        "OLDPWD",
+        "PATH",
+        "PWD",
+        "REQUESTS_CA_BUNDLE",
+        "SHELL",
+        "SHELLOPTS",
+        "SSL_CERT_DIR",
+        "SSL_CERT_FILE",
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "USER",
+        "VIRTUAL_ENV",
+    }
+)
+EXECUTION_CONTROL_ENV_PREFIXES = (
+    "BUN_",
+    "CONDA",
+    "DENO_",
+    "DYLD_",
+    "GEM_",
+    "GODEBUG",
+    "GOMODCACHE",
+    "GOPATH",
+    "JAVA_",
+    "JDK_",
+    "LC_",
+    "LD_",
+    "LUA_",
+    "NODE_",
+    "NPM_",
+    "PERL",
+    "PIP_",
+    "POETRY_",
+    "PYTHON",
+    "RUBY",
+    "RUSTC_",
+    "UV_",
+)
+NON_SOURCE_IMPORT_SUFFIXES = frozenset(
+    {".dll", ".dylib", ".pyd", ".pyc", ".pyo", ".so"}
 )
 
 
@@ -448,25 +508,177 @@ def _runner_bundle_sha256(command: list[str]) -> str:
         candidate = Path(resolved) if resolved else Path(argument)
         if not candidate.is_absolute():
             candidate = REPO / candidate
-        if candidate.is_file() and os.access(candidate, os.X_OK):
+        if (
+            candidate.is_file()
+            and not candidate.is_symlink()
+            and os.access(candidate, os.X_OK)
+        ):
             digest.update(bytes.fromhex(_sha(candidate)))
         else:
             raise EnvironmentUnavailable(
                 "provider runner entrypoint is not an executable file"
             )
         digest.update(b"\0")
+        _bind_runner_source_closure(digest, candidate)
     return digest.hexdigest()
 
 
+def _path_has_symlink(path: Path, root: Path) -> bool:
+    try:
+        relative = path.relative_to(root)
+    except ValueError:
+        return True
+    current = root
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            return True
+    return False
+
+
+def _bind_runner_source_closure(digest: Any, entrypoint: Path) -> None:
+    """Bind an optional repo-local source sidecar and every declared member."""
+
+    sidecar = entrypoint.with_name(f"{entrypoint.name}.sources.json")
+    if not sidecar.exists() and not sidecar.is_symlink():
+        return
+    repo_root = REPO.resolve()
+    try:
+        if sidecar.is_symlink() or _path_has_symlink(sidecar, repo_root):
+            raise ValueError
+        sidecar.resolve(strict=True).relative_to(repo_root)
+        payload = json.loads(sidecar.read_text())
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        raise EnvironmentUnavailable("runner source closure is invalid") from exc
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != {"schema_version", "python_roots", "files"}
+        or payload.get("schema_version") != "1.0"
+    ):
+        raise EnvironmentUnavailable("runner source closure is invalid")
+    python_roots = payload["python_roots"]
+    files = payload["files"]
+    if (
+        not isinstance(python_roots, list)
+        or not isinstance(files, list)
+        or (not python_roots and not files)
+        or len(python_roots) > 20
+        or len(files) > 200
+        or any(
+            not isinstance(value, str) or not value for value in python_roots + files
+        )
+        or len(set(python_roots)) != len(python_roots)
+        or len(set(files)) != len(files)
+    ):
+        raise EnvironmentUnavailable("runner source closure is invalid")
+
+    def member_path(value: str) -> Path:
+        relative = Path(value)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise EnvironmentUnavailable(
+                "runner source closure path escapes repository"
+            )
+        candidate = REPO / relative
+        try:
+            candidate.resolve(strict=True).relative_to(repo_root)
+        except (OSError, ValueError) as exc:
+            raise EnvironmentUnavailable(
+                "runner source closure path escapes repository"
+            ) from exc
+        if _path_has_symlink(candidate, repo_root):
+            raise EnvironmentUnavailable("runner source closure contains a symlink")
+        return candidate
+
+    members: set[Path] = set()
+    for value in python_roots:
+        root = member_path(value)
+        if not root.is_dir():
+            raise EnvironmentUnavailable("runner source closure root is unavailable")
+        for path in root.rglob("*"):
+            if path.is_symlink() or _path_has_symlink(path, repo_root):
+                raise EnvironmentUnavailable("runner source closure contains a symlink")
+            if (
+                path.name == "__pycache__"
+                or path.suffix.lower() in NON_SOURCE_IMPORT_SUFFIXES
+            ):
+                raise EnvironmentUnavailable(
+                    "runner source closure contains a non-source import artifact"
+                )
+            if path.is_file() and path.suffix == ".py":
+                members.add(path)
+    for value in files:
+        path = member_path(value)
+        if not path.is_file():
+            raise EnvironmentUnavailable("runner source closure file is unavailable")
+        members.add(path)
+    if not members or len(members) > 1000:
+        raise EnvironmentUnavailable("runner source closure member count is invalid")
+
+    digest.update(b"runner-source-closure-v1\0")
+    digest.update(bytes.fromhex(_sha(sidecar)))
+    digest.update(b"\0")
+    for path in sorted(members, key=lambda item: item.relative_to(REPO).as_posix()):
+        relative = path.relative_to(REPO).as_posix()
+        digest.update(relative.encode())
+        digest.update(b"\0")
+        digest.update(bytes.fromhex(_sha(path)))
+        digest.update(b"\0")
+
+
+def _runner_path() -> str:
+    interpreter_directory = str(Path(sys.executable).absolute().parent)
+    path_entries = [interpreter_directory, *os.defpath.split(os.pathsep)]
+    return os.pathsep.join(dict.fromkeys(path_entries))
+
+
+def _runner_python_identities() -> dict[str, dict[str, str]]:
+    identities: dict[str, dict[str, str]] = {}
+    current_interpreter = Path(sys.executable).absolute()
+    for command in ("python3", "python"):
+        selected = shutil.which(command, path=_runner_path())
+        if selected is None:
+            if command == "python3":
+                raise EnvironmentUnavailable(
+                    "runner PATH does not provide the approved Python interpreter"
+                )
+            continue
+        lexical = Path(selected).absolute()
+        try:
+            if not lexical.samefile(current_interpreter):
+                raise EnvironmentUnavailable(
+                    "runner PATH Python interpreter does not match the approved runtime"
+                )
+            resolved = lexical.resolve(strict=True)
+        except OSError as exc:
+            raise EnvironmentUnavailable(
+                "runner PATH Python interpreter is unavailable"
+            ) from exc
+        identities[command] = {
+            "path": str(lexical),
+            "resolved_path": str(resolved),
+            "sha256": _sha(resolved),
+        }
+    return identities
+
+
 def _environment_sha256() -> str:
+    interpreter = Path(sys.executable).absolute()
+    resolved_interpreter = interpreter.resolve(strict=True)
     payload = {
         "python": platform.python_version(),
         "implementation": platform.python_implementation(),
         "system": platform.system(),
         "release": platform.release(),
         "machine": platform.machine(),
-        "executable_name": Path(sys.executable).name,
+        "executable_path": str(interpreter),
+        "executable_resolved_path": str(resolved_interpreter),
+        "executable_sha256": _sha(resolved_interpreter),
+        "python_prefix": sys.prefix,
+        "runner_python_identities": _runner_python_identities(),
         "dependency_lock_sha256": _sha(BACKEND / "uv.lock"),
+        "runner_path": _runner_path(),
+        "python_dont_write_bytecode": "1",
+        "python_no_user_site": "1",
     }
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
@@ -489,6 +701,21 @@ def _approval_manifest(
     if approval["approved_by"].strip().upper().startswith("PENDING"):
         raise EnvironmentUnavailable(
             "benchmark approval requires completed owner review"
+        )
+    if any(
+        name.startswith(RESERVED_RUNNER_ENV_PREFIX)
+        for name in approval["credential_env_names"]
+    ):
+        raise EnvironmentUnavailable(
+            "benchmark approval credential list contains a reserved runner environment name"
+        )
+    if any(
+        name in EXECUTION_CONTROL_ENV_NAMES
+        or name.startswith(EXECUTION_CONTROL_ENV_PREFIXES)
+        for name in approval["credential_env_names"]
+    ):
+        raise EnvironmentUnavailable(
+            "benchmark approval credential list contains an execution-control environment name"
         )
     if approval["private_pack_sha256"] != _sha(private_path):
         raise EnvironmentUnavailable(
@@ -822,6 +1049,11 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
     manifest, approval = _bound_approval(
         args.approval_manifest, args.private_pack_manifest, args.provider_runner
     )
+    environment_hash = _environment_sha256()
+    if environment_hash != approval["environment_hash"]:
+        raise EnvironmentUnavailable(
+            "benchmark execution environment changed before runner execution"
+        )
     output = work / "provider-report.json"
     credential_env = {}
     for name in approval["credential_env_names"]:
@@ -829,9 +1061,11 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
             raise EnvironmentUnavailable("approved provider credential is unavailable")
         credential_env[name] = os.environ[name]
     env = {
-        "PATH": os.environ.get("PATH", os.defpath),
-        "LANG": "C.UTF-8",
         **credential_env,
+        "PATH": _runner_path(),
+        "LANG": "C.UTF-8",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONNOUSERSITE": "1",
         "CV_EVAL_OUTPUT": str(output),
     }
     env.update(
@@ -846,8 +1080,16 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
             "CV_EVAL_EMBEDDING_MODEL": approval["embedding_model"],
             "CV_EVAL_GENERATION_PROVIDER": approval["generation_provider"],
             "CV_EVAL_GENERATION_MODEL": approval["generation_model"],
-            "CV_EVAL_ENVIRONMENT_HASH": approval["environment_hash"],
+            "CV_EVAL_ENVIRONMENT_HASH": environment_hash,
             "CV_EVAL_CURRENCY": approval["currency"],
+            "CV_EVAL_DATASET_SHA256": manifest["dataset_sha256"],
+            "CV_EVAL_PRIVATE_PACK_MANIFEST_SHA256": _sha(args.private_pack_manifest),
+            "CV_EVAL_PRIVATE_PACK_CLASSIFICATION": manifest["classification"],
+            "CV_EVAL_PRIVATE_PACK_RECORDS": str(manifest["records"]),
+            "CV_EVAL_PRIVATE_PACK_QUERY_TYPES": json.dumps(
+                manifest["query_types"], separators=(",", ":")
+            ),
+            "CV_EVAL_RUNNER_BUNDLE_SHA256": _runner_bundle_sha256(args.provider_runner),
         }
     )
     try:
@@ -862,6 +1104,23 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
         raise EnvironmentUnavailable(
             "approved provider runner exceeded duration limit"
         ) from exc
+    try:
+        manifest_unchanged = (
+            _sha(args.private_pack_manifest) == approval["private_pack_sha256"]
+        )
+        runner_unchanged = (
+            _runner_bundle_sha256(args.provider_runner)
+            == approval["runner_bundle_sha256"]
+        )
+        environment_unchanged = _environment_sha256() == environment_hash
+    except (OSError, EnvironmentUnavailable) as exc:
+        raise EnvironmentUnavailable(
+            "benchmark admission input changed during runner execution"
+        ) from exc
+    if not manifest_unchanged or not runner_unchanged or not environment_unchanged:
+        raise EnvironmentUnavailable(
+            "benchmark admission input changed during runner execution"
+        )
     if completed.returncode != 0 or not output.exists():
         raise EnvironmentUnavailable("approved provider runner failed")
     report = _benchmark_report(json.loads(output.read_text()))
