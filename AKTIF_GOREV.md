@@ -1689,6 +1689,48 @@ koşu BLOCKED**.
   insan approval manifesti, gerçek provider koşusu, bağımsız request/non-transfer
   kanıtı ve ilk baseline insan seal'i gerekir. Bunlar gelmeden A11 başlatılmaz.
 
+### 16.14 A9 public review receipt binding çalışma kaydı — 2026-09-04
+
+Başlangıç SHA: `e27c1312814301bb4e321837f1c5554e94c875e4`.
+Durum: **yerel external-receipt binding hazırlığı PASS; public owner review ve A9
+gerçek koşu BLOCKED**.
+
+- Bağımsız kabul denetimi §16.3'teki açık review/version/hash maddesi için son yerel
+  hazırlık açığını buldu: public manifest receipt SHA istiyor, fakat CLI receipt
+  dosyasını tüketip exact dataset/manifest bağını doğrulayamıyordu. Desteklenmeyen
+  `--public-review-receipt` gerçek CLI probe'u argparse exit `2` ile bunu yeniden
+  üretti; yeni test-first paket **12 FAIL/115 PASS** verdi.
+- Versioned `public-dataset-review-receipt.schema.json`; karar, review kapsamı,
+  reviewer-reference hash'i, UTC zaman, dataset SHA/version, kayıt ve split setini
+  additional-field kapalı sözleşmeyle tanımlar. Otomasyon receipt üretmez veya
+  onaylamaz. Receipt gerektiğinde repo dışında ilgili veri politikasında tutulur.
+- No-effect status verifier receipt'in exact byte SHA'sını manifestteki
+  `review_receipt_sha256` ile; dataset/version/count/splits/reviewer/time alanlarını
+  gerçek manifest ve corpusla eşler. Hash veya herhangi bir bağ sapması, malformed
+  JSON, ek alan, pending manifest, UTC dışı/gelecek zaman ve public-status dışındaki
+  CLI kullanımı provider dispatch'ten önce fail-closed reddedilir.
+- Doğru sentetik binding yalnız `receipt_binding_verified=true` üretir;
+  `review_authority_verified=false`, `approval_evidence_verified=false`,
+  `review_complete=false`, `release_gate_eligible=false` ve
+  `provider_invoked=false` kalır. Böylece dosya bütünlüğü insan/owner otoritesi gibi
+  gösterilmez. Approved manifest receipt olmadan da yalnız
+  `manifest-declared-approved-unverified` olabilir.
+- Final exact-source doğrulaması: **127/127 tier PASS**; yalıtılmış
+  PostgreSQL/Redis/MinIO ile **743 backend PASS, 2 skip**, bilinen 1
+  Starlette/httpx uyarısı. Ruff format/check, MyPy strict 14 dosya, deterministic
+  OpenAPI, 122-package offline lock, diff-check ve pending/no-receipt CLI probe'u
+  PASS. Gerçek provider/credential veya kullanıcı DB/object verisi kullanılmadı.
+- Bağımsız alt ajan exact stabilized kaynakları **APPROVE** etti; receipt hash ve
+  bütün exact bağları kırdı, malformed/additional/pending/wrong-mode yollarının
+  fail-closed kaldığını doğruladı. Bu karar owner review, insan otoritesi, provider
+  izni, gerçek benchmark, baseline seal veya A9 kapanışı değildir.
+- Public-safe kanıt:
+  `artifacts/evals/2026-09-04-a9-public-review-binding/`.
+- Açık kapı değişmedi: public corpusun gerçek owner review'ü ve onun harici otorite
+  kararı; A9 için owner-reviewed private pack, provider/model/provider-side bütçe,
+  insan approval manifesti, gerçek provider koşusu, bağımsız request/non-transfer
+  kanıtı ve ilk baseline insan seal'i gerekir. Bunlar gelmeden A11 başlatılmaz.
+
 ---
 
 ## 17. AŞAMA 10 — Frontend ve ürün sözleşmesi

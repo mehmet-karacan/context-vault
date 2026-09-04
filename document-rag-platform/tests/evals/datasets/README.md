@@ -28,17 +28,36 @@ An integrity result of `PASS` does not mean that an owner reviewed the examples 
 that a release gate passed. Until an authorized human performs the review, the
 manifest must retain `review_status: pending`, reviewer
 `PENDING_OWNER_REVIEW`, and null review time and receipt. The status command then
-reports `review_complete: false`, `release_gate_eligible: false` and
-`provider_invoked: false`.
+reports `receipt_binding_verified: false`, `review_complete: false`,
+`release_gate_eligible: false` and `provider_invoked: false`.
 
 When the dataset bytes change, update its semantic `dataset_version`, exact SHA-256,
 record count and split set. Reset the review fields to the pending values above until
 the changed bytes are reviewed again. An approved manifest claim requires a
 non-pending human reviewer, a non-future UTC timestamp and the SHA-256 of an
-independently retained review receipt. The local status command does not receive or
-verify that receipt or reviewer authority, so even a schema-valid approved claim
-remains `manifest-declared-approved-unverified` with `review_complete: false`. Do
-not manufacture those fields from automation or model output. Public-dataset
-approval still does not substitute for the private pack,
+independently retained review receipt. That external receipt follows
+`public-dataset-review-receipt.schema.json`; automation must not create or approve
+it. Its exact byte hash is copied into the manifest only after the review decision.
+The receipt remains outside the repository when its policy or reviewer reference is
+private.
+
+The no-effect status command can verify the receipt's schema, exact byte hash and
+dataset/version/count/split/reviewer/time bindings:
+
+```sh
+document-rag-platform/services/backend/.venv/bin/python scripts/run_eval.py \
+  --public-dataset-status \
+  --public-review-receipt /secure/path/public-dataset-review-receipt.json \
+  --json-output /tmp/context-vault-public-dataset-status.json
+```
+
+An exact match reports `receipt_binding_verified: true`. It still reports
+`review_authority_verified: false` and `review_complete: false`, because this local
+validator cannot authenticate the human or grant owner authority. Without an
+external authority decision, an approved claim remains either
+`manifest-declared-approved-unverified` or
+`receipt-bound-approved-unverified-authority`. Do not manufacture those fields or
+the receipt from automation or model output. Public-dataset approval still does not
+substitute for the private pack,
 provider/budget authorization, real run evidence or sealed baseline required by the
 real benchmark gate.

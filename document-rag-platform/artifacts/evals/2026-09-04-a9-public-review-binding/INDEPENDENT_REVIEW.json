@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "review_type": "independent_local_public_review_binding_review",
+  "reviewer": "separate-codex-subagent",
+  "result": "APPROVE",
+  "scope": "Local no-effect public review receipt binding verifier only; not owner review, human authority, provider permission, benchmark execution, baseline seal or A9 closure.",
+  "verification": {
+    "tier_tests_passed": 127,
+    "ruff_check": "PASS",
+    "ruff_format_check": "PASS",
+    "diff_check": "PASS",
+    "self_created_receipt_authority": "NOT_ELEVATED",
+    "receipt_hash_drift": "FAIL_CLOSED",
+    "dataset_binding_drift": "FAIL_CLOSED",
+    "version_count_split_binding_drift": "FAIL_CLOSED",
+    "reviewer_time_binding_drift": "FAIL_CLOSED",
+    "additional_or_malformed_fields": "FAIL_CLOSED",
+    "pending_manifest_with_receipt": "FAIL_CLOSED",
+    "wrong_cli_mode_provider_dispatch": "ZERO"
+  },
+  "final_source_sha256": {
+    "scripts/run_eval.py": "1555af649d54e4ce71f3f0209b3199547319f0f38fe3416647e60b71960cb17b",
+    "document-rag-platform/services/backend/tests/evals/test_tier_contracts.py": "9395ecb44cf56d5176e9898d8543237dc82c01ad87715f94e96f6b77ea40a2f3",
+    "document-rag-platform/tests/evals/datasets/README.md": "40f1310c497c358806d9e8769407aa97ab9df3ddf5c11824dac230998a9649bf",
+    "document-rag-platform/tests/evals/datasets/public-dataset-review-receipt.schema.json": "792fd3a8923122dc14c8c92b7b611b2971757fdbd99b5e5c29c96daef30cbe8b",
+    "document-rag-platform/tests/evals/datasets/public-dataset-manifest.schema.json": "072d180988d93c89f7a4bd0890e5a942f2797362349c063f120323010b5d89a9"
+  },
+  "limitations": [
+    "A matching receipt proves only byte and field binding; it does not authenticate reviewer authority.",
+    "The current public manifest remains pending and no external human receipt was supplied.",
+    "The real A9 private-pack, provider, budget, execution, independent request and human baseline gates remain external."
+  ],
+  "phase_closed": false
+}

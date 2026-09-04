@@ -21,6 +21,37 @@ run_eval = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(run_eval)
 
 
+def _approved_public_review_fixture(tmp_path):
+    dataset = tmp_path / "dataset.jsonl"
+    manifest_path = tmp_path / "manifest.json"
+    receipt_path = tmp_path / "review-receipt.json"
+    dataset.write_bytes(run_eval.PUBLIC_DATASET.read_bytes())
+    receipt = {
+        "schema_version": "1.0",
+        "receipt_type": "public-dataset-human-review",
+        "review_id": "synthetic-review-001",
+        "decision": "approved",
+        "reviewed_by": "synthetic-human-reviewer",
+        "reviewer_reference_sha256": "b" * 64,
+        "reviewed_at_utc": "2026-09-03T00:00:00Z",
+        "dataset_sha256": run_eval._sha(dataset),
+        "dataset_version": "2.0.0",
+        "records": 16,
+        "splits": ["train", "holdout"],
+        "review_scope": "all-records-content-labels-and-splits",
+    }
+    receipt_path.write_text(json.dumps(receipt))
+    manifest = json.loads(run_eval.PUBLIC_DATASET_MANIFEST.read_text())
+    manifest.update(
+        reviewer=receipt["reviewed_by"],
+        review_status="approved",
+        reviewed_at_utc=receipt["reviewed_at_utc"],
+        review_receipt_sha256=run_eval._sha(receipt_path),
+    )
+    manifest_path.write_text(json.dumps(manifest))
+    return dataset, manifest_path, receipt_path, manifest, receipt
+
+
 def test_public_dataset_has_reviewable_v2_contract_and_required_coverage():
     path = REPO / "document-rag-platform/tests/evals/datasets/public-synthetic-v2.jsonl"
     rows = [json.loads(line) for line in path.read_text().splitlines() if line]
@@ -214,6 +245,117 @@ def test_public_dataset_self_asserted_approval_never_becomes_verified_review(tmp
     manifest_path.write_text(json.dumps(manifest))
     with pytest.raises(run_eval.EnvironmentUnavailable, match="timestamp"):
         run_eval._public_dataset_status(dataset, manifest_path)
+
+
+def test_public_review_receipt_is_exactly_bound_but_does_not_create_authority(
+    tmp_path,
+):
+    dataset, manifest_path, receipt_path, _, _ = _approved_public_review_fixture(
+        tmp_path
+    )
+
+    status = run_eval._public_dataset_status(dataset, manifest_path, receipt_path)
+
+    assert status["receipt_binding_verified"] is True
+    assert status["review_authority_verified"] is False
+    assert status["review_complete"] is False
+    assert status["review_claim_status"] == (
+        "receipt-bound-approved-unverified-authority"
+    )
+    assert status["provider_invoked"] is False
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("dataset_sha256", "0" * 64),
+        ("dataset_version", "9.9.9"),
+        ("records", 15),
+        ("splits", ["train"]),
+        ("reviewed_by", "different-reviewer"),
+        ("reviewed_at_utc", "2026-09-04T00:00:00Z"),
+        ("reviewer_reference_sha256", ""),
+        ("unexpected", "field"),
+    ],
+)
+def test_public_review_receipt_drift_fails_closed(tmp_path, field, value):
+    dataset, manifest_path, receipt_path, manifest, receipt = (
+        _approved_public_review_fixture(tmp_path)
+    )
+    receipt[field] = value
+    receipt_path.write_text(json.dumps(receipt))
+    manifest["review_receipt_sha256"] = run_eval._sha(receipt_path)
+    manifest_path.write_text(json.dumps(manifest))
+
+    with pytest.raises(run_eval.EnvironmentUnavailable):
+        run_eval._public_dataset_status(dataset, manifest_path, receipt_path)
+
+
+def test_public_review_receipt_byte_drift_fails_hash_binding(tmp_path):
+    dataset, manifest_path, receipt_path, _, receipt = _approved_public_review_fixture(
+        tmp_path
+    )
+    receipt["review_id"] = "changed-after-manifest-binding"
+    receipt_path.write_text(json.dumps(receipt))
+
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="hash mismatch"):
+        run_eval._public_dataset_status(dataset, manifest_path, receipt_path)
+
+
+def test_pending_public_manifest_rejects_review_receipt(tmp_path):
+    receipt_path = tmp_path / "review-receipt.json"
+    receipt_path.write_text("{}")
+
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="pending"):
+        run_eval._public_dataset_status(
+            run_eval.PUBLIC_DATASET,
+            run_eval.PUBLIC_DATASET_MANIFEST,
+            receipt_path,
+        )
+
+
+def test_public_review_receipt_is_supported_only_by_public_status_cli(
+    tmp_path, monkeypatch
+):
+    dataset, manifest_path, receipt_path, _, _ = _approved_public_review_fixture(
+        tmp_path
+    )
+    output = tmp_path / "status.json"
+    monkeypatch.setattr(run_eval, "PUBLIC_DATASET", dataset)
+    monkeypatch.setattr(run_eval, "PUBLIC_DATASET_MANIFEST", manifest_path)
+    monkeypatch.setattr(run_eval, "_revision", lambda: "f" * 40)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_eval.py",
+            "--public-dataset-status",
+            "--public-review-receipt",
+            str(receipt_path),
+            "--json-output",
+            str(output),
+        ],
+    )
+
+    assert run_eval.main() == 0
+    assert json.loads(output.read_text())["receipt_binding_verified"] is True
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_eval.py",
+            "--tier",
+            "contract-smoke",
+            "--public-review-receipt",
+            str(receipt_path),
+            "--json-output",
+            str(tmp_path / "tier.json"),
+            "--markdown-output",
+            str(tmp_path / "tier.md"),
+        ],
+    )
+    assert run_eval.main() == 3
 
 
 def test_public_dataset_status_is_a_supported_no_effect_cli_mode(tmp_path, monkeypatch):

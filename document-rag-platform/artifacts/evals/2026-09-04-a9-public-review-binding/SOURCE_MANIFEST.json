@@ -1,0 +1,30 @@
+[
+  {
+    "path": "AKTIF_GOREV.md",
+    "sha256": "7fc96c2240508daab2961074253ffbce5a0f01ffc155bea6711902bb24ddec38"
+  },
+  {
+    "path": "scripts/run_eval.py",
+    "sha256": "1555af649d54e4ce71f3f0209b3199547319f0f38fe3416647e60b71960cb17b"
+  },
+  {
+    "path": "document-rag-platform/services/backend/tests/evals/test_tier_contracts.py",
+    "sha256": "9395ecb44cf56d5176e9898d8543237dc82c01ad87715f94e96f6b77ea40a2f3"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/datasets/README.md",
+    "sha256": "40f1310c497c358806d9e8769407aa97ab9df3ddf5c11824dac230998a9649bf"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/datasets/public-dataset-review-receipt.schema.json",
+    "sha256": "792fd3a8923122dc14c8c92b7b611b2971757fdbd99b5e5c29c96daef30cbe8b"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/datasets/public-dataset-manifest.schema.json",
+    "sha256": "072d180988d93c89f7a4bd0890e5a942f2797362349c063f120323010b5d89a9"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/datasets/public-synthetic-v2.manifest.json",
+    "sha256": "f0313ac0fd75b2cccc959c429ba1c1211118ccdc4d18e8baaffcb1063b37f94e"
+  }
+]

@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-TOOL_VERSION = "1.4.0"
+TOOL_VERSION = "1.5.0"
 DETERMINISTIC_SEED = 20260902
 REPO = Path(__file__).resolve().parents[1]
 BACKEND = REPO / "document-rag-platform/services/backend"
@@ -31,6 +31,9 @@ PUBLIC_DATASET = (
 PUBLIC_DATASET_MANIFEST = PUBLIC_DATASET.with_suffix(".manifest.json")
 PUBLIC_DATASET_MANIFEST_SCHEMA = (
     PUBLIC_DATASET.parent / "public-dataset-manifest.schema.json"
+)
+PUBLIC_REVIEW_RECEIPT_SCHEMA = (
+    PUBLIC_DATASET.parent / "public-dataset-review-receipt.schema.json"
 )
 CONTRACT_DATASET = BACKEND / "tests/evals/datasets/golden.jsonl"
 OFFLINE_E2E_DIRECTORY = BACKEND / "tests/evals/offline_e2e"
@@ -310,7 +313,42 @@ def _utc(value: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
-def _public_dataset_status(dataset_path: Path, manifest_path: Path) -> dict[str, Any]:
+def _public_review_receipt(
+    receipt_path: Path, manifest: dict[str, Any]
+) -> dict[str, Any]:
+    receipt = _schema_document(
+        receipt_path,
+        PUBLIC_REVIEW_RECEIPT_SCHEMA,
+        "public dataset review receipt",
+    )
+    if _sha(receipt_path) != manifest["review_receipt_sha256"]:
+        raise EnvironmentUnavailable("public review receipt hash mismatch")
+    exact_bindings = {
+        "dataset_sha256": manifest["dataset_sha256"],
+        "dataset_version": manifest["dataset_version"],
+        "records": manifest["records"],
+        "reviewed_by": manifest["reviewer"],
+        "reviewed_at_utc": manifest["reviewed_at_utc"],
+    }
+    if any(receipt[name] != value for name, value in exact_bindings.items()):
+        raise EnvironmentUnavailable("public review receipt binding mismatch")
+    if sorted(receipt["splits"]) != sorted(manifest["splits"]):
+        raise EnvironmentUnavailable("public review receipt split binding mismatch")
+    if receipt["reviewed_by"].strip().upper().startswith("PENDING"):
+        raise EnvironmentUnavailable("public review receipt requires human reviewer")
+    reviewed_at = receipt["reviewed_at_utc"]
+    if not reviewed_at.endswith(("Z", "+00:00")):
+        raise EnvironmentUnavailable("public review receipt timestamp must be UTC")
+    if _utc(reviewed_at) > datetime.now(timezone.utc):
+        raise EnvironmentUnavailable("public review receipt timestamp is invalid")
+    return receipt
+
+
+def _public_dataset_status(
+    dataset_path: Path,
+    manifest_path: Path,
+    review_receipt_path: Path | None = None,
+) -> dict[str, Any]:
     manifest = _schema_document(
         manifest_path,
         PUBLIC_DATASET_MANIFEST_SCHEMA,
@@ -354,11 +392,20 @@ def _public_dataset_status(dataset_path: Path, manifest_path: Path) -> dict[str,
             raise EnvironmentUnavailable("public dataset review timestamp must be UTC")
         if _utc(reviewed_at) > datetime.now(timezone.utc):
             raise EnvironmentUnavailable("public dataset review timestamp is invalid")
+    receipt_binding_verified = False
     review_claim_status = (
         "manifest-declared-approved-unverified"
         if approved
         else "manifest-declared-pending"
     )
+    if review_receipt_path is not None:
+        if not approved:
+            raise EnvironmentUnavailable(
+                "pending public dataset manifest cannot consume review receipt"
+            )
+        _public_review_receipt(review_receipt_path, manifest)
+        receipt_binding_verified = True
+        review_claim_status = "receipt-bound-approved-unverified-authority"
     return {
         "schema_version": "1.0",
         "request_type": "public-dataset-review-status",
@@ -373,6 +420,8 @@ def _public_dataset_status(dataset_path: Path, manifest_path: Path) -> dict[str,
         "classification": manifest["classification"],
         "review_status": manifest["review_status"],
         "review_claim_status": review_claim_status,
+        "receipt_binding_verified": receipt_binding_verified,
+        "review_authority_verified": False,
         "approval_evidence_verified": False,
         "review_complete": False,
         "release_gate_eligible": False,
@@ -1017,6 +1066,7 @@ def main() -> int:
     parser.add_argument("--approval-manifest", type=Path)
     parser.add_argument("--baseline-seal", type=Path)
     parser.add_argument("--private-pack-manifest", type=Path)
+    parser.add_argument("--public-review-receipt", type=Path)
     parser.add_argument("--provider-runner", nargs="+")
     args = parser.parse_args()
     try:
@@ -1033,9 +1083,13 @@ def main() -> int:
                 )
             ):
                 raise EnvironmentUnavailable(
-                    "public dataset status accepts only its JSON output"
+                    "public dataset status accepts only its JSON output and optional review receipt"
                 )
-            report = _public_dataset_status(PUBLIC_DATASET, PUBLIC_DATASET_MANIFEST)
+            report = _public_dataset_status(
+                PUBLIC_DATASET,
+                PUBLIC_DATASET_MANIFEST,
+                args.public_review_receipt,
+            )
             args.json_output.parent.mkdir(parents=True, exist_ok=True)
             args.json_output.write_text(
                 json.dumps(report, indent=2, sort_keys=True) + "\n"
@@ -1046,11 +1100,16 @@ def main() -> int:
                         "request_type": report["request_type"],
                         "integrity": report["integrity"],
                         "review_status": report["review_status"],
+                        "receipt_binding_verified": report["receipt_binding_verified"],
                         "provider_invoked": False,
                     }
                 )
             )
             return 0
+        if args.public_review_receipt:
+            raise EnvironmentUnavailable(
+                "public review receipt requires public dataset status"
+            )
         if args.approval_preflight or args.check_approval:
             if not args.private_pack_manifest or not args.provider_runner:
                 raise EnvironmentUnavailable(

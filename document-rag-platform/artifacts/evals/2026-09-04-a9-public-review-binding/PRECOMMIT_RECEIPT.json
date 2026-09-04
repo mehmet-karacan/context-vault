@@ -1,0 +1,107 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "verify",
+  "operation_id": "cv3-a9-public-review-binding-20260904-001",
+  "work_item_id": "CV3-A9-EVAL",
+  "attempt_id": "local-public-review-binding-001",
+  "actor": "codex-local-agent",
+  "tool_adapter": "local-cli-pytest-independent-review",
+  "started_at": "2026-09-04T17:25:00Z",
+  "finished_at": "2026-09-04T17:38:27Z",
+  "time_scope": "Exact test durations and timestamps are in the redacted JUnit reports.",
+  "baseline_revision": "e27c1312814301bb4e321837f1c5554e94c875e4",
+  "result_revision": null,
+  "revision_note": "Pre-commit source hashes bind tested bytes; a follow-up receipt will bind the implementation commit.",
+  "scope_hash": "8897a1ed29fd69720933a66ba9e8d6f81388d7afc85090fa97a704bac3f225a7",
+  "context_manifest_hash": "7fc96c2240508daab2961074253ffbce5a0f01ffc155bea6711902bb24ddec38",
+  "idempotency_key_hash": null,
+  "commands": [
+    {
+      "command": "run_eval.py --public-dataset-status --public-review-receipt before implementation",
+      "exit_code": 2,
+      "result": "Argument unrecognized; missing supported receipt consumer reproduced; provider calls zero"
+    },
+    {
+      "command": "pytest -q tests/evals/test_tier_contracts.py before implementation",
+      "exit_code": 1,
+      "result": "115 passed, 12 failed; missing receipt schema/binding/CLI behavior reproduced"
+    },
+    {
+      "command": "pytest -q tests/evals/test_tier_contracts.py --junitxml=<evidence>/tier-junit.xml",
+      "exit_code": 0,
+      "result": "127 passed"
+    },
+    {
+      "command": "pytest -q tests --junitxml=<evidence>/backend-junit.xml with explicit isolated PostgreSQL/Redis/MinIO endpoints",
+      "exit_code": 0,
+      "result": "743 passed, 2 skipped, 1 warning"
+    },
+    {
+      "command": "run_eval.py --public-dataset-status without receipt",
+      "exit_code": 0,
+      "result": "Pending integrity PASS; receipt/authority/review/release/provider false"
+    },
+    {
+      "command": "run_eval.py --tier contract-smoke --public-review-receipt <unused>",
+      "exit_code": 3,
+      "result": "Expected fail-closed mode rejection before receipt read or provider effect"
+    },
+    {
+      "command": "ruff format --check; ruff check; strict MyPy ratchet; OpenAPI deterministic check; uv lock --check --offline; git diff --check",
+      "exit_code": 0,
+      "result": "PASS; MyPy checked 14 source files and lock resolved 122 packages"
+    },
+    {
+      "command": "Independent exact-source break/review",
+      "exit_code": 0,
+      "result": "APPROVE for local binding verifier only; authority/completion not elevated"
+    },
+    {
+      "command": "check_public_tree.py --repo . --json-output <evidence>/public-tree.json",
+      "exit_code": 0,
+      "result": "272 tracked files checked; PASS"
+    }
+  ],
+  "exit_status": 0,
+  "tests": [
+    {"name": "full backend", "passed": 743, "skipped": 2, "failed": 0, "warnings": 1, "report": "backend-junit.xml"},
+    {"name": "A9 tier/review-binding contracts", "passed": 127, "failed": 0, "report": "tier-junit.xml"},
+    {"name": "Ruff, MyPy, OpenAPI, offline lock, public tree and diff check", "result": "PASS"},
+    {"name": "independent local verifier review", "result": "APPROVE", "phase_closed": false}
+  ],
+  "result": "PASS",
+  "phase_closed": false,
+  "scope": "Local no-provider-effect public synthetic dataset external receipt binding only. No receipt creation, human authority, review completion, real benchmark or A9 closure.",
+  "source_manifest": "SOURCE_MANIFEST.json",
+  "artifacts": [
+    {"path": "CLI_PROBES.json", "sha256": "d0f1b86a45ab05a07b0c277438c2531f3dfaf4a0d8eddaee4d1ad44326f1d99a", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "INDEPENDENT_REVIEW.json", "sha256": "943abb91580110c2b3432242d31417c2c60cd474a7f5a7f800c1eb8bde32be9c", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "REPRODUCTION_SUMMARY.json", "sha256": "29435f8ec3f2da276b3a6b00b4de1da629befebc8413ad780f2418766d64002a", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "SOURCE_MANIFEST.json", "sha256": "8897a1ed29fd69720933a66ba9e8d6f81388d7afc85090fa97a704bac3f225a7", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "backend-junit.xml", "sha256": "72c9ba88886035973f95937bc4f32b8a63cbbb0f2ba60f4800be62fcfe8a23a0", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "public-dataset-status.json", "sha256": "3d5462e061ca4905f00a62ff50bd74430996eb655a6949471fb6c87238d25aa9", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "public-tree.json", "sha256": "4f9f648c2125a2a63f7b361b0f5ac7cfc8200d323fb3b0a90a19803cacf990d0", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "tier-junit.xml", "sha256": "2a697bd0e3ca396efc85b85aba9a76bba73c853f31ec02921945d452712d0ec2", "classification": "public-synthetic", "retention": "versioned evidence"}
+  ],
+  "security_redactions": [
+    "JUnit local hostname and absolute repository paths removed",
+    "No external receipt, reviewer identity, private path, credential value or provider output recorded",
+    "Only isolated synthetic test infrastructure was used"
+  ],
+  "intermediate_failures": [
+    "Initial unsupported CLI probe exited 2 and the test-first suite reported 12 failures.",
+    "One post-evidence format command used root-relative ../../../ paths and exited 2; the correct root paths were then run and all format/lint/type/API/lock gates passed."
+  ],
+  "rollback": {
+    "schema_change": false,
+    "data_reset_required": false,
+    "instruction": "Revert only this verifier/schema/documentation patch if needed; preserve databases, objects, prior evidence and fail-closed review/release decisions."
+  },
+  "data_safety": {
+    "user_data_mutated": false,
+    "isolated_test_infrastructure_used": true,
+    "real_provider_calls": 0,
+    "provider_credential_values_read": false
+  },
+  "remote_actions": {"push": false, "pull_request": false, "merge": false, "release": false}
+}
