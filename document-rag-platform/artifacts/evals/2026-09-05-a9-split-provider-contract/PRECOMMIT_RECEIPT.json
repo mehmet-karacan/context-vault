@@ -1,0 +1,104 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "verify",
+  "operation_id": "cv3-a9-split-provider-contract-20260905-001",
+  "work_item_id": "CV3-A9-EVAL",
+  "attempt_id": "split-provider-contract-001",
+  "actor": "codex-local-agent",
+  "tool_adapter": "local-cli-pytest-independent-review",
+  "started_at": "2026-09-04T21:00:51Z",
+  "finished_at": "2026-09-04T21:05:24Z",
+  "time_scope": "The retained final-test interval is exact; earlier test-first and independent break runs are ordered but were not assigned invented timestamps.",
+  "baseline_revision": "da15ce7d2bbc2093d3e18b7741fc9268378461ff",
+  "result_revision": null,
+  "revision_note": "Pre-commit source hashes bind tested bytes; a follow-up receipt will bind the implementation commit.",
+  "scope_hash": "d7d30d9978fd3e61131c96d8eb00f4e4a459188a8f23827e8da8f540a9576201",
+  "idempotency_key_hash": null,
+  "commands": [
+    {
+      "command": "pytest -q tests/evals/test_tier_contracts.py after split-identity test-first fixture change",
+      "exit_code": 1,
+      "result": "115 passed, 20 failed; singular provider/model contract reproduced"
+    },
+    {
+      "command": "pytest -q tests/evals/test_tier_contracts.py after first implementation",
+      "exit_code": 0,
+      "result": "154 passed"
+    },
+    {
+      "command": "Independent break tests against the first implementation",
+      "exit_code": 1,
+      "result": "154 passed, 4 failed; mixed legacy/v2 report and incomplete/current baseline validation defects reproduced"
+    },
+    {
+      "command": "pytest -q tests/evals/test_tier_contracts.py --junitxml=<evidence>/TIER_JUNIT.xml",
+      "exit_code": 0,
+      "result": "158 passed"
+    },
+    {
+      "command": "pytest -q tests --junitxml=<evidence>/BACKEND_JUNIT.xml with isolated PostgreSQL/Redis/MinIO endpoints",
+      "exit_code": 0,
+      "result": "787 passed, 2 skipped, 1 warning"
+    },
+    {
+      "command": "ruff format --check; ruff check; strict MyPy ratchet; deterministic OpenAPI; uv lock --check --offline; git diff --check",
+      "exit_code": 0,
+      "result": "PASS; MyPy checked 14 source files and lock resolved 163 packages"
+    },
+    {
+      "command": "check_public_tree.py --repo . --json-output <evidence>/PUBLIC_TREE.json",
+      "exit_code": 0,
+      "result": "273 tracked source files checked; PASS"
+    },
+    {
+      "command": "Independent two-round break/review on stabilized exact source bytes",
+      "exit_code": 0,
+      "result": "APPROVE for the split identity contract only after the initial rejection findings were fixed"
+    }
+  ],
+  "exit_status": 0,
+  "tests": [
+    {"name": "A9 split identity tier contracts", "passed": 158, "failed": 0, "report": "TIER_JUNIT.xml"},
+    {"name": "full backend", "passed": 787, "skipped": 2, "failed": 0, "warnings": 1, "report": "BACKEND_JUNIT.xml"},
+    {"name": "Ruff, MyPy, OpenAPI, offline lock, public tree and diff check", "result": "PASS"},
+    {"name": "independent split contract review", "result": "APPROVE", "phase_closed": false}
+  ],
+  "result": "PASS",
+  "phase_closed": false,
+  "scope": "Versioned embedding/generation provider-model approval, report, child-environment and baseline bindings only. No human approval, generation runtime, private benchmark or A9 closure.",
+  "source_manifest": "SOURCE_MANIFEST.json",
+  "artifacts": [
+    {"path": "BACKEND_JUNIT.xml", "sha256": "3faf058e094993398b9e1897335123f65731985eebfcac9541293482c2bb45e9", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "INDEPENDENT_REVIEW.json", "sha256": "59bba310d8e8e28fd9f5e652d1a9b5e94c3099764ef15b07708ca4f2397ccd19", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "PUBLIC_TREE.json", "sha256": "8e6955c2fddf6bf953c19e4850282f79acad98ecdc0666977983e4284f7777d2", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "README.md", "sha256": "dc16c720c6e6f7176f0a2e124db4c08fe3d3fd3685e93f7894e18ad75b248f47", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "REPRODUCTION_SUMMARY.json", "sha256": "ccb7f008506f5d0fee6da098a47888d53631a91e966f86bdbfc98fc7b3ee4724", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "SOURCE_MANIFEST.json", "sha256": "d7d30d9978fd3e61131c96d8eb00f4e4a459188a8f23827e8da8f540a9576201", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "TIER_JUNIT.xml", "sha256": "b6d47d8c7d5ec3f745329959dfb18ed1c3f951cb2a73bce15d4774e93a1b2cdf", "classification": "public-synthetic", "retention": "versioned evidence"}
+  ],
+  "security_redactions": [
+    "JUnit local hostname and absolute repository paths removed",
+    "No private benchmark record, credential value, model weight or provider output recorded",
+    "Only isolated synthetic test infrastructure was used"
+  ],
+  "intermediate_failures": [
+    "Initial test-first run: 115 passed, 20 failed.",
+    "Independent review rejected four fail-open report/baseline comparator paths; all four were reproduced before repair.",
+    "The first full-suite invocation omitted the isolated Redis password and ended with 783 passed, 2 skipped and 1 environment failure; supplying the correct URL yielded the final pass.",
+    "A first schema move would have removed generic v1 paths; the prior evidence hashes were checked and both generic paths were restored byte-identically before acceptance."
+  ],
+  "rollback": {
+    "schema_change": false,
+    "data_reset_required": false,
+    "instruction": "Revert only this evaluator/schema/test/docs patch if needed; preserve user data, historical v1 schemas, prior evidence and fail-closed A9 decisions."
+  },
+  "data_safety": {
+    "user_data_mutated": false,
+    "existing_database_migrated_or_reset": false,
+    "isolated_test_infrastructure_used": true,
+    "real_provider_calls": 0,
+    "provider_credential_values_read": false,
+    "model_weights_changed": false
+  },
+  "remote_actions": {"provider_call": false, "push": false, "pull_request": false, "merge": false, "release": false}
+}

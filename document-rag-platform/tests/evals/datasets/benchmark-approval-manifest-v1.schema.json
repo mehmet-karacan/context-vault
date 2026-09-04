@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://context-vault.local/schemas/benchmark-approval-manifest-v1.json",
+  "title": "Human-approved real benchmark execution envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "approval_id", "approved_by", "approved_at_utc",
+    "expires_at_utc", "provider", "model", "private_pack_sha256",
+    "dataset_sha256", "allowed_classification", "runner_bundle_sha256",
+    "environment_hash", "credential_env_names", "max_duration_seconds", "max_provider_calls",
+    "max_input_tokens", "max_output_tokens", "max_cost_usd", "currency"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "approval_id": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S"},
+    "approved_by": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S"},
+    "approved_at_utc": {"type": "string", "format": "date-time"},
+    "expires_at_utc": {"type": "string", "format": "date-time"},
+    "provider": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S"},
+    "model": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S"},
+    "private_pack_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "dataset_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "allowed_classification": {"enum": ["internal", "confidential", "restricted"]},
+    "runner_bundle_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "environment_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "credential_env_names": {
+      "type": "array", "maxItems": 10, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$"}
+    },
+    "max_duration_seconds": {"type": "integer", "minimum": 1, "maximum": 3600},
+    "max_provider_calls": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "max_input_tokens": {"type": "integer", "minimum": 1},
+    "max_output_tokens": {"type": "integer", "minimum": 1},
+    "max_cost_usd": {"type": "number", "exclusiveMinimum": 0, "maximum": 10000},
+    "currency": {"const": "USD"}
+  }
+}

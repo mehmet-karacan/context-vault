@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-TOOL_VERSION = "1.5.0"
+TOOL_VERSION = "1.6.0"
 DETERMINISTIC_SEED = 20260902
 REPO = Path(__file__).resolve().parents[1]
 BACKEND = REPO / "document-rag-platform/services/backend"
@@ -45,9 +45,9 @@ OFFLINE_EXTRA_TEST_TARGETS = (
 )
 PRIVATE_MANIFEST_SCHEMA = PUBLIC_DATASET.parent / "private-pack-manifest.schema.json"
 APPROVAL_MANIFEST_SCHEMA = (
-    PUBLIC_DATASET.parent / "benchmark-approval-manifest.schema.json"
+    PUBLIC_DATASET.parent / "benchmark-approval-manifest-v2.schema.json"
 )
-BASELINE_SEAL_SCHEMA = PUBLIC_DATASET.parent / "benchmark-baseline-seal.schema.json"
+BASELINE_SEAL_SCHEMA = PUBLIC_DATASET.parent / "benchmark-baseline-seal-v2.schema.json"
 QUALITY_METRICS = ("recall@5", "mrr@10", "citation_precision", "citation_coverage")
 ABSOLUTE_METRICS = (
     "permission_version_leakage",
@@ -94,6 +94,12 @@ ZERO_RATE_METRICS = (
     "cross_workspace_leakage",
     "source_label_invalidity_rate",
     "prompt_injection_success_rate",
+)
+PROVIDER_MODEL_FIELDS = (
+    "embedding_provider",
+    "embedding_model",
+    "generation_provider",
+    "generation_model",
 )
 
 
@@ -515,7 +521,7 @@ def _approval_preflight(private_path: Path, command: list[str]) -> dict[str, Any
     environment_hash = _environment_sha256()
     repository_revision = _revision()
     return {
-        "schema_version": "1.0",
+        "schema_version": "2.0",
         "request_type": "real-benchmark-approval-preflight",
         "status": "HUMAN_APPROVAL_REQUIRED",
         "repository_revision": repository_revision,
@@ -532,8 +538,7 @@ def _approval_preflight(private_path: Path, command: list[str]) -> dict[str, Any
             "approved_by",
             "approved_at_utc",
             "expires_at_utc",
-            "provider",
-            "model",
+            *PROVIDER_MODEL_FIELDS,
             "credential_env_names",
             "max_duration_seconds",
             "max_provider_calls",
@@ -550,7 +555,7 @@ def _check_approval(
     """Validate a human approval against current bytes without provider dispatch."""
     manifest, approval = _bound_approval(approval_path, private_path, command)
     return {
-        "schema_version": "1.0",
+        "schema_version": "2.0",
         "request_type": "real-benchmark-approval-check",
         "status": "APPROVAL_VALID_FOR_CURRENT_INPUTS",
         "repository_revision": _revision(),
@@ -564,6 +569,7 @@ def _check_approval(
         "allowed_classification": manifest["classification"],
         "runner_bundle_sha256": _runner_bundle_sha256(command),
         "environment_hash": _environment_sha256(),
+        **{name: approval[name] for name in PROVIDER_MODEL_FIELDS},
         "provider_invoked": False,
         "credential_values_read": False,
     }
@@ -625,11 +631,15 @@ def _finite_number(
 def _benchmark_report(report: Any) -> dict[str, Any]:
     if not isinstance(report, dict):
         raise EnvironmentUnavailable("provider report must be an object")
-    for name in ("provider", "model"):
+    if report.get("schema_version") != "2.0":
+        raise EnvironmentUnavailable("provider report has unsupported schema version")
+    if "provider" in report or "model" in report:
+        raise EnvironmentUnavailable("provider report mixes legacy provenance fields")
+    for name in PROVIDER_MODEL_FIELDS:
         value = report.get(name)
         if not isinstance(value, str) or not value.strip() or len(value) > 200:
             raise EnvironmentUnavailable(
-                "provider report lacks provider/model provenance"
+                "provider report lacks split provider/model provenance"
             )
     for name in ("embedding_profile_hash", "prompt_hash", "config_hash"):
         value = report.get(name)
@@ -772,8 +782,8 @@ def _benchmark_report(report: Any) -> dict[str, Any]:
         **{
             name: report[name]
             for name in (
-                "provider",
-                "model",
+                "schema_version",
+                *PROVIDER_MODEL_FIELDS,
                 "embedding_profile_hash",
                 "prompt_hash",
                 "config_hash",
@@ -832,8 +842,10 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
             "CV_EVAL_MAX_OUTPUT_TOKENS": str(approval["max_output_tokens"]),
             "CV_EVAL_MAX_COST_USD": str(approval["max_cost_usd"]),
             "CV_EVAL_MAX_DURATION_SECONDS": str(approval["max_duration_seconds"]),
-            "CV_EVAL_PROVIDER": approval["provider"],
-            "CV_EVAL_MODEL": approval["model"],
+            "CV_EVAL_EMBEDDING_PROVIDER": approval["embedding_provider"],
+            "CV_EVAL_EMBEDDING_MODEL": approval["embedding_model"],
+            "CV_EVAL_GENERATION_PROVIDER": approval["generation_provider"],
+            "CV_EVAL_GENERATION_MODEL": approval["generation_model"],
             "CV_EVAL_ENVIRONMENT_HASH": approval["environment_hash"],
             "CV_EVAL_CURRENCY": approval["currency"],
         }
@@ -861,10 +873,7 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
         raise EnvironmentUnavailable(
             "provider report query-type breakdown does not match private dataset"
         )
-    if (
-        report["provider"] != approval["provider"]
-        or report["model"] != approval["model"]
-    ):
+    if any(report[name] != approval[name] for name in PROVIDER_MODEL_FIELDS):
         raise EnvironmentUnavailable("provider report does not match approval")
     if report["environment_hash"] != approval["environment_hash"]:
         raise EnvironmentUnavailable(
@@ -980,13 +989,15 @@ def _compare_with_seal(
     baseline = json.loads(baseline_path.read_text())
     if (
         not isinstance(baseline, dict)
+        or baseline.get("schema_version") != "2.0"
         or baseline.get("tier") != "real-benchmark"
         or baseline.get("result") != "PASS"
     ):
         raise EnvironmentUnavailable("baseline is not a successful real benchmark")
+    _benchmark_report(baseline)
+    _benchmark_report(report)
     provenance = (
-        "provider",
-        "model",
+        *PROVIDER_MODEL_FIELDS,
         "dataset_sha256",
         "embedding_profile_hash",
         "prompt_hash",
@@ -1165,7 +1176,7 @@ def main() -> int:
                 details = _real_benchmark(args, work)
         report = {
             **details,
-            "schema_version": "1.0",
+            "schema_version": ("2.0" if args.tier == "real-benchmark" else "1.0"),
             "tool_version": TOOL_VERSION,
             "tier": args.tier,
             "observed_at_utc": datetime.now(timezone.utc).isoformat(),

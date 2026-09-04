@@ -374,6 +374,7 @@ def test_public_dataset_status_is_a_supported_no_effect_cli_mode(tmp_path, monke
 
     assert run_eval.main() == 0
     report = json.loads(output.read_text())
+    assert report["schema_version"] == "1.0"
     assert report["review_status"] == "pending"
     assert report["release_gate_eligible"] is False
     assert report["provider_invoked"] is False
@@ -436,8 +437,11 @@ def benchmark_fixture(tmp_path, monkeypatch):
         "query_types": ["prose"],
     }
     report = {
-        "provider": "synthetic-test-only",
-        "model": "not-a-real-model",
+        "schema_version": "2.0",
+        "embedding_provider": "local-sentence-transformers",
+        "embedding_model": "BAAI/bge-m3@synthetic-revision",
+        "generation_provider": "local-transformers",
+        "generation_model": "synthetic-instruct-model@revision",
         "embedding_profile_hash": "b" * 64,
         "prompt_hash": "c" * 64,
         "config_hash": "d" * 64,
@@ -482,13 +486,15 @@ def benchmark_fixture(tmp_path, monkeypatch):
     entrypoint.chmod(0o700)
     command = [str(entrypoint)]
     approval = {
-        "schema_version": "1.0",
+        "schema_version": "2.0",
         "approval_id": "synthetic-test-approval",
         "approved_by": "synthetic-owner",
         "approved_at_utc": "2026-09-02T00:00:00Z",
         "expires_at_utc": "2027-09-02T00:00:00Z",
-        "provider": report["provider"],
-        "model": report["model"],
+        "embedding_provider": report["embedding_provider"],
+        "embedding_model": report["embedding_model"],
+        "generation_provider": report["generation_provider"],
+        "generation_model": report["generation_model"],
         "private_pack_sha256": run_eval._sha(path),
         "dataset_sha256": manifest["dataset_sha256"],
         "allowed_classification": manifest["classification"],
@@ -644,8 +650,11 @@ def test_nonobject_manifest_is_rejected_before_dispatch(tmp_path, monkeypatch, v
 @pytest.mark.parametrize(
     "field,value",
     [
-        ("provider", ""),
-        ("model", None),
+        ("schema_version", "1.0"),
+        ("embedding_provider", ""),
+        ("embedding_model", None),
+        ("generation_provider", ""),
+        ("generation_model", None),
         ("prompt_hash", "fake"),
         ("metrics", None),
         ("golden_results_sent_to_provider", "false"),
@@ -656,6 +665,109 @@ def test_malformed_provider_provenance_is_rejected(tmp_path, monkeypatch, field,
     report[field] = value
     with pytest.raises(run_eval.EnvironmentUnavailable):
         run_eval._real_benchmark(args, tmp_path)
+
+
+def test_legacy_single_provider_approval_fails_before_dispatch(tmp_path, monkeypatch):
+    args, _, report, runner = benchmark_fixture(tmp_path, monkeypatch)
+    approval = json.loads(args.approval_manifest.read_text())
+    for field in (
+        "embedding_provider",
+        "embedding_model",
+        "generation_provider",
+        "generation_model",
+    ):
+        approval.pop(field)
+    approval.update(
+        schema_version="1.0",
+        provider=report["generation_provider"],
+        model=report["generation_model"],
+    )
+    args.approval_manifest.write_text(json.dumps(approval))
+    with pytest.raises(run_eval.EnvironmentUnavailable):
+        run_eval._real_benchmark(args, tmp_path)
+    runner.assert_not_called()
+
+
+def test_mixed_legacy_and_v2_approval_fails_before_dispatch(tmp_path, monkeypatch):
+    args, _, _, runner = benchmark_fixture(tmp_path, monkeypatch)
+    approval = json.loads(args.approval_manifest.read_text())
+    approval.update(provider="legacy", model="legacy")
+    args.approval_manifest.write_text(json.dumps(approval))
+    with pytest.raises(run_eval.EnvironmentUnavailable):
+        run_eval._real_benchmark(args, tmp_path)
+    runner.assert_not_called()
+
+
+@pytest.mark.parametrize("field", run_eval.PROVIDER_MODEL_FIELDS)
+@pytest.mark.parametrize("mutation", ["missing", "blank"])
+def test_each_split_approval_identity_is_required_before_dispatch(
+    tmp_path, monkeypatch, field, mutation
+):
+    args, _, _, runner = benchmark_fixture(tmp_path, monkeypatch)
+    approval = json.loads(args.approval_manifest.read_text())
+    if mutation == "missing":
+        approval.pop(field)
+    else:
+        approval[field] = "   "
+    args.approval_manifest.write_text(json.dumps(approval))
+    with pytest.raises(run_eval.EnvironmentUnavailable):
+        run_eval._real_benchmark(args, tmp_path)
+    runner.assert_not_called()
+
+
+def test_legacy_single_provider_report_fails_closed(tmp_path, monkeypatch):
+    args, _, report, runner = benchmark_fixture(tmp_path, monkeypatch)
+    for field in (
+        "embedding_provider",
+        "embedding_model",
+        "generation_provider",
+        "generation_model",
+    ):
+        report.pop(field)
+    report.update(provider="synthetic-test-only", model="not-a-real-model")
+    with pytest.raises(run_eval.EnvironmentUnavailable):
+        run_eval._real_benchmark(args, tmp_path)
+    assert runner.call_count == 1
+
+
+def test_mixed_legacy_and_v2_report_fails_closed(tmp_path, monkeypatch):
+    args, _, report, runner = benchmark_fixture(tmp_path, monkeypatch)
+    report.update(provider="legacy", model="legacy")
+    with pytest.raises(run_eval.EnvironmentUnavailable):
+        run_eval._real_benchmark(args, tmp_path)
+    assert runner.call_count == 1
+
+
+@pytest.mark.parametrize("field", run_eval.PROVIDER_MODEL_FIELDS)
+def test_each_split_report_identity_is_required(tmp_path, monkeypatch, field):
+    args, _, report, runner = benchmark_fixture(tmp_path, monkeypatch)
+    report.pop(field)
+    with pytest.raises(run_eval.EnvironmentUnavailable):
+        run_eval._real_benchmark(args, tmp_path)
+    assert runner.call_count == 1
+
+
+def test_runtime_uses_v2_schemas_and_keeps_v1_only_for_history():
+    approval_v1 = run_eval.APPROVAL_MANIFEST_SCHEMA.with_name(
+        "benchmark-approval-manifest-v1.schema.json"
+    )
+    seal_v1 = run_eval.BASELINE_SEAL_SCHEMA.with_name(
+        "benchmark-baseline-seal-v1.schema.json"
+    )
+    assert run_eval.APPROVAL_MANIFEST_SCHEMA.name.endswith("-v2.schema.json")
+    assert run_eval.BASELINE_SEAL_SCHEMA.name.endswith("-v2.schema.json")
+    assert json.loads(run_eval.APPROVAL_MANIFEST_SCHEMA.read_text())["$id"].endswith(
+        "-v2.json"
+    )
+    assert json.loads(run_eval.BASELINE_SEAL_SCHEMA.read_text())["$id"].endswith(
+        "-v2.json"
+    )
+    assert json.loads(approval_v1.read_text())["properties"]["schema_version"] == {
+        "const": "1.0"
+    }
+    assert json.loads(seal_v1.read_text())["properties"]["schema_version"] == {
+        "const": "1.0"
+    }
 
 
 def test_golden_transfer_is_a_failure_and_unknown_fields_never_escape(
@@ -673,8 +785,11 @@ def test_golden_transfer_is_a_failure_and_unknown_fields_never_escape(
     assert runner.call_args.kwargs["timeout"] == 30
     child_env = runner.call_args.kwargs["env"]
     assert child_env["SYNTHETIC_PROVIDER_KEY"] == "memory-only-test-key"
-    assert child_env["CV_EVAL_PROVIDER"] == report["provider"]
-    assert child_env["CV_EVAL_MODEL"] == report["model"]
+    assert child_env["CV_EVAL_EMBEDDING_PROVIDER"] == report["embedding_provider"]
+    assert child_env["CV_EVAL_EMBEDDING_MODEL"] == report["embedding_model"]
+    assert child_env["CV_EVAL_GENERATION_PROVIDER"] == report["generation_provider"]
+    assert child_env["CV_EVAL_GENERATION_MODEL"] == report["generation_model"]
+    assert "CV_EVAL_PROVIDER" not in child_env and "CV_EVAL_MODEL" not in child_env
     assert child_env["CV_EVAL_ENVIRONMENT_HASH"] == report["environment_hash"]
     assert "HOME" not in child_env and "CODEX_SESSION_ID" not in child_env
 
@@ -719,8 +834,10 @@ def test_successful_regression_comparison_requires_complete_valid_metrics(
 @pytest.mark.parametrize(
     "field,value,pre_dispatch",
     [
-        ("provider", "other", False),
-        ("model", "other", False),
+        ("embedding_provider", "other", False),
+        ("embedding_model", "other", False),
+        ("generation_provider", "other", False),
+        ("generation_model", "other", False),
         ("private_pack_sha256", "0" * 64, True),
         ("dataset_sha256", "0" * 64, True),
         ("allowed_classification", "restricted", True),
@@ -806,7 +923,7 @@ def sealed_baseline(tmp_path, report):
     baseline_path = tmp_path / "real-baseline.json"
     baseline_path.write_text(json.dumps(baseline))
     seal = {
-        "schema_version": "1.0",
+        "schema_version": "2.0",
         "seal_id": "synthetic-seal",
         "sealed_by": "synthetic-human-reviewer",
         "sealed_at_utc": "2026-09-02T00:00:00Z",
@@ -815,8 +932,10 @@ def sealed_baseline(tmp_path, report):
         **{
             name: baseline[name]
             for name in (
-                "provider",
-                "model",
+                "embedding_provider",
+                "embedding_model",
+                "generation_provider",
+                "generation_model",
                 "dataset_sha256",
                 "embedding_profile_hash",
                 "prompt_hash",
@@ -841,6 +960,11 @@ def test_baseline_requires_matching_human_seal_and_provenance(tmp_path, monkeypa
         "environment_hash differs from approved baseline"
         in run_eval._compare_with_seal(changed, baseline, seal)
     )
+    for field in run_eval.PROVIDER_MODEL_FIELDS:
+        changed = {**current, field: "different"}
+        assert f"{field} differs from approved baseline" in run_eval._compare_with_seal(
+            changed, baseline, seal
+        )
 
 
 @pytest.mark.parametrize(
@@ -850,7 +974,10 @@ def test_baseline_requires_matching_human_seal_and_provenance(tmp_path, monkeypa
         {"report_sha256": "0" * 64},
         {"sealed_by": "PENDING_OWNER_REVIEW"},
         {"sealed_by": "   "},
-        {"provider": "other"},
+        {"embedding_provider": "other"},
+        {"embedding_model": "other"},
+        {"generation_provider": "other"},
+        {"generation_model": "other"},
         {"sealed_at_utc": "2027-09-02T00:00:00Z"},
         {"unexpected": "raw"},
     ],
@@ -863,6 +990,80 @@ def test_invalid_or_unbound_baseline_seal_fails_closed(tmp_path, monkeypatch, ch
     seal.write_text(json.dumps(value))
     with pytest.raises(run_eval.EnvironmentUnavailable):
         run_eval._compare_with_seal(report, baseline, seal)
+
+
+def test_legacy_single_provider_baseline_seal_fails_closed(tmp_path, monkeypatch):
+    _, _, report, _ = benchmark_fixture(tmp_path, monkeypatch)
+    baseline, seal = sealed_baseline(tmp_path, report)
+    value = json.loads(seal.read_text())
+    for field in (
+        "embedding_provider",
+        "embedding_model",
+        "generation_provider",
+        "generation_model",
+    ):
+        value.pop(field)
+    value.update(
+        schema_version="1.0",
+        provider=report["generation_provider"],
+        model=report["generation_model"],
+    )
+    seal.write_text(json.dumps(value))
+    with pytest.raises(run_eval.EnvironmentUnavailable):
+        run_eval._compare_with_seal(report, baseline, seal)
+
+
+def test_legacy_v1_baseline_report_fails_closed(tmp_path, monkeypatch):
+    _, _, report, _ = benchmark_fixture(tmp_path, monkeypatch)
+    baseline, seal = sealed_baseline(tmp_path, report)
+    baseline_value = json.loads(baseline.read_text())
+    baseline_value["schema_version"] = "1.0"
+    baseline.write_text(json.dumps(baseline_value))
+    seal_value = json.loads(seal.read_text())
+    seal_value["report_sha256"] = run_eval._sha(baseline)
+    seal.write_text(json.dumps(seal_value))
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="successful"):
+        run_eval._compare_with_seal(report, baseline, seal)
+
+
+def test_mixed_legacy_and_v2_baseline_report_fails_closed(tmp_path, monkeypatch):
+    _, _, report, _ = benchmark_fixture(tmp_path, monkeypatch)
+    baseline, seal = sealed_baseline(tmp_path, report)
+    baseline_value = json.loads(baseline.read_text())
+    baseline_value.update(provider="legacy", model="legacy")
+    baseline.write_text(json.dumps(baseline_value))
+    seal_value = json.loads(seal.read_text())
+    seal_value["report_sha256"] = run_eval._sha(baseline)
+    seal.write_text(json.dumps(seal_value))
+    with pytest.raises(run_eval.EnvironmentUnavailable):
+        run_eval._compare_with_seal(report, baseline, seal)
+
+
+def test_sealed_baseline_requires_full_v2_report_contract(tmp_path, monkeypatch):
+    _, _, report, _ = benchmark_fixture(tmp_path, monkeypatch)
+    baseline, seal = sealed_baseline(tmp_path, report)
+    baseline_value = json.loads(baseline.read_text())
+    baseline_value["metrics"].pop("recall@1")
+    baseline.write_text(json.dumps(baseline_value))
+    seal_value = json.loads(seal.read_text())
+    seal_value["report_sha256"] = run_eval._sha(baseline)
+    seal.write_text(json.dumps(seal_value))
+    with pytest.raises(run_eval.EnvironmentUnavailable):
+        run_eval._compare_with_seal(report, baseline, seal)
+
+
+def test_current_comparison_candidate_requires_full_v2_report_contract(
+    tmp_path, monkeypatch
+):
+    _, _, report, _ = benchmark_fixture(tmp_path, monkeypatch)
+    baseline, seal = sealed_baseline(tmp_path, report)
+    current = {
+        **report,
+        "schema_version": "1.0",
+        "dataset_sha256": "a" * 64,
+    }
+    with pytest.raises(run_eval.EnvironmentUnavailable):
+        run_eval._compare_with_seal(current, baseline, seal)
 
 
 def test_strict_turns_warnings_into_failure_but_does_not_break_clean_offline_report():
@@ -950,6 +1151,13 @@ def test_approval_preflight_is_bounded_deterministic_and_has_no_effect(
         "human_decisions_required",
     }
     assert first["status"] == "HUMAN_APPROVAL_REQUIRED"
+    assert first["schema_version"] == "2.0"
+    assert all(
+        name in first["human_decisions_required"]
+        for name in run_eval.PROVIDER_MODEL_FIELDS
+    )
+    assert "provider" not in first["human_decisions_required"]
+    assert "model" not in first["human_decisions_required"]
     assert first["provider_invoked"] is False
     assert first["credential_values_read"] is False
     output = json.dumps(first)
@@ -1004,9 +1212,49 @@ def test_check_approval_validates_bindings_without_runner_or_credentials(
     )
 
     assert result["status"] == "APPROVAL_VALID_FOR_CURRENT_INPUTS"
+    assert result["schema_version"] == "2.0"
+    assert all(result[name] for name in run_eval.PROVIDER_MODEL_FIELDS)
     assert result["provider_invoked"] is False
     assert result["credential_values_read"] is False
     assert "SYNTHETIC_PROVIDER_KEY" not in json.dumps(result)
+    runner.assert_not_called()
+
+
+def test_main_keeps_v2_for_real_report_and_v1_for_nonreal_tiers(tmp_path, monkeypatch):
+    args, manifest, report, runner = benchmark_fixture(tmp_path, monkeypatch)
+    monkeypatch.setattr(run_eval, "_revision", lambda: "f" * 40)
+    monkeypatch.setattr(
+        run_eval,
+        "_real_benchmark",
+        lambda *_args: {
+            **report,
+            "result": "PASS",
+            "dataset_sha256": manifest["dataset_sha256"],
+        },
+    )
+    output = tmp_path / "real.json"
+    markdown = tmp_path / "real.md"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_eval.py",
+            "--tier",
+            "real-benchmark",
+            "--approval-manifest",
+            str(args.approval_manifest),
+            "--private-pack-manifest",
+            str(args.private_pack_manifest),
+            "--provider-runner",
+            args.provider_runner[0],
+            "--json-output",
+            str(output),
+            "--markdown-output",
+            str(markdown),
+        ],
+    )
+    assert run_eval.main() == 0
+    assert json.loads(output.read_text())["schema_version"] == "2.0"
     runner.assert_not_called()
 
 

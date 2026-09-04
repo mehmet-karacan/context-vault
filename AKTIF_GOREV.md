@@ -1782,6 +1782,48 @@ benchmark kapısı AÇIK**.
   pipeline koşusu, bağımsız request/non-transfer kanıtı ve ilk insan baseline
   seal'i gerekir. Bunlar tamamlanmadan A11 başlatılmaz.
 
+### 16.16 A9 embedding/generation identity split kaydı — 2026-09-05
+
+Başlangıç SHA: `da15ce7d2bbc2093d3e18b7741fc9268378461ff`.
+Durum: **versioned split approval/report/baseline contract PASS; generation ve A9
+gerçek benchmark kapısı AÇIK**.
+
+- Test-first fixture tekil `provider/model` yerine ayrı `embedding_provider`,
+  `embedding_model`, `generation_provider` ve `generation_model` kimliklerini
+  istediğinde ilk koşu **115 PASS/20 FAIL** verdi. Runtime yalnız v2 approval ve
+  seal şemalarına bağlandı; v1 veya karma v1/v2 approval runner dispatch'ten önce
+  fail-closed reddedilir.
+- Provider report executable sözleşmesi `schema_version=2.0` ve dört identity
+  alanını zorunlu tutar. Child process'e yalnız dört ayrı `CV_EVAL_*` identity
+  değişkeni verilir; legacy `CV_EVAL_PROVIDER`/`CV_EVAL_MODEL` verilmez.
+  Approval/report equality, seal/baseline ve current/baseline provenance bağları
+  dört identity alanının tamamını kapsar. Preflight değerleri üretmez; yalnız
+  yetkili insanın ayrı ayrı karar vermesi gereken alan adlarını listeler.
+- Bağımsız kırma ilk stabilize adayı REJECT etti: v2 report veya baseline'a legacy
+  alan eklenmesi, eksik zorunlu metriğe sahip sealed baseline ve v1 current
+  comparator adayı kabul edilebiliyordu. Dört bulgu **4 FAIL** ile yeniden
+  üretildi. `_benchmark_report` legacy alanları reddeder; sealed baseline ve
+  current candidate tam v2 report sözleşmesinden geçmeden karşılaştırılmaz.
+- Final tier sözleşme testi **158/158 PASS**; Ruff check/format, strict MyPy
+  ratchet (14 source), deterministic OpenAPI, offline lock (163 paket) ve
+  diff-check PASS. İzole PostgreSQL `cv3_00000006` head, Redis ve MinIO ile tam
+  backend **787 PASS, 2 skip**, bir bilinen Starlette/httpx uyarısıdır. İlk tam
+  koşudaki tek hata Redis test endpoint'inin parola bilgisini URL'de taşımamasıydı;
+  kod değişikliği yapılmadan doğru izole endpoint ile yeniden koşulup geçti.
+- Tarihsel generic v1 schema yolları önceki kanıt manifestlerini bozmamak için
+  byte-identical korundu. Ayrı `-v1` arşiv kopyaları aynı SHA'ları taşır; runtime
+  yalnız `-v2` dosyalarını kullanır. Approval v1 SHA
+  `a071586bc85dcbede58185d7ba7a4b843df4a823aefd167a5d4efab5a4d2f6f6`, seal v1
+  SHA `6a18222393fe66a7d62bbcaf974357aa2e60172b41c94d1d04f35f47e565b255`.
+- Bağımsız alt ajan final source'u **APPROVE** etti. Bu karar insan approval'ı,
+  provider çalıştırma izni, private-pack review, baseline seal veya A9 kapanışı
+  değildir. Kullanıcı DB/object verisi ve model ağırlıkları değiştirilmedi;
+  remote provider/push/PR/merge/release yapılmadı.
+- Public-safe kanıt: `artifacts/evals/2026-09-05-a9-split-provider-contract/`.
+- Açık kapı: exact yerel generation runtime, owner-reviewed private pack, gerçek
+  production-path benchmark, bağımsız request/non-transfer kanıtı ve ilk insan
+  baseline seal'i gerekir. Bunlar tamamlanmadan A11 başlatılmaz.
+
 ---
 
 ## 17. AŞAMA 10 — Frontend ve ürün sözleşmesi

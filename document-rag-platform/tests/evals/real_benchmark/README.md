@@ -2,7 +2,8 @@
 
 This tier collects candidate evidence for the real-provider quality gate. It must
 run only with an owner-reviewed private-pack manifest, explicit
-`--approval-manifest`, approved provider/model, credentials, budget and compatible
+`--approval-manifest`, separately approved embedding and generation
+provider/model identities, credentials, budget and compatible
 data classification. The manifest is a reference to an existing human
 authorization, not authority to invent one. No real provider run has been
 authorized or verified by this code change.
@@ -12,8 +13,10 @@ validation uses the versioned JSON schema with format checking. Malformed fields
 missing review/date/hash, pending review and additional fields fail before runner
 dispatch. Schema validity alone does not establish provider policy or budget approval.
 
-The provider report must contain nonblank provider/model, SHA-256 profile/prompt/
-config hashes, nonnegative integer safety counters, finite [0,1] Recall@5, MRR@10,
+The v2 provider report must contain `schema_version=2.0` and nonblank
+`embedding_provider`, `embedding_model`, `generation_provider` and
+`generation_model` values. It must also contain SHA-256 profile/prompt/config
+hashes, nonnegative integer safety counters, finite [0,1] Recall@5, MRR@10,
 citation precision/coverage and nonnegative ordered latency percentiles. Missing,
 bool, NaN, infinite or out-of-range values do not pass. A sealed-baseline
 comparison additionally requires positive end-to-end p95 values; missing comparator
@@ -34,8 +37,9 @@ Human review/seal and independent provider/request evidence are required before 
 release decision; this wrapper does not implement that final admission. Numeric
 comparison alone neither seals a baseline nor grants release.
 
-The versioned `benchmark-approval-manifest.schema.json` binds the private-manifest
-file hash and dataset/classification to provider/model, runner bundle hash,
+The runtime accepts only the versioned
+`benchmark-approval-manifest-v2.schema.json`. It binds the private-manifest file
+hash and dataset/classification to both provider/model identities, runner bundle hash,
 environment hash, expiry and maximum duration/calls/input tokens/output tokens/USD.
 The wrapper passes those caps to the approved runner, enforces its timeout and
 rejects reported usage above them. This is defense in depth: a malicious runner
@@ -57,12 +61,16 @@ distribution and provider calls/tokens/cost. Percentiles must be ordered. Query-
 rows must exactly cover and total the private manifest. Missing, non-finite,
 out-of-range or oversized fields fail closed.
 
-`--baseline <report> --baseline-seal <seal>` requires a versioned human-approved
-seal whose report hash and provider/model/dataset/profile/prompt/config/environment
-provenance match. Current and baseline provenance must also match before numeric
+`--baseline <report> --baseline-seal <seal>` requires a v2 human-approved seal
+validated by `benchmark-baseline-seal-v2.schema.json`; its report hash and both
+provider/model identities plus dataset/profile/prompt/config/environment provenance
+must match. The baseline report itself must be v2. Current and baseline provenance
+must also match before numeric
 regression comparison. `--strict` changes a warning-bearing candidate to FAIL; it
 does not affect clean contract/offline tiers. Neither an approval manifest nor a
-baseline seal may be created by the model/CLI itself.
+baseline seal may be created by the model/CLI itself. Frozen v1 schemas remain in
+the tree for historical evidence validation only; the runtime does not upgrade or
+accept a legacy single-provider approval, report or seal.
 
 ## Approval preparation (no provider effect)
 
@@ -88,14 +96,16 @@ cv_preflight_output="/private/path/approval-preflight.json"
 Expected status is `HUMAN_APPROVAL_REQUIRED` with `provider_invoked=false` and
 `credential_values_read=false`. The bounded file contains only the exact private-manifest,
 dataset, runner-bundle and environment hashes/classification plus tool/repository
-revision. It deliberately omits approval identity/times, provider/model, credentials
-and budgets, so it is not an approval manifest. Stop if validation fails, the pack is
+revision. It deliberately omits approval identity/times, the four provider/model
+identity values, credentials and budgets, so it is not an approval manifest. Stop
+if validation fails, the pack is
 not owner-reviewed, any hash is unexpected, or the intended runner/environment is not
 the one independently reviewed.
 
 An authorized human uses those fingerprints, the versioned approval schema and
-separately approved provider/model, credential-variable names, expiry and
-provider-side budgets to issue the approval manifest. Validate it without provider
+separately approved embedding and generation provider/model identities,
+credential-variable names, expiry and provider-side budgets to issue the approval
+manifest. Validate it without provider
 dispatch before any real run:
 
 ```sh
@@ -154,7 +164,7 @@ full snapshot validation to detect byte or symlink drift during inference. Its
 JSON output is created as a new mode-0600 file and is never overwritten:
 
 ```sh
-services/backend/.venv/bin/python ../scripts/verify_local_bge.py \
+.venv/bin/python ../../../scripts/verify_local_bge.py \
   --snapshot /local/huggingface/models--BAAI--bge-m3/snapshots/<revision> \
   --expected-model BAAI/bge-m3 \
   --expected-revision <revision> \

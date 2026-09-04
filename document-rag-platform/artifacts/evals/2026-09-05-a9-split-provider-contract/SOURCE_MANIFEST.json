@@ -1,0 +1,42 @@
+[
+  {
+    "path": "AKTIF_GOREV.md",
+    "sha256": "a9fac2df44574f6ad1ade31ebb8f71386c1abb7df879dc9962ee9f65bed1fac4"
+  },
+  {
+    "path": "scripts/run_eval.py",
+    "sha256": "f0748a7ea5571ea3f3571fa2f58856c17d635ac05fb50f926029f7f23bcd1e19"
+  },
+  {
+    "path": "document-rag-platform/services/backend/tests/evals/test_tier_contracts.py",
+    "sha256": "fea6febf46504115787fbc9c804521a8e55313bfbf65e7b1373d9be94421795c"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/real_benchmark/README.md",
+    "sha256": "fbe1bad420d1f0c4df31493f6fabfde6c36b5579273e2a0d07b767ee7c0de4b8"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/datasets/benchmark-approval-manifest.schema.json",
+    "sha256": "a071586bc85dcbede58185d7ba7a4b843df4a823aefd167a5d4efab5a4d2f6f6"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/datasets/benchmark-approval-manifest-v1.schema.json",
+    "sha256": "a071586bc85dcbede58185d7ba7a4b843df4a823aefd167a5d4efab5a4d2f6f6"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/datasets/benchmark-approval-manifest-v2.schema.json",
+    "sha256": "c831996cbc34f97e64982e0cdbcd30af644e27d4ca8bacac8182b65d2ec6cd1e"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/datasets/benchmark-baseline-seal.schema.json",
+    "sha256": "6a18222393fe66a7d62bbcaf974357aa2e60172b41c94d1d04f35f47e565b255"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/datasets/benchmark-baseline-seal-v1.schema.json",
+    "sha256": "6a18222393fe66a7d62bbcaf974357aa2e60172b41c94d1d04f35f47e565b255"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/datasets/benchmark-baseline-seal-v2.schema.json",
+    "sha256": "cedf948e64839a422e055a5c714d80683238f21458635626db01d53481400b6f"
+  }
+]
