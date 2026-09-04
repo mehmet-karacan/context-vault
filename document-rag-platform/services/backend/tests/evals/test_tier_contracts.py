@@ -64,6 +64,179 @@ def test_public_dataset_has_reviewable_v2_contract_and_required_coverage():
     assert required_types <= {row["query_type"] for row in rows}
 
 
+def test_contract_smoke_reports_the_dataset_it_actually_executes(tmp_path):
+    details = run_eval._contract_smoke(tmp_path)
+
+    assert details["dataset_sha256"] == run_eval._sha(run_eval.CONTRACT_DATASET)
+    assert details["dataset_sha256"] != run_eval._sha(run_eval.PUBLIC_DATASET)
+    assert details["dataset_provenance"] == {
+        "kind": "contract-golden-file",
+        "records": details["records"],
+    }
+
+
+def test_offline_fixture_bundle_hash_is_deterministic_and_byte_sensitive(tmp_path):
+    first = tmp_path / "first.py"
+    second = tmp_path / "second.py"
+    first.write_text("fixture = 1\n")
+    second.write_text("fixture = 2\n")
+
+    initial = run_eval._path_bundle_sha256((first, second), root=tmp_path)
+    assert initial == run_eval._path_bundle_sha256((second, first), root=tmp_path)
+    second.write_text("fixture = 3\n")
+    assert run_eval._path_bundle_sha256((first, second), root=tmp_path) != initial
+
+
+def test_offline_source_bundle_discovers_directory_tests_and_pytest_support():
+    sources = set(run_eval._offline_source_paths())
+    discovered = set((run_eval.BACKEND / "tests/evals/offline_e2e").glob("test_*.py"))
+
+    assert discovered
+    assert sources == (
+        discovered
+        | set(run_eval.OFFLINE_EXTRA_TEST_TARGETS)
+        | {run_eval.BACKEND / "tests/conftest.py", run_eval.BACKEND / "pyproject.toml"}
+    )
+
+
+def test_offline_source_bundle_recurses_and_includes_nested_conftest(tmp_path):
+    relative_paths = [
+        run_eval.OFFLINE_E2E_DIRECTORY.relative_to(run_eval.BACKEND) / "test_top.py",
+        run_eval.OFFLINE_E2E_DIRECTORY.relative_to(run_eval.BACKEND)
+        / "nested/test_deep.py",
+        run_eval.OFFLINE_E2E_DIRECTORY.relative_to(run_eval.BACKEND)
+        / "nested/conftest.py",
+        Path("tests/conftest.py"),
+        Path("pyproject.toml"),
+        *(
+            path.relative_to(run_eval.BACKEND)
+            for path in run_eval.OFFLINE_EXTRA_TEST_TARGETS
+        ),
+    ]
+    for relative in relative_paths:
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"# {relative.as_posix()}\n")
+
+    assert set(run_eval._offline_source_paths(root=tmp_path)) == {
+        tmp_path / relative for relative in relative_paths
+    }
+
+
+def test_public_dataset_manifest_is_hash_bound_but_review_stays_pending():
+    status = run_eval._public_dataset_status(
+        run_eval.PUBLIC_DATASET, run_eval.PUBLIC_DATASET_MANIFEST
+    )
+
+    assert status["integrity"] == "PASS"
+    assert status["dataset_sha256"] == run_eval._sha(run_eval.PUBLIC_DATASET)
+    assert status["dataset_version"] == "2.0.0"
+    assert status["records"] == 16
+    assert status["splits"] == ["holdout", "train"]
+    assert status["review_status"] == "pending"
+    assert status["review_complete"] is False
+    assert status["review_claim_status"] == "manifest-declared-pending"
+    assert status["approval_evidence_verified"] is False
+    assert status["release_gate_eligible"] is False
+    assert status["provider_invoked"] is False
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        {"schema_version": "9.9"},
+        {"dataset_sha256": "0" * 64},
+        {"dataset_version": "9.9.9"},
+        {"records": 15},
+        {"classification": "internal"},
+        {"splits": ["train"]},
+        {"review_status": "unknown"},
+        {"reviewer": "unverified-name"},
+        {"reviewed_at_utc": "2026-09-03T00:00:00Z"},
+        {"review_receipt_sha256": "a" * 64},
+        {"fixture_independence": ""},
+        {"private_equivalent": "other.json"},
+        {"unexpected": "field"},
+    ],
+)
+def test_public_dataset_manifest_drift_fails_closed(tmp_path, mutation):
+    dataset = tmp_path / "dataset.jsonl"
+    manifest_path = tmp_path / "manifest.json"
+    dataset.write_bytes(run_eval.PUBLIC_DATASET.read_bytes())
+    manifest = json.loads(run_eval.PUBLIC_DATASET_MANIFEST.read_text())
+    manifest.update(mutation)
+    manifest_path.write_text(json.dumps(manifest))
+
+    with pytest.raises(run_eval.EnvironmentUnavailable):
+        run_eval._public_dataset_status(dataset, manifest_path)
+
+
+def test_public_dataset_row_version_drift_fails_closed(tmp_path):
+    dataset = tmp_path / "dataset.jsonl"
+    manifest_path = tmp_path / "manifest.json"
+    rows = [
+        json.loads(line) for line in run_eval.PUBLIC_DATASET.read_text().splitlines()
+    ]
+    rows[0]["dataset_version"] = "9.9.9"
+    dataset.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
+    manifest = json.loads(run_eval.PUBLIC_DATASET_MANIFEST.read_text())
+    manifest["dataset_sha256"] = run_eval._sha(dataset)
+    manifest_path.write_text(json.dumps(manifest))
+
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="version"):
+        run_eval._public_dataset_status(dataset, manifest_path)
+
+
+def test_public_dataset_self_asserted_approval_never_becomes_verified_review(tmp_path):
+    dataset = tmp_path / "dataset.jsonl"
+    manifest_path = tmp_path / "manifest.json"
+    dataset.write_bytes(run_eval.PUBLIC_DATASET.read_bytes())
+    manifest = json.loads(run_eval.PUBLIC_DATASET_MANIFEST.read_text())
+    manifest.update(
+        reviewer="synthetic-human-reviewer",
+        review_status="approved",
+        reviewed_at_utc="2026-09-03T00:00:00Z",
+        review_receipt_sha256="a" * 64,
+    )
+    manifest_path.write_text(json.dumps(manifest))
+
+    status = run_eval._public_dataset_status(dataset, manifest_path)
+    assert status["review_status"] == "approved"
+    assert status["review_claim_status"] == "manifest-declared-approved-unverified"
+    assert status["approval_evidence_verified"] is False
+    assert status["review_complete"] is False
+    assert status["release_gate_eligible"] is False
+    manifest["reviewed_at_utc"] = "2026-09-03T03:00:00+03:00"
+    manifest_path.write_text(json.dumps(manifest))
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="must be UTC"):
+        run_eval._public_dataset_status(dataset, manifest_path)
+    manifest["reviewed_at_utc"] = "2999-01-01T00:00:00Z"
+    manifest_path.write_text(json.dumps(manifest))
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="timestamp"):
+        run_eval._public_dataset_status(dataset, manifest_path)
+
+
+def test_public_dataset_status_is_a_supported_no_effect_cli_mode(tmp_path, monkeypatch):
+    output = tmp_path / "public-dataset-status.json"
+    monkeypatch.setattr(run_eval, "_revision", lambda: "f" * 40)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_eval.py",
+            "--public-dataset-status",
+            "--json-output",
+            str(output),
+        ],
+    )
+
+    assert run_eval.main() == 0
+    report = json.loads(output.read_text())
+    assert report["review_status"] == "pending"
+    assert report["release_gate_eligible"] is False
+    assert report["provider_invoked"] is False
+
+
 def test_offline_fixture_does_not_read_golden_expected_results():
     fixture = (
         REPO

@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-TOOL_VERSION = "1.3.0"
+TOOL_VERSION = "1.4.0"
 DETERMINISTIC_SEED = 20260902
 REPO = Path(__file__).resolve().parents[1]
 BACKEND = REPO / "document-rag-platform/services/backend"
@@ -28,7 +28,18 @@ PYTHON = BACKEND / ".venv/bin/python"
 PUBLIC_DATASET = (
     REPO / "document-rag-platform/tests/evals/datasets/public-synthetic-v2.jsonl"
 )
+PUBLIC_DATASET_MANIFEST = PUBLIC_DATASET.with_suffix(".manifest.json")
+PUBLIC_DATASET_MANIFEST_SCHEMA = (
+    PUBLIC_DATASET.parent / "public-dataset-manifest.schema.json"
+)
 CONTRACT_DATASET = BACKEND / "tests/evals/datasets/golden.jsonl"
+OFFLINE_E2E_DIRECTORY = BACKEND / "tests/evals/offline_e2e"
+OFFLINE_EXTRA_TEST_TARGETS = (
+    BACKEND / "tests/integration/test_typed_retrieval.py",
+    BACKEND / "tests/integration/test_ingestion_control_plane.py",
+    BACKEND / "tests/test_structured_answer.py",
+    BACKEND / "tests/test_no_answer.py",
+)
 PRIVATE_MANIFEST_SCHEMA = PUBLIC_DATASET.parent / "private-pack-manifest.schema.json"
 APPROVAL_MANIFEST_SCHEMA = (
     PUBLIC_DATASET.parent / "benchmark-approval-manifest.schema.json"
@@ -101,6 +112,51 @@ def _revision() -> str:
     ).stdout.strip()
 
 
+def _path_bundle_sha256(paths: tuple[Path, ...], *, root: Path) -> str:
+    digest = hashlib.sha256()
+    members = []
+    for path in paths:
+        try:
+            relative = path.resolve().relative_to(root.resolve())
+        except ValueError as exc:
+            raise EnvironmentUnavailable(
+                "fixture bundle path escapes its root"
+            ) from exc
+        if not path.is_file():
+            raise EnvironmentUnavailable("fixture bundle member is unavailable")
+        members.append((relative.as_posix(), path))
+    for relative, path in sorted(members):
+        digest.update(relative.encode())
+        digest.update(b"\0")
+        digest.update(bytes.fromhex(_sha(path)))
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _offline_source_paths(*, root: Path = BACKEND) -> tuple[Path, ...]:
+    e2e_directory = root / OFFLINE_E2E_DIRECTORY.relative_to(BACKEND)
+    extra_targets = tuple(
+        root / path.relative_to(BACKEND) for path in OFFLINE_EXTRA_TEST_TARGETS
+    )
+    directory_tests = tuple(sorted(e2e_directory.rglob("test_*.py")))
+    if not directory_tests:
+        raise EnvironmentUnavailable("offline E2E directory contains no tests")
+    test_files = directory_tests + extra_targets
+    conftests: set[Path] = set()
+    for test_file in test_files:
+        parent = test_file.parent
+        while True:
+            candidate = parent / "conftest.py"
+            if candidate.is_file():
+                conftests.add(candidate)
+            if parent == root:
+                break
+            if root not in parent.parents:
+                raise EnvironmentUnavailable("offline test path escapes backend root")
+            parent = parent.parent
+    return tuple(sorted(set(test_files) | conftests | {root / "pyproject.toml"}))
+
+
 def _percentile(values: list[float], percentile: float) -> float:
     if not values:
         return 0.0
@@ -134,6 +190,11 @@ def _contract_smoke(work: Path) -> dict[str, Any]:
         "release_gate_eligible": False,
         "quality_claim": False,
         "records": raw["n_records"],
+        "dataset_sha256": _sha(CONTRACT_DATASET),
+        "dataset_provenance": {
+            "kind": "contract-golden-file",
+            "records": raw["n_records"],
+        },
         "contract": raw["contract_check"],
         "note": "expected labels may be used only in this contract-smoke tier",
     }
@@ -159,11 +220,8 @@ def _offline_e2e(work: Path) -> dict[str, Any]:
         "-q",
         "--junitxml",
         str(junit),
-        "tests/evals/offline_e2e",
-        "tests/integration/test_typed_retrieval.py",
-        "tests/integration/test_ingestion_control_plane.py",
-        "tests/test_structured_answer.py",
-        "tests/test_no_answer.py",
+        str(OFFLINE_E2E_DIRECTORY.relative_to(BACKEND)),
+        *[str(path.relative_to(BACKEND)) for path in OFFLINE_EXTRA_TEST_TARGETS],
     ]
     completed = subprocess.run(command, cwd=BACKEND, env=os.environ.copy())
     if not junit.exists():
@@ -179,6 +237,15 @@ def _offline_e2e(work: Path) -> dict[str, Any]:
         "quality_claim": "offline-production-pipeline",
         "tests": len(cases),
         "failures": len(failures),
+        "dataset_sha256": None,
+        "dataset_provenance": {
+            "kind": "inline-test-fixtures",
+            "source_bundle_sha256": _path_bundle_sha256(
+                _offline_source_paths(), root=BACKEND
+            ),
+            "source_files": len(_offline_source_paths()),
+            "source_bundle_scope": "pytest-targets-conftest-config",
+        },
         "metrics": {
             "permission_version_leakage": 0 if result == "PASS" else None,
             "invalid_citation_labels": 0 if result == "PASS" else None,
@@ -241,6 +308,76 @@ def _utc(value: str) -> datetime:
     if parsed.tzinfo is None:
         raise EnvironmentUnavailable("approval timestamps must include timezone")
     return parsed.astimezone(timezone.utc)
+
+
+def _public_dataset_status(dataset_path: Path, manifest_path: Path) -> dict[str, Any]:
+    manifest = _schema_document(
+        manifest_path,
+        PUBLIC_DATASET_MANIFEST_SCHEMA,
+        "public dataset manifest",
+    )
+    try:
+        rows = [
+            json.loads(line)
+            for line in dataset_path.read_text().splitlines()
+            if line.strip()
+        ]
+    except (OSError, json.JSONDecodeError) as exc:
+        raise EnvironmentUnavailable(
+            "public dataset is unavailable or malformed"
+        ) from exc
+    if not rows or any(not isinstance(row, dict) for row in rows):
+        raise EnvironmentUnavailable("public dataset must contain object records")
+    if _sha(dataset_path) != manifest["dataset_sha256"]:
+        raise EnvironmentUnavailable("public dataset/manifest hash mismatch")
+    if len(rows) != manifest["records"]:
+        raise EnvironmentUnavailable("public dataset/manifest record count mismatch")
+    versions = {row.get("dataset_version") for row in rows}
+    if versions != {manifest["dataset_version"]}:
+        raise EnvironmentUnavailable("public dataset/manifest version mismatch")
+    split_values = [row.get("split") for row in rows]
+    if any(not isinstance(split, str) for split in split_values):
+        raise EnvironmentUnavailable("public dataset/manifest split mismatch")
+    splits = sorted(set(split_values))
+    if splits != sorted(manifest["splits"]):
+        raise EnvironmentUnavailable("public dataset/manifest split mismatch")
+    approved = manifest["review_status"] == "approved"
+    if approved:
+        if manifest["reviewer"].strip().upper().startswith("PENDING"):
+            raise EnvironmentUnavailable(
+                "approved public dataset requires human reviewer"
+            )
+        reviewed_at = manifest["reviewed_at_utc"]
+        if not isinstance(reviewed_at, str) or not reviewed_at.endswith(
+            ("Z", "+00:00")
+        ):
+            raise EnvironmentUnavailable("public dataset review timestamp must be UTC")
+        if _utc(reviewed_at) > datetime.now(timezone.utc):
+            raise EnvironmentUnavailable("public dataset review timestamp is invalid")
+    review_claim_status = (
+        "manifest-declared-approved-unverified"
+        if approved
+        else "manifest-declared-pending"
+    )
+    return {
+        "schema_version": "1.0",
+        "request_type": "public-dataset-review-status",
+        "integrity": "PASS",
+        "repository_revision": _revision(),
+        "tool_version": TOOL_VERSION,
+        "dataset_manifest_sha256": _sha(manifest_path),
+        "dataset_sha256": manifest["dataset_sha256"],
+        "dataset_version": manifest["dataset_version"],
+        "records": manifest["records"],
+        "splits": sorted(manifest["splits"]),
+        "classification": manifest["classification"],
+        "review_status": manifest["review_status"],
+        "review_claim_status": review_claim_status,
+        "approval_evidence_verified": False,
+        "review_complete": False,
+        "release_gate_eligible": False,
+        "provider_invoked": False,
+    }
 
 
 def _runner_bundle_sha256(command: list[str]) -> str:
@@ -709,6 +846,11 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
         ).hexdigest(),
         "approval_manifest_sha256": _sha(args.approval_manifest),
         "dataset_sha256": manifest["dataset_sha256"],
+        "dataset_provenance": {
+            "kind": "private-manifest-declared",
+            "private_manifest_sha256": _sha(args.private_pack_manifest),
+            "review_complete": True,
+        },
         "private_pack": {
             "opaque_pack_id": manifest["opaque_pack_id"],
             "dataset_sha256": manifest["dataset_sha256"],
@@ -838,13 +980,19 @@ def _finalize_real_gate(report: dict[str, Any], has_approved_baseline: bool) -> 
 
 
 def _markdown(report: dict[str, Any]) -> str:
+    provenance = report.get("dataset_provenance")
+    provenance_kind = (
+        provenance.get("kind") if isinstance(provenance, dict) else "unspecified"
+    )
+    dataset_sha = report.get("dataset_sha256") or "not-applicable"
     return "\n".join(
         [
             f"# {report['tier']} evaluation",
             "",
             f"- result: `{report['result']}`",
             f"- revision: `{report['repository_revision']}`",
-            f"- dataset sha256: `{report['dataset_sha256']}`",
+            f"- dataset sha256: `{dataset_sha}`",
+            f"- dataset provenance: `{provenance_kind}`",
             f"- release gate eligible: `{str(report['release_gate_eligible']).lower()}`",
             f"- regression findings: `{len(report['regression_findings'])}`",
             "",
@@ -861,6 +1009,7 @@ def main() -> int:
     )
     mode.add_argument("--approval-preflight", action="store_true")
     mode.add_argument("--check-approval", action="store_true")
+    mode.add_argument("--public-dataset-status", action="store_true")
     parser.add_argument("--json-output", type=Path, required=True)
     parser.add_argument("--markdown-output", type=Path)
     parser.add_argument("--baseline", type=Path)
@@ -871,6 +1020,37 @@ def main() -> int:
     parser.add_argument("--provider-runner", nargs="+")
     args = parser.parse_args()
     try:
+        if args.public_dataset_status:
+            if any(
+                (
+                    args.markdown_output,
+                    args.baseline,
+                    args.strict,
+                    args.approval_manifest,
+                    args.baseline_seal,
+                    args.private_pack_manifest,
+                    args.provider_runner,
+                )
+            ):
+                raise EnvironmentUnavailable(
+                    "public dataset status accepts only its JSON output"
+                )
+            report = _public_dataset_status(PUBLIC_DATASET, PUBLIC_DATASET_MANIFEST)
+            args.json_output.parent.mkdir(parents=True, exist_ok=True)
+            args.json_output.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n"
+            )
+            print(
+                json.dumps(
+                    {
+                        "request_type": report["request_type"],
+                        "integrity": report["integrity"],
+                        "review_status": report["review_status"],
+                        "provider_invoked": False,
+                    }
+                )
+            )
+            return 0
         if args.approval_preflight or args.check_approval:
             if not args.private_pack_manifest or not args.provider_runner:
                 raise EnvironmentUnavailable(
@@ -931,7 +1111,8 @@ def main() -> int:
             "tier": args.tier,
             "observed_at_utc": datetime.now(timezone.utc).isoformat(),
             "repository_revision": _revision(),
-            "dataset_sha256": details.get("dataset_sha256", _sha(PUBLIC_DATASET)),
+            "dataset_sha256": details.get("dataset_sha256"),
+            "dataset_provenance": details.get("dataset_provenance"),
         }
         report["regression_findings"] = _compare_with_seal(
             report, args.baseline, args.baseline_seal
@@ -951,7 +1132,9 @@ def main() -> int:
         return 0 if report["result"] == "PASS" else 1
     except (OSError, ValueError, ImportError, EnvironmentUnavailable) as exc:
         mode_name = (
-            "real-benchmark-approval-preflight"
+            "public-dataset-review-status"
+            if args.public_dataset_status
+            else "real-benchmark-approval-preflight"
             if args.approval_preflight
             else "real-benchmark-approval-check"
             if args.check_approval

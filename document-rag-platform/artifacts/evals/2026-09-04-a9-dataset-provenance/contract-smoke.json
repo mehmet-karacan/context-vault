@@ -1,0 +1,25 @@
+{
+  "contract": {
+    "pass": true,
+    "reasons": [
+      "no-answer hata orani raporlandi: fp=0, fn=0, overall=0.0",
+      "generation raporlandi: n_samples=57"
+    ]
+  },
+  "dataset_provenance": {
+    "kind": "contract-golden-file",
+    "records": 66
+  },
+  "dataset_sha256": "b64edd130207d51ae0f2b0e61a5c3fe74e6b698e809b1a81cb9a633bf0071c9b",
+  "note": "expected labels may be used only in this contract-smoke tier",
+  "observed_at_utc": "2026-09-04T17:18:21.374515+00:00",
+  "quality_claim": false,
+  "records": 66,
+  "regression_findings": [],
+  "release_gate_eligible": false,
+  "repository_revision": "e5116c441f54e79207b94bc95611dc6c4612af52",
+  "result": "PASS",
+  "schema_version": "1.0",
+  "tier": "contract-smoke",
+  "tool_version": "1.4.0"
+}

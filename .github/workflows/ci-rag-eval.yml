@@ -74,6 +74,11 @@ jobs:
           mkdir -p reports
           uv run alembic upgrade head
 
+      - name: Verify public dataset provenance
+        run: >-
+          uv run python ../../../scripts/run_eval.py --public-dataset-status
+          --json-output reports/public-dataset-status.json
+
       - name: Start isolated MinIO
         run: >-
           docker run -d --name cv3-ci-minio -p 127.0.0.1:9000:9000

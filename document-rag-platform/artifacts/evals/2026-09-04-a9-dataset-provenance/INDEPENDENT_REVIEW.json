@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "review_type": "independent_local_dataset_provenance_review",
+  "reviewer": "separate-codex-subagent",
+  "result": "APPROVE",
+  "scope": "Local A9 dataset-provenance patch only; not owner review, provider permission, benchmark execution, baseline seal or A9 closure.",
+  "verification": {
+    "tier_tests_passed": 115,
+    "ruff_check": "PASS",
+    "ruff_format_check": "PASS",
+    "diff_check": "PASS",
+    "contract_executed_dataset_binding": "PASS",
+    "self_asserted_review_elevation": "FAIL_CLOSED",
+    "non_utc_review_timestamp": "FAIL_CLOSED",
+    "future_review_timestamp": "FAIL_CLOSED",
+    "nested_test_discovery": "PASS",
+    "nested_conftest_binding": "PASS",
+    "offline_source_files": 8,
+    "offline_source_bundle_sha256": "fa6eb25e9147074e35cb41a71d03ee3e5ffd89e90b464e4db47c5c09c512c6bf"
+  },
+  "first_review_result": "REJECT",
+  "first_review_findings": [
+    "A schema-valid arbitrary reviewer/date/receipt claim was initially elevated to review_complete=true without receipt or authority verification.",
+    "The initial offline bundle omitted pytest support/config and future recursively discovered directory tests."
+  ],
+  "final_source_sha256": {
+    "scripts/run_eval.py": "9a25610ab24d07a483143e3b48daddab74472a2eff31640f0f07b82038c2519a",
+    "document-rag-platform/services/backend/tests/evals/test_tier_contracts.py": "e729988cc6bcd849f655c387c459d6be8ab102b67de5cb90115e73f0151c6698",
+    "document-rag-platform/tests/evals/datasets/public-synthetic-v2.manifest.json": "f0313ac0fd75b2cccc959c429ba1c1211118ccdc4d18e8baaffcb1063b37f94e",
+    "document-rag-platform/tests/evals/datasets/public-dataset-manifest.schema.json": "072d180988d93c89f7a4bd0890e5a942f2797362349c063f120323010b5d89a9",
+    "document-rag-platform/tests/evals/datasets/README.md": "0534e2288ea37eee1965c9a234880c72c74acbc826fb0f0cbfc3158c72680847",
+    ".github/workflows/ci-rag-eval.yml": "376322e0ad9db119ff3c8ceca4b6038a7aa534ec35120f06493a14a7bd36f628"
+  },
+  "limitations": [
+    "The public manifest remains pending and no human review receipt was verified.",
+    "A model or subagent cannot grant owner approval or provider authority.",
+    "The real A9 private-pack, provider, budget, execution, independent request and human baseline gates remain external."
+  ],
+  "phase_closed": false
+}

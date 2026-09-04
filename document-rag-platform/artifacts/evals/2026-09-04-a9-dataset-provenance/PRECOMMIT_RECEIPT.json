@@ -1,0 +1,120 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "verify",
+  "operation_id": "cv3-a9-dataset-provenance-20260904-001",
+  "work_item_id": "CV3-A9-EVAL",
+  "attempt_id": "local-dataset-provenance-001",
+  "actor": "codex-local-agent",
+  "tool_adapter": "local-cli-pytest-independent-review",
+  "started_at": "2026-09-04T17:07:31Z",
+  "finished_at": "2026-09-04T17:21:32Z",
+  "time_scope": "Exact test durations and timestamps are in the redacted JUnit and tier reports.",
+  "baseline_revision": "e5116c441f54e79207b94bc95611dc6c4612af52",
+  "result_revision": null,
+  "revision_note": "Pre-commit source hashes bind tested bytes; a follow-up receipt will bind the implementation commit.",
+  "scope_hash": "8ba0ebd91272fccffb579fa90b1f8bcc38ab97eec9beb73e68886266bbee40b9",
+  "context_manifest_hash": "3192f3ac5e0784621f1ab2d1edbe68942fbda6080e325d61c3fbcbc728c0e612",
+  "idempotency_key_hash": null,
+  "commands": [
+    {
+      "command": "pytest -q tests/evals/test_tier_contracts.py before implementation",
+      "exit_code": 1,
+      "result": "94 passed, 12 failed; incorrect/missing dataset provenance guards reproduced"
+    },
+    {
+      "command": "pytest -q tests/evals/test_tier_contracts.py after first independent rejection",
+      "exit_code": 1,
+      "result": "112 passed, 2 failed; self-asserted review elevation and incomplete offline bundle reproduced"
+    },
+    {
+      "command": "pytest -q tests/evals/test_tier_contracts.py --junitxml=<evidence>/tier-junit.xml",
+      "exit_code": 0,
+      "result": "115 passed"
+    },
+    {
+      "command": "pytest -q tests --junitxml=<evidence>/backend-junit.xml with explicit isolated PostgreSQL/Redis/MinIO test endpoints",
+      "exit_code": 0,
+      "result": "731 passed, 2 skipped, 1 warning"
+    },
+    {
+      "command": "run_eval.py --tier contract-smoke --strict",
+      "exit_code": 0,
+      "result": "PASS; reported exact executed 66-record golden dataset SHA"
+    },
+    {
+      "command": "run_eval.py --tier offline-e2e --strict with isolated services",
+      "exit_code": 0,
+      "result": "42 passed; dataset SHA null and eight-member scoped source bundle reported"
+    },
+    {
+      "command": "run_eval.py --public-dataset-status",
+      "exit_code": 0,
+      "result": "Integrity PASS; review pending/unverified; release/provider false"
+    },
+    {
+      "command": "ruff format --check; ruff check; strict MyPy ratchet; OpenAPI deterministic check; uv lock --check --offline; git diff --check",
+      "exit_code": 0,
+      "result": "PASS; MyPy checked 14 source files and lock resolved 122 packages"
+    },
+    {
+      "command": "Independent two-round break/review on stabilized exact source bytes",
+      "exit_code": 0,
+      "result": "APPROVE for local patch only after initial and nested-discovery REJECT findings were fixed"
+    },
+    {
+      "command": "check_public_tree.py --repo . --json-output <evidence>/public-tree.json",
+      "exit_code": 0,
+      "result": "272 tracked files checked; PASS"
+    }
+  ],
+  "exit_status": 0,
+  "tests": [
+    {"name": "full backend", "passed": 731, "skipped": 2, "failed": 0, "warnings": 1, "report": "backend-junit.xml"},
+    {"name": "A9 tier/dataset contracts", "passed": 115, "failed": 0, "report": "tier-junit.xml"},
+    {"name": "isolated offline E2E", "passed": 42, "failed": 0, "report": "offline-e2e.json"},
+    {"name": "Ruff, MyPy, OpenAPI, offline lock, public tree and diff check", "result": "PASS"},
+    {"name": "independent local patch review", "result": "APPROVE", "phase_closed": false}
+  ],
+  "result": "PASS",
+  "phase_closed": false,
+  "scope": "Local no-provider-effect A9 dataset identity, scoped fixture provenance and public-manifest integrity only. No human approval, real benchmark or A9 closure.",
+  "source_manifest": "SOURCE_MANIFEST.json",
+  "artifacts": [
+    {"path": "CLI_PROBES.json", "sha256": "4e330366358fb3766f4190c5c1d3d96fd41a8a5ddabc6968cd7b573cbfebafa8", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "INDEPENDENT_REVIEW.json", "sha256": "01d2e99d88c9de49bd72a975eb3cc3d598d0c4958144b31c5b59eec186144eb6", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "REPRODUCTION_SUMMARY.json", "sha256": "0075e53611b479e33842f9bccda6fc668351388b2a9d86c9f27e0b2bec874f33", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "SOURCE_MANIFEST.json", "sha256": "8ba0ebd91272fccffb579fa90b1f8bcc38ab97eec9beb73e68886266bbee40b9", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "backend-junit.xml", "sha256": "807d6099b51456b151c74c67d0953f0a5a3489727ca70ae6cdcdf14f0be90156", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "contract-smoke.json", "sha256": "85c60cac2634c97eece3ad80ebdea51cb15ebc043169f404f2a8b7572a1840df", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "contract-smoke.md", "sha256": "069e9f00ffe07fc65cdd6bb8655bd75cbdb6eb1e5a886249b42688426be0da13", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "offline-e2e.json", "sha256": "b396e82ddd72d17a2976f3afeee1a8797aa4137e9e039ee2ef423fcf4027c701", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "offline-e2e.md", "sha256": "18e7e7d4ed3aadae62eb565cb77788c34b925e52b5c383c076ca9bb6b9267630", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "public-dataset-status.json", "sha256": "aa353636d7a448519b1a39ab2f2a4155d9d22832cb387ad726b06cf0afe214b8", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "public-tree.json", "sha256": "4f9f648c2125a2a63f7b361b0f5ac7cfc8200d323fb3b0a90a19803cacf990d0", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "tier-junit.xml", "sha256": "e66fca2ebd3d3d8043bb098d789485b7d3503cfe801415533daa33c7e4bb66ac", "classification": "public-synthetic", "retention": "versioned evidence"}
+  ],
+  "security_redactions": [
+    "JUnit local hostname and absolute repository paths removed",
+    "No private path, credential value or provider output recorded",
+    "Only isolated synthetic test infrastructure was used"
+  ],
+  "intermediate_failures": [
+    "Initial test-first run: 94 passed, 12 failed.",
+    "First independent review rejected self-asserted human review and incomplete pytest source provenance.",
+    "Focused reproduction after adding guards: 112 passed, 2 failed.",
+    "Second review rejected non-recursive nested test discovery; rglob and nested conftest regression were added.",
+    "One evidence redaction command initially used a wrong relative path; the subsequent secret/path scan failed and prevented acceptance until the correct files were redacted and rescanned."
+  ],
+  "rollback": {
+    "schema_change": false,
+    "data_reset_required": false,
+    "instruction": "Revert only this evaluator/manifest/CI patch if needed; preserve databases, objects, prior evidence and fail-closed release decisions."
+  },
+  "data_safety": {
+    "user_data_mutated": false,
+    "isolated_test_infrastructure_used": true,
+    "real_provider_calls": 0,
+    "provider_credential_values_read": false
+  },
+  "remote_actions": {"push": false, "pull_request": false, "merge": false, "release": false}
+}

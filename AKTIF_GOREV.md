@@ -1642,6 +1642,53 @@ Durum: **yerel operator-preparation PASS; A9 gerçek koşu BLOCKED**.
   bağımsız request/non-transfer kanıtı ve ilk baseline insan seal'i gerekir. Bunlar
   gelmeden A11 başlatılmaz.
 
+### 16.13 A9 dataset provenance ve public review guard çalışma kaydı — 2026-09-04
+
+Başlangıç SHA: `e5116c441f54e79207b94bc95611dc6c4612af52`.
+Durum: **yerel dataset-provenance doğrulaması PASS; public owner review ve A9 gerçek
+koşu BLOCKED**.
+
+- Salt-okunur yeniden üretimde `contract-smoke` gerçekten backend
+  `tests/evals/datasets/golden.jsonl` dosyasını çalıştırdığı halde raporun
+  yürütülmeyen public sentetik corpus SHA'sını fallback olarak yazdığı kanıtlandı.
+  `offline-e2e` de inline pytest fixture'ları çalıştırırken aynı ilgisiz public SHA'yı
+  taşıyordu. Önceki 94/94 test bu yanlış provenance iddiasını yakalamıyordu.
+- Test-first eklenen kontroller ilk koşuda **12 FAIL/94 PASS** verdi. Contract tier
+  artık exact çalıştırılan golden dosyanın SHA'sını ve 66 kaydını;
+  offline tier `dataset_sha256=null` ile özyinelemeli keşfedilen testler, sabit
+  production-pipeline hedefleri, ilgili `conftest.py` zinciri ve `pyproject.toml`
+  üzerinden scoped source-bundle hash'ini raporluyor. Yalıtılmış gerçek offline
+  koşu **42/42 PASS**, sekiz kaynaklı bundle SHA
+  `fa6eb25e9147074e35cb41a71d03ee3e5ffd89e90b464e4db47c5c09c512c6bf`.
+- Public `public-synthetic-v2` manifesti versioned JSON Schema, exact corpus SHA,
+  semver, kayıt sayısı, satır sürümleri ve split setiyle fail-closed doğrulanır.
+  CI bu salt-okunur kontrolü koşar. Mevcut gerçek durum `review_status=pending`,
+  `review_complete=false`, `release_gate_eligible=false`, `provider_invoked=false`.
+- İlk bağımsız inceleme yerel paketi `REJECT` etti: rastgele reviewer/tarih/64-hex
+  receipt alanları yanlış biçimde `review_complete=true` olabiliyor; offline bundle
+  pytest config/conftest ve gelecekteki nested testleri eksik bırakabiliyordu. Bu
+  aşırı iddialar test-first **2 FAIL/112 PASS** ile tekrar üretildi. Düzeltmeden sonra
+  schema-valid self-asserted approval yalnız
+  `manifest-declared-approved-unverified` kalır; receipt/otorite doğrulanmadığı için
+  `approval_evidence_verified=false` ve `review_complete=false` değişmez. UTC dışı
+  offset ve gelecek tarih reddedilir. Nested test ile nested `conftest.py` keşfi ve
+  byte-sensitive bundle hash'i regresyonla korunur.
+- Bağımsız ikinci inceleme stabilized exact kaynakları **APPROVE** etti: **115/115
+  tier PASS**, Ruff/format/diff PASS; self-asserted approval ve nested discovery
+  kırma denemeleri fail-closed. Bu karar owner review, provider yetkisi, gerçek
+  benchmark, baseline seal veya A9 kapanışı değildir.
+- Final exact-source doğrulaması: yalıtılmış PostgreSQL/Redis/MinIO ile **731 backend
+  PASS, 2 skip**, bilinen 1 Starlette/httpx uyarısı; **115 tier PASS**; contract
+  66-record exact hash PASS; offline **42 PASS**; public manifest integrity PASS.
+  Ruff format/check, MyPy strict 14 dosya, deterministic OpenAPI, 122-package
+  offline lock ve diff-check PASS. Kullanıcı DB/MinIO/object verisi ve gerçek
+  provider kullanılmadı; remote push/PR/merge/release yapılmadı.
+- Public-safe kanıt: `artifacts/evals/2026-09-04-a9-dataset-provenance/`.
+- Açık kapı değişmedi: public corpus için gerçek owner review/bağlı bağımsız receipt;
+  A9 için owner-reviewed private pack, exact provider/model/provider-side bütçe,
+  insan approval manifesti, gerçek provider koşusu, bağımsız request/non-transfer
+  kanıtı ve ilk baseline insan seal'i gerekir. Bunlar gelmeden A11 başlatılmaz.
+
 ---
 
 ## 17. AŞAMA 10 — Frontend ve ürün sözleşmesi
