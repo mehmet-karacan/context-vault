@@ -1,0 +1,125 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "verify",
+  "operation_id": "cv3-a9-local-generation-20260905-001",
+  "work_item_id": "CV3-A9-EVAL",
+  "attempt_id": "local-generation-admission-001",
+  "actor": "codex-local-agent",
+  "tool_adapter": "local-cli-mps-pytest-independent-review",
+  "started_at": "2026-09-04T21:43:47Z",
+  "finished_at": "2026-09-04T21:44:14Z",
+  "time_scope": "The retained final tier/full-test interval is exact to the recorded JUnit timestamps; earlier test-first, model and review runs are ordered without invented timestamps.",
+  "baseline_revision": "54d95d4cd43f1ff9eb9b06063a67ab757c8e4bb4",
+  "result_revision": null,
+  "revision_note": "Pre-commit source hashes bind tested bytes; a follow-up receipt will bind the implementation commit.",
+  "scope_hash": "f4f738cc0ef5f1e0e42448b40c53283b5c04f825b389ac4de143927ea31086e1",
+  "idempotency_key_hash": null,
+  "commands": [
+    {
+      "command": "Real CPU semantic smoke with Qwen/Qwen2.5-0.5B-Instruct",
+      "exit_code": 2,
+      "result": "REJECT; unsafe data-deletion recommendation and fabricated no-answer detail"
+    },
+    {
+      "command": "Initial natural-language semantic smoke with Qwen/Qwen2.5-1.5B-Instruct",
+      "exit_code": 2,
+      "result": "REJECT; grounded and no-answer guards failed"
+    },
+    {
+      "command": "pytest -q tests/evals/test_local_generation_runtime.py before verifier implementation",
+      "exit_code": 1,
+      "result": "16 failed; missing verifier reproduced"
+    },
+    {
+      "command": "Independent three-round break/review and test-first reproductions",
+      "exit_code": 1,
+      "result": "REJECT rounds reproduced envelope injection, permissive output, malformed config, symlink identity, resource/runtime binding and timeout bypass defects"
+    },
+    {
+      "command": "verify_local_generation.py with exact 1.5B revision/bundle, MPS, local-files-only and 600-second bound",
+      "exit_code": 0,
+      "result": "PASS; real model load plus three generations, exact output hashes, 200 prompt and 15 generated tokens"
+    },
+    {
+      "command": "pytest -q tests/evals/test_local_generation_runtime.py",
+      "exit_code": 0,
+      "result": "42 passed"
+    },
+    {
+      "command": "pytest -q tests/evals --ignore=tests/evals/offline_e2e --junitxml=<evidence>/TIER_JUNIT.xml",
+      "exit_code": 0,
+      "result": "247 passed"
+    },
+    {
+      "command": "pytest -q tests --junitxml=<evidence>/BACKEND_JUNIT.xml with isolated PostgreSQL/Redis/MinIO endpoints",
+      "exit_code": 0,
+      "result": "829 passed, 2 skipped, 1 warning"
+    },
+    {
+      "command": "ruff format --check; ruff check; strict MyPy ratchet; deterministic OpenAPI; uv lock --check --offline; git diff --check",
+      "exit_code": 0,
+      "result": "PASS; Ruff covered 180 files, MyPy checked 14 source files and lock resolved 163 packages"
+    },
+    {
+      "command": "pip-audit against locked local-eval environment",
+      "exit_code": 0,
+      "result": "PASS; 141 dependencies, 0 known vulnerabilities"
+    },
+    {
+      "command": "check_public_tree.py --repo . --json-output <evidence>/PUBLIC_TREE.json after staging",
+      "exit_code": 0,
+      "result": "274 tracked source files checked; PASS"
+    },
+    {
+      "command": "Independent final break/review on stabilized exact source and artifact bytes",
+      "exit_code": 0,
+      "result": "APPROVE for the bounded local generation runtime package only"
+    }
+  ],
+  "exit_status": 0,
+  "tests": [
+    {"name": "local generation fail-closed contract", "passed": 42, "failed": 0},
+    {"name": "A9 eval tier contracts", "passed": 247, "failed": 0, "report": "TIER_JUNIT.xml"},
+    {"name": "full backend", "passed": 829, "skipped": 2, "failed": 0, "warnings": 1, "report": "BACKEND_JUNIT.xml"},
+    {"name": "Ruff, MyPy, OpenAPI, offline lock, audit, public tree and diff check", "result": "PASS"},
+    {"name": "independent local-generation review", "result": "APPROVE", "phase_closed": false}
+  ],
+  "result": "PASS",
+  "phase_closed": false,
+  "scope": "Exact local Qwen generation runtime and controlled exact-answer/no-answer smoke only. No human approval, owner-reviewed private pack, production-path benchmark, baseline seal or A9 closure.",
+  "source_manifest": "SOURCE_MANIFEST.json",
+  "artifacts": [
+    {"path": "BACKEND_JUNIT.xml", "sha256": "2f2faf261ebe5b4489bee499b9867c75f5029f4c714697e8e7bcc07766492c9b", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "INDEPENDENT_REVIEW.json", "sha256": "69008fffc67b41f5130bfd8e10e8f7fdaafc6c7efdcc0e1ea4bfdc11b3fc1f04", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "LOCAL_GENERATION_MPS.json", "sha256": "dc98fec90be1e9edf53b134536e73febf7d0134d224faef0344bc129255df9cf", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "PUBLIC_TREE.json", "sha256": "2895f78d84fbced58cd688d43580b23e01ca22dc17c020a074c10956fd765c0a", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "README.md", "sha256": "d4c4df53887f364c2672f76f2ff04885d6478561f88a3717691e124fd64feebf", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "REPRODUCTION_SUMMARY.json", "sha256": "fe5864b1daaa8cf0e973214b45cfbfc03b415522fa2b9e81936cd8b450aebc9c", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "SOURCE_MANIFEST.json", "sha256": "f4f738cc0ef5f1e0e42448b40c53283b5c04f825b389ac4de143927ea31086e1", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "TIER_JUNIT.xml", "sha256": "f7a9cbe27e923c90fcd3945dea287fbc0f1c61f71c744aca0db666d72b75eadc", "classification": "public-synthetic", "retention": "versioned evidence"}
+  ],
+  "security_redactions": [
+    "JUnit hostname and absolute repository paths removed",
+    "No private benchmark record, credential value, model weight, prompt or generation text recorded",
+    "Only isolated synthetic test infrastructure and local model cache were used"
+  ],
+  "intermediate_failures": [
+    "The 0.5B runtime and initial 1.5B natural-language semantic smoke were rejected.",
+    "Three independent rejection rounds were reproduced and repaired before the final approval.",
+    "The final admission is intentionally described as prompt adherence, not grounding quality."
+  ],
+  "rollback": {
+    "schema_change": false,
+    "data_reset_required": false,
+    "instruction": "Revert only this verifier/test/dependency/docs/evidence patch if needed; preserve user data, model caches and prior evidence."
+  },
+  "data_safety": {
+    "user_data_mutated": false,
+    "existing_database_migrated_or_reset": false,
+    "isolated_test_infrastructure_used": true,
+    "real_remote_provider_calls": 0,
+    "provider_credential_values_read": false,
+    "model_weights_changed_or_committed": false
+  },
+  "remote_actions": {"provider_call": false, "push": false, "pull_request": false, "merge": false, "release": false}
+}

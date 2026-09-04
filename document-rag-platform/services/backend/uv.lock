@@ -391,6 +391,8 @@ dependencies = [
 [package.optional-dependencies]
 local-eval = [
     { name = "sentence-transformers" },
+    { name = "torch" },
+    { name = "transformers" },
 ]
 
 [package.dev-dependencies]
@@ -428,6 +430,8 @@ requires-dist = [
     { name = "redis", specifier = "==5.0.1" },
     { name = "sentence-transformers", marker = "extra == 'local-eval'", specifier = "==6.0.1" },
     { name = "sqlalchemy", specifier = "==2.0.25" },
+    { name = "torch", marker = "extra == 'local-eval'", specifier = "==2.14.0" },
+    { name = "transformers", marker = "extra == 'local-eval'", specifier = "==5.15.1" },
     { name = "uvicorn", extras = ["standard"], specifier = "==0.27.0" },
 ]
 provides-extras = ["local-eval"]

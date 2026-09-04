@@ -1,0 +1,91 @@
+{
+  "schema_version": "1.0",
+  "work_item": "CV3-A9-LOCAL-GENERATION-ADMISSION",
+  "baseline_revision": "54d95d4cd43f1ff9eb9b06063a67ab757c8e4bb4",
+  "accepted_model": {
+    "model": "Qwen/Qwen2.5-1.5B-Instruct",
+    "revision": "989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+    "bundle_sha256": "5a6a6259762fed70e38ae346763b105a7b05aa981e5ab078c8e5b033f87f0c87",
+    "files": 10,
+    "bytes": 3098973447,
+    "device": "mps"
+  },
+  "rejected_runtime_candidates": [
+    {
+      "model": "Qwen/Qwen2.5-0.5B-Instruct",
+      "revision": "7ae557604adf67be50417f59c2c2f167def9a775",
+      "files": 10,
+      "bytes": 999604126,
+      "bundle_sha256_under_final_verifier": "f308e715dc72eca106a0370ab33095eee79108aeb9c94b5868f68ef4356f05cd",
+      "result": "REJECT",
+      "reason": "Real CPU semantic smoke recommended deletion of existing data and fabricated unsupported retention detail."
+    },
+    {
+      "model": "Qwen/Qwen2.5-1.5B-Instruct",
+      "revision": "989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+      "result": "REJECT_FOR_QUALITY_CLAIM",
+      "reason": "Initial natural-language Turkish semantic smoke failed grounded and no-answer guards; only the later opaque-token prompt-adherence runtime contract was admitted."
+    }
+  ],
+  "test_first": [
+    {
+      "result": "FAIL",
+      "passed": 0,
+      "failed": 16,
+      "reason": "The local generation verifier did not exist."
+    },
+    {
+      "result": "FAIL",
+      "passed": 18,
+      "failed": 5,
+      "reason": "String architectures, malformed config, same-cache same-byte symlink retarget and inference envelope injection were reproduced."
+    },
+    {
+      "result": "REJECT",
+      "reason": "Independent review found permissive output predicates, missing resource ceilings/direct dependency pins and report-envelope injection."
+    },
+    {
+      "result": "REJECT",
+      "reason": "Independent review reproduced unbounded numeric/hash/runtime observations and direct worker timeout bypass."
+    },
+    {
+      "result": "REJECT",
+      "reason": "Independent review reproduced extension of the declared 600-second timeout to 3,600 seconds."
+    }
+  ],
+  "final": {
+    "focused": "42 passed",
+    "eval_tier": "247 passed",
+    "full_backend": "829 passed, 2 skipped, 1 warning",
+    "ruff": "PASS; 180 files formatted",
+    "mypy_strict_ratchet": "PASS; 14 source files",
+    "openapi_deterministic": "PASS",
+    "offline_lock": "PASS; 163 packages",
+    "pip_audit": "PASS; 141 dependencies, 0 known vulnerabilities",
+    "independent_review": "APPROVE for this bounded runtime package"
+  },
+  "runtime_envelope": {
+    "snapshot_max_files": 64,
+    "snapshot_max_bytes": 4000000000,
+    "prompt_max_tokens": 4096,
+    "generated_max_tokens": 72,
+    "wall_clock_max_seconds": 600,
+    "library_offline_mode": true,
+    "network_isolation_verified": false
+  },
+  "infrastructure": {
+    "postgresql_revision": "cv3_00000006",
+    "postgresql": "isolated existing synthetic test database",
+    "redis": "isolated password-protected test endpoint",
+    "minio": "isolated synthetic test bucket"
+  },
+  "data_safety": {
+    "user_data_mutated": false,
+    "database_migrated_or_reset": false,
+    "remote_provider_calls": 0,
+    "model_weights_committed": false,
+    "push_or_release": false
+  },
+  "quality_scope": "Controlled exact-answer/no-answer runtime smoke only; not general grounding or benchmark quality.",
+  "remaining_gate": "Owner-reviewed private pack, exact local BGE plus generation production-path benchmark, independent request/non-transfer evidence and first human baseline seal remain required."
+}

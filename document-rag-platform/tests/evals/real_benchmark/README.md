@@ -184,3 +184,52 @@ runtime report cannot satisfy the approved real-provider tier by itself. The
 approval, provider report and baseline seal must separately bind the exact
 embedding and generation providers/models before the first real benchmark can
 be sealed.
+
+## Local generation runtime admission
+
+The MacBook-local generation-side smoke uses an exact cached
+`Qwen/Qwen2.5-1.5B-Instruct` snapshot. This is a controlled prompt-adherence
+and runtime-integrity check, not a RAG quality benchmark. It proves only that
+the admitted bytes load without remote provider execution and deterministically
+return the exact opaque token for a bounded context case plus exact `NO_CONTEXT`
+for a bounded no-answer case. It does not prove general Turkish answer quality,
+grounding, citation quality or release eligibility.
+
+Install the locked optional runtime and run the verifier with a new private
+output path:
+
+```sh
+cd document-rag-platform/services/backend
+uv sync --locked --all-groups --extra local-eval
+
+.venv/bin/python ../../../scripts/verify_local_generation.py \
+  --snapshot /local/huggingface/models--Qwen--Qwen2.5-1.5B-Instruct/snapshots/<revision> \
+  --expected-model Qwen/Qwen2.5-1.5B-Instruct \
+  --expected-revision <revision> \
+  --expected-bundle-sha256 <sha256> \
+  --device mps \
+  --timeout-seconds 600 \
+  --json-output /new/private/path/local-generation-runtime.json
+```
+
+The verifier limits the snapshot to 64 files and 4,000,000,000 resolved bytes,
+allows at most 4,096 total prompt tokens and 72 generated tokens, and enforces a
+maximum 600-second subprocess timeout. The worker pipe capability prevents an
+accidental direct CLI worker-mode bypass in the trusted-local operator model; it
+is not authentication against a malicious process running as the same OS user.
+Snapshot path, revision, symlink targets and bytes are checked before and after
+inference. Only exact output hashes and pinned runtime versions enter the report;
+raw prompts and generation text are not retained. Library offline mode is not an
+OS egress sandbox, so `network_isolation_verified` remains false.
+
+The smaller `Qwen/Qwen2.5-0.5B-Instruct` candidate was rejected after real CPU
+smokes returned unsafe/unsupported answers. An initial natural-language smoke of
+the 1.5B candidate also failed the semantic guards. The final opaque-token case
+only admits the execution contract; those failures must not be reinterpreted as
+quality success. Cached owner/name/revision and bundle hashes establish local byte
+identity, not cryptographic proof of publisher origin or license provenance.
+
+Model weights remain outside Git. A passing local generation report still needs
+an owner-reviewed private pack, a production-path run using both exact local
+models, independent request/non-transfer evidence, and a human baseline seal
+before A9 can close.

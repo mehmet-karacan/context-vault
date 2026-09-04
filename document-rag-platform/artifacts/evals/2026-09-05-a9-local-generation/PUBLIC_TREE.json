@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "scope": [
+    ".github",
+    "document-rag-platform/apps",
+    "document-rag-platform/services"
+  ],
+  "tracked_files_checked": 274,
+  "findings": []
+}

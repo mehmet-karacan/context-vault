@@ -1,0 +1,41 @@
+{
+  "dependency_lock_sha256": "92ce53a1346d77d15118e72670a41140cf73a6dc8bf780605bbf799663c9b954",
+  "deterministic_repeat_match": true,
+  "device": "mps",
+  "execution_wall_clock_limit_seconds": 600,
+  "generated_tokens": 15,
+  "generation_seconds": 12.766,
+  "generation_text_retained": false,
+  "grounded_guard_pass": true,
+  "grounded_output_sha256": "b850c26c1da5cac3bd8f2011776506fd3193ade0cd4e917fa14a135465689411",
+  "library_offline_mode": true,
+  "load_seconds": 28.276,
+  "local_model_invoked": true,
+  "model": "Qwen/Qwen2.5-1.5B-Instruct",
+  "model_bundle_bytes": 3098973447,
+  "model_bundle_files": 10,
+  "model_bundle_sha256": "5a6a6259762fed70e38ae346763b105a7b05aa981e5ab078c8e5b033f87f0c87",
+  "model_resource_limits": {
+    "max_bytes": 4000000000,
+    "max_files": 64
+  },
+  "model_revision": "989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+  "network_isolation_verified": false,
+  "network_policy": "huggingface-local-files-only",
+  "no_answer_guard_pass": true,
+  "no_answer_output_sha256": "4e1d96a3d622df6b6aae19c1018f4984a1bc5208ae869595dc1a6ce6f01542f1",
+  "prompt_case_bundle_sha256": "64312fdd024ca2be09a13f0dbbf42a3b67f024c091b5ecf1bbb5b8fa831bf258",
+  "prompt_tokens": 200,
+  "remote_provider_invoked": false,
+  "repository_revision": "54d95d4cd43f1ff9eb9b06063a67ab757c8e4bb4",
+  "request_type": "local-generation-runtime-verification",
+  "result": "PASS",
+  "runtime_versions": {
+    "python": "3.12.14",
+    "torch": "2.14.0",
+    "transformers": "5.15.1"
+  },
+  "schema_version": "1.0",
+  "tool_version": "1.0.0",
+  "verifier_sha256": "12eaa0a015b6e66670e988074ca5dd066642d939016bd163951a66094846900c"
+}

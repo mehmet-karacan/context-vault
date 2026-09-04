@@ -1824,6 +1824,58 @@ gerçek benchmark kapısı AÇIK**.
   production-path benchmark, bağımsız request/non-transfer kanıtı ve ilk insan
   baseline seal'i gerekir. Bunlar tamamlanmadan A11 başlatılmaz.
 
+### 16.17 A9 yerel generation runtime admission kaydı — 2026-09-05
+
+Başlangıç SHA: `54d95d4cd43f1ff9eb9b06063a67ab757c8e4bb4`.
+Durum: **exact yerel generation runtime/admission PASS; gerçek kalite benchmarkı
+ve A9 kapısı AÇIK**.
+
+- MacBook için ilk gerçek aday `Qwen/Qwen2.5-0.5B-Instruct`, revision
+  `7ae557604adf67be50417f59c2c2f167def9a775`, 10 dosya ve 999.604.126
+  byte olarak sınandı. Mevcut kullanıcı verisini koruma sorusunda silmeyi önerdi
+  ve no-answer sorusunda desteklenmeyen retention ayrıntısı üretti; bu aday
+  **REJECT** edildi. İlk 1.5B doğal-dil semantik smoke'u da aynı iki guardı
+  geçemedi. Başarısızlıklar kalite kanıtından çıkarılmadı.
+- Kabul edilen runtime kimliği `Qwen/Qwen2.5-1.5B-Instruct`, exact revision
+  `989aa7980e4cf806f80c7fef2b1adb7bc71aa306`; 10 resolved dosya,
+  3.098.973.447 byte ve symlink identity dahil bundle SHA
+  `5a6a6259762fed70e38ae346763b105a7b05aa981e5ab078c8e5b033f87f0c87`.
+  Ağırlıklar yalnız yerel Hugging Face cache'inde kaldı, Git'e eklenmedi.
+- Final MPS koşusu gerçek model yükleme ve üç üretim yaptı: exact grounded token,
+  exact `NO_CONTEXT` ve deterministic tekrar PASS; 200 prompt token, 15 generated
+  token. Ham prompt/çıktı tutulmadı, yalnız case/output SHA'ları kaydedildi.
+  Bu dar bir controlled prompt-adherence/runtime smoke'udur; genel grounding,
+  Türkçe kalite, citation veya release başarısı değildir.
+- Verifier exact owner/name/revision, Qwen2 config şekli, gerekli dosyalar,
+  cache-root symlink confinement, symlink-target+byte bundle kimliği ve inference
+  öncesi/sonrası tam eşitlik uygular. Snapshot zarfı 64 dosya/4 GB; inference
+  zarfı 4.096 prompt/72 output token ve en fazla 600 saniye dış süreçtir.
+  Direct worker CLI geçişi parent pipe capability olmadan fail-closed olur; bu
+  aynı OS kullanıcısına karşı kimlik doğrulama iddiası değildir.
+- İlk bağımsız inceleme rapor-envelope enjeksiyonu, permissive grounded predicate,
+  malformed config ve kaynak/pin açıklarını; ikinci inceleme numeric/hash/runtime
+  üst bağları ile doğrudan worker timeout bypassını; üçüncü inceleme 600 saniyelik
+  sınırın 3.600'e yükseltilebilmesini `REJECT` etti. Bulgular test-first yeniden
+  üretildi ve regresyonlarla kapatıldı. Final odaklı test **42/42 PASS** oldu.
+- Bağımsız alt ajan stabilize exact kaynak ve artifact hashlerini yeniden eşledi,
+  timeout bypasslarını providersız kırma testleriyle reddetti ve yalnız bu dar
+  yerel runtime paketini **APPROVE** etti. Bu karar owner/provider onayı, private
+  pack review'u, insan baseline seal'i veya A9 kapanışı değildir.
+- `local-eval` extra doğrudan `sentence-transformers==6.0.1`, `torch==2.14.0`
+  ve `transformers==5.15.1` pinlerini taşır; offline lock 163 pakettir. Exact
+  output hashleri, runtime sürümleri, dependency lock, verifier, prompt-case ve
+  repository revision rapora bağlanır. OS ağ izolasyonu kanıtlanmadığı için
+  `network_isolation_verified=false` kalır.
+- Cached path/revision/bundle yerel byte identity sağlar; yayıncı kökeni veya
+  Apache lisansını kriptografik olarak kanıtladığı iddia edilmez. Kullanıcı DB,
+  MinIO, embedding index veya proje dosyası değiştirilmedi; remote provider,
+  push, PR, merge veya release yapılmadı.
+- Public-safe kanıt: `artifacts/evals/2026-09-05-a9-local-generation/`.
+- Açık kapı: owner-reviewed private pack, exact BGE+generation ile production
+  ingestion/retrieval/answer yolunu kullanan gerçek benchmark, bağımsız
+  request/non-transfer kanıtı ve ilk insan baseline seal'i gerekir. Bu yerel
+  runtime admission tek başına §16.8'i veya A9'u kapatmaz; A11 başlatılmaz.
+
 ---
 
 ## 17. AŞAMA 10 — Frontend ve ürün sözleşmesi

@@ -1,0 +1,26 @@
+[
+  {
+    "path": "AKTIF_GOREV.md",
+    "sha256": "b53156343d87ad74bcc49989aec31f0ec402e5d5f7e97ef49f78ac9b1fa5d9cd"
+  },
+  {
+    "path": "scripts/verify_local_generation.py",
+    "sha256": "12eaa0a015b6e66670e988074ca5dd066642d939016bd163951a66094846900c"
+  },
+  {
+    "path": "document-rag-platform/services/backend/tests/evals/test_local_generation_runtime.py",
+    "sha256": "3a5ed5d3a6785338dbf23be1550f21e68425e9e79acac887a8de56d3567bcbe8"
+  },
+  {
+    "path": "document-rag-platform/services/backend/pyproject.toml",
+    "sha256": "131dd52612166eabd592fa95da4a7a91fe3a932fc741c3e1fe2c4b123066fa0b"
+  },
+  {
+    "path": "document-rag-platform/services/backend/uv.lock",
+    "sha256": "92ce53a1346d77d15118e72670a41140cf73a6dc8bf780605bbf799663c9b954"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/real_benchmark/README.md",
+    "sha256": "e2108f4ca88b7566b41c589de816712dfdaee32f72e49821e1047134de1cc628"
+  }
+]
