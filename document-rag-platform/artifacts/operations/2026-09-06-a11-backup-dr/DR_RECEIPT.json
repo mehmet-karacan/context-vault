@@ -1,0 +1,53 @@
+{
+  "backup": {
+    "backup_completed_at_utc": "2026-09-05T21:20:40.404905Z",
+    "backup_id_hash": "96d9c658b17b9980cd03d0b29a0cf3983e0121cde3785b576d6a0d316ff37d35",
+    "backup_manifest_sha256": "88c8fe41f145c3f54c1ea6d3b0ff1544d8058f7a8f1556d790ccd210fc923fe0",
+    "encrypted_envelope_count": 1,
+    "object_bytes": 76,
+    "object_count": 1,
+    "object_inventory_digest": "4e7465ec5b76b62444adaaaa81ff848e047efeb62dfb7dbfdef6a3826a106f51",
+    "postgres_dump_sha256": "76291a4ef9473827d4a45357aa7283eb86fffdf05f59fbd6d16870be1dbd2110",
+    "retention_days": 30,
+    "status": "PASS",
+    "versioning_enabled": true
+  },
+  "credential_values_retained": false,
+  "disposable_resources_cleaned": true,
+  "fresh_target_verified": true,
+  "human_release_decision_required": true,
+  "private_manifest_contains_restore_keys": true,
+  "raw_object_names_retained_in_receipt": false,
+  "release_gate_eligible": false,
+  "restore": {
+    "backup_manifest_sha256": "88c8fe41f145c3f54c1ea6d3b0ff1544d8058f7a8f1556d790ccd210fc923fe0",
+    "reconciliation": {
+      "db_reference_count": 1,
+      "missing_object_count": 0,
+      "object_count": 1,
+      "orphan_object_count": 0
+    },
+    "restore_finished_at_utc": "2026-09-05T21:21:58.147758Z",
+    "restore_started_at_utc": "2026-09-05T21:21:57.856872Z",
+    "rpo_seconds": 77.452,
+    "rto_seconds": 0.291,
+    "smoke": {
+      "auth": true,
+      "citation": true,
+      "migration": true,
+      "retrieval": true
+    },
+    "status": "PASS"
+  },
+  "schema_version": "1.0",
+  "source_data_kind": "disposable-synthetic",
+  "source_mutated": false,
+  "source_repository_revision": "fcddb4a49e99c05e7f225fff64c56c0a778fb970",
+  "source_runtime_images": {
+    "minio": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+    "postgres": "sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b"
+  },
+  "receipt_type": "a11-disposable-backup-restore-drill",
+  "status": "INVALIDATED_BY_HARDENING_AUDIT",
+  "superseded_evidence": true
+}

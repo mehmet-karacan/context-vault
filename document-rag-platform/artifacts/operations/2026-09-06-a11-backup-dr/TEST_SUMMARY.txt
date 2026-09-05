@@ -1,0 +1,36 @@
+A11 BACKUP/DR + OPS EVIDENCE SUMMARY
+
+STATUS: HARDENED CODE/TEST EVIDENCE ONLY. The earlier runtime results predate the
+immutable target/manifest admission contract and are retained only as historical
+negative context, not proof for the hardened implementation.
+
+Red phase:
+- test_ops_doctor.py + test_backup_restore_ops.py: 10 failed (scripts absent).
+
+Final hardened green phase:
+- ruff format: clean
+- ruff check scripts/backup_restore.py scripts/ops_doctor.py and focused tests: PASS
+- pytest test_backup_restore_ops.py test_ops_doctor.py: 36 passed in 0.51s
+- combined backup/doctor/release-gate subset: 51 passed in 1.52s
+- py_compile for both scripts: PASS
+- git diff --check: PASS
+- both CLI dry-runs: exit 0, DRY_RUN, effects_performed=false, receipts mode 0600
+
+Superseded runtime context:
+- An initial attempted disposable drill stopped before backup creation because the
+  production source module was not on PYTHONPATH (ModuleNotFoundError: src).
+- A corrected fully disposable source/target drill backed up one production-format
+  CVENC1 encrypted synthetic object and its matching DB reference, restored both,
+  re-downloaded the object for payload-SHA verification, reconciled 1 DB reference
+  to 1 object with no missing/orphan entries, and passed migration/auth/retrieval/
+  citation smoke checks.
+- A disposable orphan container and volume were detected; after exact cleanup the
+  doctor passed with zero orphans and all dependency/head probes passing.
+- All disposable runtime containers and volumes were removed. Private backup data
+  was retained outside Git under mode-0700/0600 controls.
+
+No hardened v2 drill was started because the implementation is uncommitted and the
+effectful clean-tree provenance gate correctly prevents a canonical receipt from
+claiming the older HEAD. A read-only Docker context/image inspection created no
+container, volume, bucket or database. The canonical hardened drill remains open
+until these files are committed and rerun at that clean exact revision.

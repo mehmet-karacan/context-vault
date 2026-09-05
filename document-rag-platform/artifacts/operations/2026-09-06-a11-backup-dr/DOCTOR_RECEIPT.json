@@ -1,0 +1,29 @@
+{
+  "clean_state": {
+    "dependency_status": "PASS",
+    "expected_migration_head": "cv3_00000006",
+    "observed_at_utc": "2026-09-05T21:24:47.895686Z",
+    "observed_migration_head": "cv3_00000006",
+    "orphan_container_count": 0,
+    "orphan_volume_count": 0,
+    "status": "PASS"
+  },
+  "credential_values_retained": false,
+  "disposable_resources_cleaned": true,
+  "orphan_reproduction": {
+    "dependency_status": "PASS",
+    "observed_at_utc": "2026-09-05T21:24:47.334624Z",
+    "orphan_container_count": 1,
+    "orphan_container_name_hash": "f81a5284b5467eae5ccd929a4c1194c4198105a19a85058ad1f6ec7e005ad068",
+    "orphan_volume_count": 1,
+    "orphan_volume_name_hash": "17ec89390458fbadbf936ea389676bce69a0e25124aacab4621f224f8b301da9",
+    "status": "FAIL"
+  },
+  "project_name_hash": "c9a641a9e39abb3c6180b446555149fb54d26b9879687b96b6ba31e39a519531",
+  "raw_resource_names_retained": false,
+  "receipt_type": "a11-disposable-ops-doctor",
+  "schema_version": "1.0",
+  "source_repository_revision": "fcddb4a49e99c05e7f225fff64c56c0a778fb970",
+  "status": "INVALIDATED_BY_HARDENING_AUDIT",
+  "superseded_evidence": true
+}
