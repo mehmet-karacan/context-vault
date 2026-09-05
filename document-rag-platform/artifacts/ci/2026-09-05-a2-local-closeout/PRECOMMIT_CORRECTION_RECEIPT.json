@@ -1,9 +1,17 @@
 {
   "schema_version": "1.0",
   "status": "PASS_LOCAL_ONLY",
-  "generated_at_utc": "2026-09-05T05:23:39Z",
+  "corrected_at_utc": "2026-09-05T05:52:30Z",
+  "supersedes": {
+    "path": "PRECOMMIT_RECEIPT.json",
+    "sha256": "5c16cb03645266a9d21c72be45b19f64526ac92cd81ddf6fa661ccb9e544dc38"
+  },
+  "correction_reason": [
+    "The original Python audit omitted the locked local-eval extra, so its dependency count and three Python report hashes were not authoritative for the complete locked environment.",
+    "The original aggregate Node and license counts used different aggregation semantics from the retained reports.",
+    "The original working-tree source_diff_sha256 was not reproducible after the implementation commit; commit and tree binding replace that claim."
+  ],
   "repository_head_before_change": "708dac922e16fe75f40d39a52840a621bf076f87",
-  "source_diff_sha256": "3c8a9b6741b6f1d8b6c779a5111d4302bf81c6d1df087f9c10d74f662aab45e2",
   "scope": "A2 local runtime, lock, workflow-source, dependency, image and public-tree gates",
   "checks": {
     "compose_config": "PASS",
@@ -18,21 +26,21 @@
     "frontend_api_client_drift": "PASS",
     "frontend_build": "PASS",
     "frontend_bundle_scan": "PASS_15_JS_CHUNKS",
-    "python_dependency_audit": "PASS_119_DEPENDENCIES_0_VULNERABILITIES",
-    "node_dependency_audit": "PASS_548_PACKAGES_0_VULNERABILITIES",
-    "license_policy": "PASS_644_PACKAGES",
+    "python_dependency_audit": "PASS_141_DISTRIBUTIONS_0_VULNERABILITIES",
+    "node_dependency_audit": "PASS_629_DEPENDENCY_ENTRIES_0_VULNERABILITIES",
+    "license_policy": "PASS_665_PACKAGES",
     "fresh_backend_image_scan": "PASS_0_CRITICAL_0_HIGH",
     "public_tree": "PASS_279_TRACKED_FILES",
     "commit_ownership": "PASS_114_COMMITS",
     "supply_chain_regression": "PASS_3_TESTS"
   },
   "report_hashes": {
-    "python_audit_sha256": "b40f00d9b88c4543667764b35f05c7b6dec34b7facc8e339fc7c90dea6f917b2",
-    "python_sbom_sha256": "7db99bfd50d26d9f304935397419612ca2e8c39a9396ca662056d7c8ebf8d678",
-    "python_licenses_sha256": "109ba3d166edfb5aca31365b000e20a8e2fe96eac58ae5c8c9c1f0fdfdf58b4b",
+    "python_audit_sha256": "ada26b8d2dd0b79eda0642510050e052ecc1407f192b03d1231c2b39533d76d2",
+    "python_sbom_sha256": "885d02d8b69870ec8c23dc2b305ddee034c95df82fc3e2a56c6ccf6ba5129d72",
+    "python_licenses_sha256": "ec702cab9f448aa499debcfe9e7fc43e8b130bb9355277ed427343f5bc73a29d",
     "node_audit_sha256": "1d72e7f7eccc95945c572669b19561aa2bc336a4bcfd137460c0cfc70c8f54e4",
     "node_sbom_sha256": "0e03f33dc1d24cba892898b1701ac76084fba50b28b4b9f31973f41038a68321",
-    "license_policy_sha256": "de1ab371c382444877904c1e6bed8fd80b750651382420b21e1514bb4db7153b",
+    "license_policy_sha256": "7b6d9cb500a86fd27dc98e65140bfeba30c5a2ee265c8458277dbb2fbea1dc4e",
     "fresh_image_sarif_sha256": "d5792a5052fb157aaf686dec92fd7a5a2d83f524c846c9c4032fc13e820a44df",
     "public_tree_sha256": "08e6d6f282d60dcf235645b07abe9cf6d815c09db69f65dce0c280ad7870a924"
   },
@@ -56,6 +64,7 @@
     "remote_push_or_repository_setting_changed": false,
     "provider_called": false
   },
+  "binding": "COMMIT_BINDING_RECEIPT.json binds this correction to the implementation commit and tree; the superseded working-tree diff hash is not an authoritative source binding.",
   "limitations": [
     "This receipt does not claim GitHub Actions execution, branch protection, ruleset, private environment or direct-push rejection.",
     "The first two full-suite attempts exposed test-environment preconditions (missing local-eval extra and Redis authentication); only the third correctly configured fresh-target run is the PASS claim.",

@@ -15,7 +15,11 @@ MinIO bucket. The final result was `1070 passed, 2 skipped`; the skips are the
 known optional real-binary Pillow/Tesseract paths. Existing databases, buckets
 and user objects were not reset or deleted. The dependency and image reports
 were generated outside Git; their exact hashes and normalized results are bound
-in `PRECOMMIT_RECEIPT.json`.
+in `PRECOMMIT_CORRECTION_RECEIPT.json`. The original
+`PRECOMMIT_RECEIPT.json` is retained byte-for-byte for auditability but is
+superseded: it omitted the `local-eval` extra, used inconsistent aggregate count
+semantics and included a non-reproducible working-tree diff hash. The correction
+receipt records the correction time, reason and original receipt SHA-256.
 
 An earlier cached image scan correctly failed on four HIGH `libuuid/util-linux`
 findings. A clean `--no-cache` build consumed the fixed Alpine package and then
