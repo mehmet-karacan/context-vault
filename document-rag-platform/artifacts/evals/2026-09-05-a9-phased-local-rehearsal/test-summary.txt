@@ -1,0 +1,19 @@
+PASS focused post-commit regression: 337 passed
+  command: .venv/bin/python -m pytest tests/evals/test_tier_contracts.py tests/evals/test_local_benchmark_pack.py tests/evals/test_local_benchmark_providers.py tests/evals/test_local_production_benchmark.py tests/evals/test_local_production_case_executor.py tests/test_answer_service.py tests/test_structured_answer.py -q
+PASS full backend on fresh cv3_eval_fullsuite_20260905_03 PostgreSQL, Redis, and separate MinIO bucket: 992 passed, 2 skipped, 1 known warning in 21.17s
+  command: DATABASE_URL=[REDACTED] REDIS_URL=[REDACTED] MINIO_ENDPOINT=[LOOPBACK] MINIO_ACCESS_KEY=[REDACTED] MINIO_SECRET_KEY=[REDACTED] MINIO_BUCKET=cv3-eval-fullsuite-20260905-03 OBJECT_STORAGE_ENCRYPTION_KEY=[REDACTED] LITELLM_API_KEY=[TEST_ONLY] .venv/bin/python -m pytest -q
+PASS exact local phased production rehearsal run 10: process exit 0 under enforced 900-second budget
+  output: provider-report.json
+PASS database persistence: project=1 document=1 completed_job=1 retrieval_run=1 messages=2 claims=1 message_citations=1 claim_citations=1
+PASS storage persistence: bucket objects=3 AES-GCM envelope markers=3
+PASS MyPy ratchet: 14 source files
+  command: .venv/bin/python ../../../scripts/check_mypy_ratchet.py
+PASS deterministic OpenAPI contract
+  command: .venv/bin/python ../../../scripts/generate_openapi.py --check
+PASS offline dependency lock: 163 packages
+  command: /opt/homebrew/bin/uv lock --check --offline
+PASS local dependency audit: no known vulnerabilities
+  command: .venv/bin/python -m pip_audit --local --progress-spinner off
+PASS Ruff and git diff --check
+PASS independent post-commit review: no P0/P1/P2; 109-member source closure includes structured_prompt_contract.py
+OPEN owner-reviewed private pack, exact approval, adversarial scope pack, independent non-transfer, and human baseline seal

@@ -1983,6 +1983,68 @@ gate FAIL; approved benchmark ve A9 kapısı AÇIK**.
   non-transfer kanıtı; süre bütçesini geçen approved local-generation profili;
   ilk insan baseline seal'i. Bu rehearsal A9'u kapatmaz ve A11 başlatılmadı.
 
+### 16.20 A9 phased local-production ve prompt-boundary hardening kaydı — 2026-09-05
+
+Başlangıç SHA: `88e8db2f324fed485871a12ac5fe4148ce9b70a8`.
+Kaynak SHA: `6dbbfbbe5939f710faad3aa06258fe1dc32d2d89`.
+Durum: **exact yerel phased production rehearsal PASS; owner/private-pack/human
+kapıları nedeniyle A9 AÇIK**.
+
+- 8 GB M1 MacBook ortamında BGE-M3 ingestion/retrieval fazı ile Qwen generation
+  fazı ayrıldı. BGE kapatılıp MPS cache temizlendikten sonra Qwen lazy yüklendi;
+  çağrı ledger'ı ve duration gate fazlar arasında korunur. Generation çıkış
+  bütçesi `256` token olarak source/config hashine bağlandı.
+- Bağımsız adversarial review, eski system promptun `<<KANITLAR>>` üretmesini ve
+  untrusted filename/path/heading/content'in `</KANITLAR>`, `<POLITIKA>`,
+  `<REPAIR>` veya `[S<n>]` taklit edebilmesini P1 olarak yeniden üretti. System ve
+  user delimiter'ları exact eşitlendi; query/history/evidence scalarları yalnız
+  model-facing katmanda injective JSON-string encoding ile structure-inert hale
+  getirildi. Raw evidence, hash, encrypted snapshot ve citation değerleri
+  değişmedi.
+- Yalnız canonical `S1..Sn` label dizisi kabul edilir. Boş/unresolved leading
+  evidence sonrası kullanılabilir kaynaklar aynı production response/persistence
+  zincirinde deterministik yeniden label'lanır. Whitespace/control-only/non-text
+  içerik model çağırmadan no-answer olur. History rolü yalnız `user|assistant`.
+- `structured_prompt_contract.py`, AnswerEnvelope schema serialization'ı ile
+  initial/internal repair promptunun ortak authority'sidir. Context budget,
+  encoded base promptun yanında application repair ve en kötü provider-internal
+  repair zarfını da sayar. Malformed model çıktısı repair promptuna geri taşınmaz.
+- Yeni ve silinmeyen `05`–`07` izole DB/bucket koşuları duration gate'i geçti
+  fakat model filename'i source label sanınca answerability/citation kalite
+  kapısını geçemedi. `08`, bağımsız P1 review üzerine application write öncesi
+  durduruldu. `09`, yanlış direct-invocation SQLAlchemy driver seçimi nedeniyle
+  import öncesi fail-closed oldu. DB'ler korundu; yeniden kullanılmadı.
+- Doğru installed `psycopg2` yolu ve yeni `10` DB/bucket ile exact offline BGE
+  `5617a9f61b028005a4858fdac845db406aefb181` + Qwen
+  `989aa7980e4cf806f80c7fef2b1adb7bc71aa306` üretim provası exit `0` verdi.
+  Enforced 900 saniye kapısı içinde end-to-end `56.218 s`, answer `50.679 s`;
+  provider call `3`, input token `917`, output token `97`, maliyet `0`.
+- Run `10` metrikleri: recall/MRR/NDCG/context precision/context recall/citation
+  precision/recall/coverage/answer sufficiency `1.0`; answerability FP/FN,
+  active-version/profile/project/workspace leakage, prompt-injection success,
+  invalid label, unsupported claim, retry, duplicate, orphan ve critical/high
+  security finding `0`. Golden sonuçların provider'a gönderilmediği candidate
+  rapor alanı `false`; bu bağımsız non-transfer yerine geçmez.
+- DB10 Alembic `cv3_00000006`: project `1`, document `1`, completed ingestion
+  `1`, retrieval run `1`, message `2`, answerable assistant `1`, claim `1`,
+  message citation `1`, claim-citation `1`. Bucket10 nesne `3`; AES-GCM marker
+  doğrulaması `3/3`. Hiçbir DB/bucket silinmedi veya resetlenmedi.
+- Post-commit focused **337/337 PASS**. Fresh
+  `cv3_eval_fullsuite_20260905_03` + ayrı MinIO bucket ile tam backend
+  **992 PASS, 2 SKIP, 1 bilinen uyarı**. Ruff, `git diff --check`, 14-source
+  MyPy ratchet, deterministic OpenAPI, 163-package offline lock ve dependency
+  audit (bilinen açık yok) PASS.
+- Bağımsız post-commit review `APPROVE`, P0/P1/P2 `0`; commit tree
+  `bcc9b651916e6bd853e1992a0a6882d40e34e9da`, 109-member source closure ve
+  runner bundle
+  `abeaaf8a3d1901318139f41ec215c362470e60336ba3b639056e93fc7d133858`
+  doğrulandı. Public-safe kanıt:
+  `document-rag-platform/artifacts/evals/2026-09-05-a9-phased-local-rehearsal/`.
+- Açık kapılar değişmedi: owner-reviewed private pack + exact approval;
+  adversarial permission/version/cross-scope pack; bağımsız request/golden
+  non-transfer kanıtı; ilk insan baseline review/seal. Onaysız tek kayıtlı
+  fixture bu kapıları veya A9'u kapatmaz; A11 başlatılmadı.
+
 ---
 
 ## 17. AŞAMA 10 — Frontend ve ürün sözleşmesi

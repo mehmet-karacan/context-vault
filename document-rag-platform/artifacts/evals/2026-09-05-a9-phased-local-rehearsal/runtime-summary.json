@@ -1,0 +1,121 @@
+{
+  "schema_version": "1.0",
+  "status": "LOCAL_REHEARSAL_PASS_A9_OPEN",
+  "repository_revision": "6dbbfbbe5939f710faad3aa06258fe1dc32d2d89",
+  "branch": "fix/context-vault-v3-hardening",
+  "pack_kind": "unapproved-local-rehearsal",
+  "pack_sha256": "2619e9e96be0e32015354f493e4f426f4446747548140499cd05ecc95d102899",
+  "execution_projection_sha256": "d83cafa42847e67846e2175a432ad7ce8b55079dcac0030de60fdf6447d3f768",
+  "runner_bundle_sha256": "abeaaf8a3d1901318139f41ec215c362470e60336ba3b639056e93fc7d133858",
+  "environment_sha256": "bf95455c4fe8a691b73ebbec1e5370b8db7cd1b8977b712c3eecb9d2519a0658",
+  "provider_report_sha256": "00481226ad61c6e50948ab75a39bec55e61939e78424bed597c8793ec47cb6c7",
+  "embedding_model": "BAAI/bge-m3@5617a9f61b028005a4858fdac845db406aefb181",
+  "generation_model": "Qwen/Qwen2.5-1.5B-Instruct@989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+  "infrastructure": {
+    "alembic_head": "cv3_00000006",
+    "redis_role": "health-only",
+    "celery_delivery_exercised": false,
+    "databases_deleted": 0,
+    "buckets_deleted": 0
+  },
+  "runs": [
+    {
+      "id": "05",
+      "database": "cv3_eval_a9_local_20260905_05",
+      "bucket": "cv3-eval-a9-local-20260905-05",
+      "report_sha256": "db63e3bcc05e22e074eb6342baabcc91a82eb6d8d18620cb4d9674c01813dfc7",
+      "result": "DURATION_PASS_QUALITY_FAIL",
+      "messages": 2,
+      "citations": 0,
+      "bucket_objects": 3,
+      "encrypted_objects": 3
+    },
+    {
+      "id": "06",
+      "database": "cv3_eval_a9_local_20260905_06",
+      "bucket": "cv3-eval-a9-local-20260905-06",
+      "report_sha256": "050057b2550dccb6228a9a838c387ee72b6f872aaafff34d132b4eba3d7a715c",
+      "result": "DURATION_PASS_QUALITY_FAIL",
+      "messages": 2,
+      "citations": 0,
+      "bucket_objects": 3,
+      "encrypted_objects": 3
+    },
+    {
+      "id": "07",
+      "database": "cv3_eval_a9_local_20260905_07",
+      "bucket": "cv3-eval-a9-local-20260905-07",
+      "report_sha256": "1a5a1c5995f03bc4c93bf43ba32c92785d4ad310ee4258a6f0c59c0be5f2a71d",
+      "result": "DURATION_PASS_QUALITY_FAIL",
+      "messages": 2,
+      "citations": 0,
+      "bucket_objects": 3,
+      "encrypted_objects": 3
+    },
+    {
+      "id": "08",
+      "database": "cv3_eval_a9_local_20260905_08",
+      "bucket": "cv3-eval-a9-local-20260905-08",
+      "result": "INTERRUPTED_ON_INDEPENDENT_P1_REVIEW_BEFORE_WRITES",
+      "messages": 0,
+      "citations": 0,
+      "bucket_objects": 0
+    },
+    {
+      "id": "09",
+      "database": "cv3_eval_a9_local_20260905_09",
+      "bucket": "cv3-eval-a9-local-20260905-09",
+      "result": "DIAGNOSTIC_INVOCATION_DRIVER_MISMATCH_BEFORE_WRITES",
+      "messages": 0,
+      "citations": 0,
+      "bucket_objects": 0
+    },
+    {
+      "id": "10",
+      "database": "cv3_eval_a9_local_20260905_10",
+      "bucket": "cv3-eval-a9-local-20260905-10",
+      "report_sha256": "00481226ad61c6e50948ab75a39bec55e61939e78424bed597c8793ec47cb6c7",
+      "result": "LOCAL_REHEARSAL_PASS",
+      "projects": 1,
+      "documents": 1,
+      "completed_ingestion_jobs": 1,
+      "retrieval_runs": 1,
+      "messages": 2,
+      "assistant_answerable_messages": 1,
+      "message_claims": 1,
+      "message_citations": 1,
+      "claim_citations": 1,
+      "bucket_objects": 3,
+      "encrypted_objects": 3,
+      "provider_calls": 3,
+      "input_tokens": 917,
+      "output_tokens": 97,
+      "cost_usd": 0.0,
+      "end_to_end_ms": 56217.860125005245,
+      "answer_ms": 50679.04341593385
+    }
+  ],
+  "verification": {
+    "focused_tests_passed": 337,
+    "focused_tests_failed": 0,
+    "full_backend_tests_passed": 992,
+    "full_backend_tests_skipped": 2,
+    "full_backend_tests_failed": 0,
+    "full_backend_warnings": 1,
+    "ruff": "PASS",
+    "mypy_ratchet": "PASS_14_SOURCES",
+    "deterministic_openapi": "PASS",
+    "offline_lock_packages": 163,
+    "dependency_audit": "PASS_NO_KNOWN_VULNERABILITIES",
+    "git_diff_check": "PASS",
+    "independent_review": "APPROVE_NO_P0_P1_P2"
+  },
+  "open_gates": [
+    "owner-reviewed private pack and exact approval manifest",
+    "adversarial permission/version/cross-scope coverage",
+    "independent request/golden non-transfer evidence",
+    "first human baseline review and seal"
+  ],
+  "a9_closed": false,
+  "a11_started": false
+}
