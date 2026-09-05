@@ -28,9 +28,13 @@ The JSON object must bind the exact checkout SHA and an active positive
 through the authenticated GitHub REST API. It requires `main` to point at the
 exact SHA, branch-targeting conditions, required PRs, up-to-date status checks,
 conversation resolution, blocked force-push/deletion, and the owner-only admin
-bypass representation. Required status checks are the actual GitHub job/check
+bypass representation. The dedicated main ruleset must have no ref exclusions,
+avoiding any local approximation of GitHub's wildcard semantics. Required status
+checks are the actual GitHub job/check
 contexts (`backend`, `frontend`, `offline-contract-fixture`, `supply-chain`, two
-CodeQL matrix checks and `check-ownership`), not workflow display names.
+CodeQL matrix checks and `check-ownership`), not workflow display names, and every
+one must be bound to the GitHub Actions integration id observed from GitHub's
+authenticated check-run API.
 
 A ruleset response does not prove that an attempted direct push was rejected.
 That acceptance item stays separate and open until a real rejection probe has

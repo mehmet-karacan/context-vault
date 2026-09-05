@@ -180,7 +180,17 @@ def test_hand_authored_ci_receipt_fails_when_github_disagrees(tmp_path: Path) ->
     assert any("authenticated GitHub API state" in error for error in result["errors"])
 
 
-def _ruleset_api(module, head: str, checks: list[str]):
+def _ruleset_api(
+    module,
+    head: str,
+    checks: list[str],
+    *,
+    excludes: list[str] | None = None,
+    integration_id: int | None = None,
+):
+    if integration_id is None:
+        integration_id = module.GITHUB_ACTIONS_INTEGRATION_ID
+
     def get(endpoint: str) -> dict:
         if endpoint.endswith("/branches/main"):
             return {"commit": {"sha": head}}
@@ -198,7 +208,12 @@ def _ruleset_api(module, head: str, checks: list[str]):
                     "bypass_mode": "always",
                 }
             ],
-            "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
+            "conditions": {
+                "ref_name": {
+                    "include": ["~DEFAULT_BRANCH"],
+                    "exclude": excludes or [],
+                }
+            },
             "rules": [
                 {"type": "deletion"},
                 {"type": "non_fast_forward"},
@@ -211,7 +226,11 @@ def _ruleset_api(module, head: str, checks: list[str]):
                     "parameters": {
                         "strict_required_status_checks_policy": True,
                         "required_status_checks": [
-                            {"context": context} for context in checks
+                            {
+                                "context": context,
+                                "integration_id": integration_id,
+                            }
+                            for context in checks
                         ],
                     },
                 },
@@ -221,13 +240,8 @@ def _ruleset_api(module, head: str, checks: list[str]):
     return get
 
 
-def test_ruleset_receipt_rejects_unprotected_or_incomplete_state(
-    tmp_path: Path,
-) -> None:
-    module = _module()
-    head = "a" * 40
-    path = tmp_path / "ruleset.json"
-    payload = {
+def _valid_ruleset_receipt(module, head: str) -> dict:
+    return {
         "schema_version": "1.0",
         "repository": module.REPOSITORY_ID,
         "head_sha": head,
@@ -243,6 +257,15 @@ def test_ruleset_receipt_rejects_unprotected_or_incomplete_state(
         "required_status_checks": sorted(module.REQUIRED_STATUS_CHECKS),
         "ruleset_id": 42,
     }
+
+
+def test_ruleset_receipt_rejects_unprotected_or_incomplete_state(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    head = "a" * 40
+    path = tmp_path / "ruleset.json"
+    payload = _valid_ruleset_receipt(module, head)
     _write_json(path, payload)
     assert (
         module.inspect_main_ruleset_receipt(
@@ -267,22 +290,7 @@ def test_hand_authored_ruleset_receipt_fails_when_github_disagrees(
     module = _module()
     head = "a" * 40
     path = tmp_path / "ruleset.json"
-    payload = {
-        "schema_version": "1.0",
-        "repository": module.REPOSITORY_ID,
-        "head_sha": head,
-        "status": "PASS",
-        "branch": "main",
-        "enforcement": "active",
-        "pull_request_required": True,
-        "required_branch_up_to_date": True,
-        "force_push_allowed": False,
-        "deletion_allowed": False,
-        "conversation_resolution_required": True,
-        "bypass_policy": "owner_emergency_receipt_only",
-        "required_status_checks": sorted(module.REQUIRED_STATUS_CHECKS),
-        "ruleset_id": 42,
-    }
+    payload = _valid_ruleset_receipt(module, head)
     _write_json(path, payload)
     result = module.inspect_main_ruleset_receipt(
         path,
@@ -293,3 +301,46 @@ def test_hand_authored_ruleset_receipt_fails_when_github_disagrees(
     )
     assert result["valid"] is False
     assert any("GitHub ruleset/main state" in error for error in result["errors"])
+
+
+def test_ruleset_rejects_pattern_exclusion_that_can_remove_main(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    head = "a" * 40
+    path = tmp_path / "ruleset.json"
+    payload = _valid_ruleset_receipt(module, head)
+    _write_json(path, payload)
+    result = module.inspect_main_ruleset_receipt(
+        path,
+        head=head,
+        github_get=_ruleset_api(
+            module,
+            head,
+            sorted(module.REQUIRED_STATUS_CHECKS),
+            excludes=["refs/heads/ma*"],
+        ),
+    )
+    assert result["valid"] is False
+
+
+def test_ruleset_rejects_status_checks_from_untrusted_integration(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    head = "a" * 40
+    path = tmp_path / "ruleset.json"
+    payload = _valid_ruleset_receipt(module, head)
+    _write_json(path, payload)
+    result = module.inspect_main_ruleset_receipt(
+        path,
+        head=head,
+        github_get=_ruleset_api(
+            module,
+            head,
+            sorted(module.REQUIRED_STATUS_CHECKS),
+            integration_id=999999,
+        ),
+    )
+    assert result["valid"] is False
+    assert any("not bound to GitHub Actions" in error for error in result["errors"])

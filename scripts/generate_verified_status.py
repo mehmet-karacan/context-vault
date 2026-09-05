@@ -59,6 +59,7 @@ REQUIRED_STATUS_CHECKS = {
     "codeql (javascript-typescript)",
     "check-ownership",
 }
+GITHUB_ACTIONS_INTEGRATION_ID = 15368
 GitHubGet = Callable[[str], dict[str, Any]]
 
 
@@ -344,21 +345,30 @@ def _ruleset_targets_main(ruleset: dict[str, Any]) -> bool:
     if not isinstance(include, list) or not isinstance(exclude, list):
         return False
     targets_main = "~DEFAULT_BRANCH" in include or "refs/heads/main" in include
-    excludes_main = "~DEFAULT_BRANCH" in exclude or "refs/heads/main" in exclude
-    return targets_main and not excludes_main
+    # GitHub applies fnmatch semantics to exclusions. A local approximation could
+    # drift from that authority, so the verifier accepts only an empty exclusion
+    # set for this dedicated main ruleset.
+    return targets_main and not exclude
 
 
-def _ruleset_status_checks(ruleset: dict[str, Any]) -> tuple[set[str], bool]:
+def _ruleset_status_checks(
+    ruleset: dict[str, Any],
+) -> tuple[dict[str, int | None], bool]:
     status_rule = _rules_by_type(ruleset).get("required_status_checks", {})
     parameters = status_rule.get("parameters")
     if not isinstance(parameters, dict):
-        return set(), False
+        return {}, False
     raw_checks = parameters.get("required_status_checks")
-    checks = {
-        item["context"]
-        for item in raw_checks or []
-        if isinstance(item, dict) and isinstance(item.get("context"), str)
-    }
+    if not isinstance(raw_checks, list):
+        return {}, False
+    checks: dict[str, int | None] = {}
+    for item in raw_checks:
+        if not isinstance(item, dict) or not isinstance(item.get("context"), str):
+            continue
+        integration_id = item.get("integration_id")
+        checks[item["context"]] = (
+            integration_id if isinstance(integration_id, int) else None
+        )
     return checks, parameters.get("strict_required_status_checks_policy") is True
 
 
@@ -434,7 +444,8 @@ def inspect_main_ruleset_receipt(
         return result
 
     rules = _rules_by_type(ruleset)
-    remote_checks, strict_checks = _ruleset_status_checks(ruleset)
+    remote_check_sources, strict_checks = _ruleset_status_checks(ruleset)
+    remote_checks = set(remote_check_sources)
     pr_required, conversation_resolution = _ruleset_pull_request_policy(ruleset)
     branch_commit = branch.get("commit")
     branch_sha = branch_commit.get("sha") if isinstance(branch_commit, dict) else None
@@ -480,6 +491,16 @@ def inspect_main_ruleset_receipt(
     if missing_remote:
         result["errors"].append(
             f"GitHub ruleset misses required status checks: {', '.join(missing_remote)}"
+        )
+    wrong_integration = sorted(
+        context
+        for context in REQUIRED_STATUS_CHECKS & remote_checks
+        if remote_check_sources[context] != GITHUB_ACTIONS_INTEGRATION_ID
+    )
+    if wrong_integration:
+        result["errors"].append(
+            "GitHub ruleset status checks are not bound to GitHub Actions: "
+            + ", ".join(wrong_integration)
         )
     result["valid"] = not result["errors"]
     result["required_status_checks"] = sorted(remote_checks)
