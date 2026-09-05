@@ -1,0 +1,100 @@
+{
+  "schema_version": "1.0",
+  "status": "PASS_CAPTURED_LOCAL_REAL_BENCHMARK",
+  "observed_at_utc": "2026-09-05T21:05:10Z",
+  "capture_implementation_revision": "8ae5d46e4a032ee04686757051da3f9fa14374f7",
+  "evaluated_source_revision": "c3dd6f8719a0bf817ed3d9667505f86d06d52427",
+  "runner_bundle_sha256": "969235e2f1cba32bddab77d577dc6ca88a9aecb0733cb4363bfefcb51b097ed9",
+  "collector_sha256": "7ab76f90622620ba62fb801108e05279c3d97612a80946ee837102f186a19240",
+  "environment_hash": "533f8164550c9281345341768b41afacafd7ee3e3368e2a3c4e4a2c6ac72e6ef",
+  "private_inputs": {
+    "manifest_sha256": "6bb35ec5e4502a09ea15e39ecc3f762f972ed00168fea03d850d1830c1cf05c8",
+    "dataset_bundle_sha256": "5f43b2cca095d9ac74ffcc452db4a37fd3088f3004554f545868f6ecfe9dab76",
+    "golden_dataset_sha256": "5536cfa362078cabdb1eb62fce5011e7190d728644f32583691fafd79fcf9e1e",
+    "execution_dataset_sha256": "2facc380039aba17796f529d90d574a2788d026894ce5c3be1c76f95ce45b0d0",
+    "execution_projection_sha256": "ac11ebbd1605c90f4433e1b10411741e470f7908947d29fc24b4c24632097c35"
+  },
+  "approval_binding": {
+    "preflight_sha256": "11840436839d7beab4e7ec88d017cbb1dd02303ff8eb8fde957706acf79a0e84",
+    "approval_manifest_sha256": "79e50331d5263834fee869c933ebc50f53d600c94acdf414f9f15ffcfe7370df",
+    "approval_check_sha256": "c017b6130aa05322bd99c351c64785865e841baf913a61cf956c9b63c4a7f8e6",
+    "embedding_model": "BAAI/bge-m3@5617a9f61b028005a4858fdac845db406aefb181",
+    "generation_model": "Qwen/Qwen2.5-1.5B-Instruct@989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+    "provider_calls_limit": 32,
+    "input_tokens_limit": 15000,
+    "output_tokens_limit": 2000,
+    "cost_usd_limit": 0.01,
+    "duration_seconds_limit": 900
+  },
+  "discarded_outlier": {
+    "report_sha256": "5ef910734d2c6ed00d9eaba3b2294653a305773b7f999df3e19ece8fd72aeefd",
+    "capture_evidence_sha256": "bd790aba36181801b527bd53a2db22223f41b0f790b3120b8821f1b2b5170792",
+    "end_to_end_p95_ms": 125051.27780197654,
+    "delta_from_previous_sealed_baseline_percent": 25.232,
+    "promoted": false
+  },
+  "approved_captured_baseline": {
+    "report_sha256": "64f0353a28a9bc445899b8de0d9d2c2b8b328d2a6c9bdfe8a04ff12e2d86cb32",
+    "capture_evidence_sha256": "3fb63130b315767a22d729f2ea2f7389ed19083e71db03c01df3baccf0c2659b",
+    "non_transfer_receipt_sha256": "b5851f930a9dba1eef577e97a849d477c70df72f593bcc274c9673f249ff3536",
+    "non_transfer_check_sha256": "843eb2e650303a348b2dc216d93cf0a8bc14f0a72fab28bd715669c1ba157e50",
+    "baseline_seal_sha256": "805a566e357808cbd266ed354099ede204cb138963869d22a3f02900098fbefa",
+    "end_to_end_p95_ms": 108864.53115628683,
+    "delta_from_previous_sealed_baseline_percent": 9.0223
+  },
+  "strict_regression": {
+    "report_sha256": "ca674b3517b0e4b6e3abc2a565248b92140383706681a09a53558a52beb6bd39",
+    "capture_evidence_sha256": "aa5fbfa3ab17ca5183e14ff6b1a3a03332771cec3af7e177ab9425bfbd0be849",
+    "non_transfer_receipt_sha256": "43d497ebaea199ddd3959d4411b710a8b6d0de135ecd3d36fb1f6d262e1fed3e",
+    "non_transfer_check_sha256": "80403cb5e3c8b710c878b78d40ad9209eab187c2f1d374820fc2cbbadbd5d7b8",
+    "result": "PASS",
+    "regression_candidate_eligible": true,
+    "regression_findings": [],
+    "warnings": [],
+    "end_to_end_p95_ms": 107078.84477073094,
+    "delta_from_captured_baseline_percent": -1.6403
+  },
+  "quality_and_safety": {
+    "recall_at_5": 0.8333333333333334,
+    "mrr_at_10": 0.8333333333333334,
+    "citation_precision": 1.0,
+    "citation_coverage": 1.0,
+    "unsupported_claim_rate": 0.0,
+    "cross_project_leakage": 0.0,
+    "cross_workspace_leakage": 0.0,
+    "invalid_citation_labels": 0,
+    "fabricated_no_answer_responses": 0,
+    "prompt_injection_success_rate": 0.0,
+    "critical_high_security_findings": 0,
+    "provider_calls": 22,
+    "input_tokens": 10078,
+    "output_tokens": 713,
+    "cost_usd": 0.0,
+    "known_non_blocking_observation": "one answerable_claims_empty repair; retrieval metrics remain 0.833333"
+  },
+  "capture_contract": {
+    "request_count": 22,
+    "request_kind_counts": {
+      "embedding": 8,
+      "query": 6,
+      "generation": 7,
+      "repair": 1
+    },
+    "raw_request_retained": false,
+    "raw_response_retained": false,
+    "golden_payload_retained": false,
+    "seal_before_golden_open": true
+  },
+  "runtime_integrity": {
+    "alembic_head": "cv3_00000006",
+    "fresh_databases_used": 3,
+    "fresh_buckets_used": 3,
+    "objects_per_completed_bucket": 24,
+    "encrypted_objects_per_completed_bucket": 24,
+    "existing_data_deleted": false
+  },
+  "independent_review": "APPROVE_P0_0_P1_0",
+  "remote_mutation": false,
+  "release_gate_eligible": false,
+  "human_release_decision_required": true
+}

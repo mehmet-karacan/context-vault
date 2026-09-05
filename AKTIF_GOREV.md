@@ -1515,7 +1515,7 @@ notes + reviewer + version
 
 ### 16.6 Regression ve release gate
 
-- [ ] İlk approved real-provider koşusu “baseline” olarak insan onayıyla mühürlenir.
+- [x] İlk approved real-provider koşusu “baseline” olarak insan onayıyla mühürlenir.
 - [x] Sonraki değişikliklerde:
   - permission/version leakage kesin `0`;
   - invalid citation label kesin `0`;
@@ -1543,7 +1543,7 @@ notes + reviewer + version
 
 - [x] Fake eval hiçbir release/quality kapısını tek başına geçiremez.
 - [x] Offline E2E fresh infrastructure üzerinde production pipeline'ı kullanır.
-- [ ] Approved real-provider benchmark etiketten sonuç türetmeden çalışır.
+- [x] Approved real-provider benchmark etiketten sonuç türetmeden çalışır.
 - [x] Leakage ve citation validity mutlak kapıları geçer.
 - [x] Quality regression exact SHA ve config hash ile raporlanır.
 - [x] Fault/concurrency/recovery senaryoları deterministic receipt üretir.
@@ -2438,6 +2438,59 @@ Durum: **yerel authority-input hardening PASS; insan/owner kapıları AÇIK**.
   run sonrası bağımsız non-transfer receipt ve ilk baseline insan seal'i gerekir.
   Bunlar model/alt ajan tarafından verilemez; §16.3, §16.6 ve §16.8 açık, A11
   başlatılmadı.
+
+### 16.26 A9 authenticated capture, approved baseline ve strict regression kaydı — 2026-09-06
+
+Başlangıç SHA: `8ae5d46e4a032ee04686757051da3f9fa14374f7`.
+Değerlendirilen kaynak SHA: `c3dd6f8719a0bf817ed3d9667505f86d06d52427`.
+Durum: **A9 gerçek yerel-provider kalite/güvenlik kapısı PASS; final release kararı
+ayrı ve açık**.
+
+- Kullanıcının açık devam/onay talimatı, exact yerel embedding/generation modelleri,
+  private pack, süre/call/token/cost bütçesi, bağımsız alt-ajan incelemesi ve baseline
+  seal için insan otoritesi olarak kaydedildi. Remote provider/OpenCode kullanılmadı;
+  `BAAI/bge-m3@5617a9f...` ve `Qwen/Qwen2.5-1.5B-Instruct@989aa798...`
+  exact local snapshot'ları kullanıldı.
+- Split v3 private manifest; execution, golden ve normalized execution projection
+  hashlerini ayrı bağladı. No-effect preflight ve approval check exact kaynak
+  `c3dd6f8`, runner bundle `969235e2...7ed9` ve environment
+  `533f8164...e6ef` için geçti; approval check'te provider çağrısı ve credential
+  value okuması `false` kaldı.
+- Authenticated persistent-socket collector her gerçek model çağrısını ACK'ledi,
+  22 isteği mühürledi ve golden dosyasını yalnız seal sonrasında açtı. Raw request,
+  response ve golden payload retention bayrakları `false`; nonce/path/credential
+  public artifact'e yazılmadı.
+- İlk captured run PASS olsa da end-to-end p95 eski mühürlü run02'ye göre
+  `%25.232` kötüleştiği için baseline yapılmadı; byte'ları değiştirilmeden outlier
+  kanıtı olarak korundu. Taze DB/bucket varyans koşusu `%9.0223` farkla eşik içinde
+  kaldı ve yeni capture-contract baseline olarak insan onayıyla mühürlendi.
+- Yeni baseline rapor SHA'sı `64f0353a...6cb32`; capture evidence SHA'sı
+  `3fb63130...659b`; seal SHA'sı `805a566e...befa`. Non-transfer checker exact
+  candidate için `RECEIPT_BOUND_TO_EXACT_CANDIDATE`, `capture_sequence_verified=true`
+  ve `provider_invoked=false` döndürdü.
+- Üçüncü taze DB/bucket koşusu bu immutable baseline'a karşı `--strict` çalıştı:
+  rapor `PASS`, `regression_candidate_eligible=true`, `warnings=[]`,
+  `regression_findings=[]`; rapor SHA `ca674b35...bd39`, evidence SHA
+  `aa5fbfa3...e849`. Bu koşunun ayrı non-transfer receipt'i de exact candidate'a
+  başarıyla bağlandı.
+- Strict koşuda Recall@5/MRR `0.833333`, citation precision/coverage `1.0`;
+  cross-project/workspace leakage, invalid citation, fabricated no-answer,
+  prompt-injection success, unsupported claim ve critical/high sayaçları `0`.
+  End-to-end p95 `107078.845 ms`, baseline'a göre `%1.6403` daha iyi. 22/32 call,
+  10078/15000 input token, 713/2000 output token ve `$0/$0.01` bütçeleri geçildi.
+  Tek `answerable_claims_empty` repair ve `0.833333` retrieval kalitesi P2 gözlem
+  olarak saklandı; mutlak kapıyı ihlal etmedi.
+- Her koşu yeni `cv3_eval_*` DB ve `cv3-eval-*` bucket kullandı; Alembic
+  `cv3_00000006`, tamamlanan bucket başına 24/24 AES-GCM marker doğrulandı.
+  Kullanıcı verisi, önceki DB/bucket, remote Git veya release state silinmedi/değişmedi.
+- Bağımsız audit capture02 ve capture03 için `APPROVE`, P0/P1 `0` verdi.
+  Checker'ın `receipt_authority_verified=false` ve `release_gate_eligible=false`
+  alanları tasarım gereği korunur; bunlar teknik A9 kapanışını geri açmaz fakat
+  otomatik remote release yetkisi vermez.
+- Public-safe kanıt:
+  `document-rag-platform/artifacts/evals/2026-09-06-a9-captured-real-benchmark/`.
+  Private pack, capture ledger ve approval/seal/receipt asılları Git dışında `0600`
+  dosyalarda tutulur.
 
 ---
 
