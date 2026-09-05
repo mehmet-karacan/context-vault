@@ -335,7 +335,9 @@ def _rules_by_type(ruleset: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
-def _ruleset_targets_main(ruleset: dict[str, Any]) -> bool:
+def _ruleset_targets_main(
+    ruleset: dict[str, Any], *, default_branch: str | None
+) -> bool:
     conditions = ruleset.get("conditions")
     ref_name = conditions.get("ref_name") if isinstance(conditions, dict) else None
     if not isinstance(ref_name, dict):
@@ -344,7 +346,9 @@ def _ruleset_targets_main(ruleset: dict[str, Any]) -> bool:
     exclude = ref_name.get("exclude")
     if not isinstance(include, list) or not isinstance(exclude, list):
         return False
-    targets_main = "~DEFAULT_BRANCH" in include or "refs/heads/main" in include
+    targets_main = "refs/heads/main" in include or (
+        "~DEFAULT_BRANCH" in include and default_branch == "main"
+    )
     # GitHub applies fnmatch semantics to exclusions. A local approximation could
     # drift from that authority, so the verifier accepts only an empty exclusion
     # set for this dedicated main ruleset.
@@ -438,6 +442,7 @@ def inspect_main_ruleset_receipt(
     try:
         ruleset = github_get(f"repos/{REPOSITORY_ID}/rulesets/{ruleset_id}")
         branch = github_get(f"repos/{REPOSITORY_ID}/branches/main")
+        repository = github_get(f"repos/{REPOSITORY_ID}")
     except RuntimeError:
         result["errors"].append("authenticated GitHub API lookup failed")
         result["required_status_checks"] = sorted(set(checks))
@@ -455,7 +460,10 @@ def inspect_main_ruleset_receipt(
         "source_type": ruleset.get("source_type"),
         "source": ruleset.get("source"),
         "enforcement": ruleset.get("enforcement"),
-        "targets_main": _ruleset_targets_main(ruleset),
+        "default_branch": repository.get("default_branch"),
+        "targets_main": _ruleset_targets_main(
+            ruleset, default_branch=repository.get("default_branch")
+        ),
         "main_head_sha": branch_sha,
         "pull_request_required": pr_required,
         "required_branch_up_to_date": strict_checks,
@@ -470,6 +478,7 @@ def inspect_main_ruleset_receipt(
         "source_type": "Repository",
         "source": REPOSITORY_ID,
         "enforcement": "active",
+        "default_branch": "main",
         "targets_main": True,
         "main_head_sha": head,
         "pull_request_required": True,

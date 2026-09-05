@@ -187,6 +187,7 @@ def _ruleset_api(
     *,
     excludes: list[str] | None = None,
     integration_id: int | None = None,
+    default_branch: str = "main",
 ):
     if integration_id is None:
         integration_id = module.GITHUB_ACTIONS_INTEGRATION_ID
@@ -194,6 +195,8 @@ def _ruleset_api(
     def get(endpoint: str) -> dict:
         if endpoint.endswith("/branches/main"):
             return {"commit": {"sha": head}}
+        if endpoint == f"repos/{module.REPOSITORY_ID}":
+            return {"default_branch": default_branch}
         return {
             "id": 42,
             "name": "Protect main",
@@ -344,3 +347,23 @@ def test_ruleset_rejects_status_checks_from_untrusted_integration(
     )
     assert result["valid"] is False
     assert any("not bound to GitHub Actions" in error for error in result["errors"])
+
+
+def test_default_branch_alias_must_resolve_to_main(tmp_path: Path) -> None:
+    module = _module()
+    head = "a" * 40
+    path = tmp_path / "ruleset.json"
+    payload = _valid_ruleset_receipt(module, head)
+    _write_json(path, payload)
+    result = module.inspect_main_ruleset_receipt(
+        path,
+        head=head,
+        github_get=_ruleset_api(
+            module,
+            head,
+            sorted(module.REQUIRED_STATUS_CHECKS),
+            default_branch="dev",
+        ),
+    )
+    assert result["valid"] is False
+    assert any("GitHub ruleset/main state" in error for error in result["errors"])

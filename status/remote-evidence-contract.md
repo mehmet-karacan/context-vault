@@ -28,7 +28,9 @@ The JSON object must bind the exact checkout SHA and an active positive
 through the authenticated GitHub REST API. It requires `main` to point at the
 exact SHA, branch-targeting conditions, required PRs, up-to-date status checks,
 conversation resolution, blocked force-push/deletion, and the owner-only admin
-bypass representation. The dedicated main ruleset must have no ref exclusions,
+bypass representation. If the ruleset uses GitHub's `~DEFAULT_BRANCH` alias,
+the authenticated repository metadata must identify `main` as that default. The
+dedicated main ruleset must have no ref exclusions,
 avoiding any local approximation of GitHub's wildcard semantics. Required status
 checks are the actual GitHub job/check
 contexts (`backend`, `frontend`, `offline-contract-fixture`, `supply-chain`, two
