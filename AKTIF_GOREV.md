@@ -2402,6 +2402,43 @@ otoritesi kapıları AÇIK**.
   baseline seal. Bu dış otoriteler henüz yoktur, dolayısıyla §16.3, §16.6 ve §16.8
   tamamlanmadı, A9 kapatılmadı ve A11'e geçilmedi.
 
+### 16.25 A9 external approval-input stable-read hardening kaydı — 2026-09-05
+
+Başlangıç SHA: `168720ca2c4aaee24ab651efb4ac0891a2f14c01`.
+Uygulama SHA: `6b39aba248c474bbc69e89bb7bd83b795278e8eb`.
+Durum: **yerel authority-input hardening PASS; insan/owner kapıları AÇIK**.
+
+- Salt-okunur tekrar incelemede external private-pack manifestinin bazı approval
+  akışlarında limitsiz `read_bytes()` ve ayrı hash okumalarıyla tüketildiği;
+  approval manifestinin de aynı stable-byte garantisini taşımadığı bulundu. İlk
+  symlink/boyut negatif testleri eski kaynakta **2 FAIL** üretti.
+- Private-pack ve approval manifestleri artık en fazla 1 MB, regular-file,
+  final-symlink takip etmeyen `O_NOFOLLOW` FD üzerinden tek stable byte/hash
+  bağlamında parse edilir. Preflight result dönmeden private manifesti; approval
+  check valid receipt dönmeden iki authority dosyasını yeniden eşler.
+- Real benchmark, bütün hazırlık tamamlandıktan sonra ve subprocess dispatch'inden
+  hemen önce private+approval hashlerini, runner bundle'ı ve environment'ı tekrar
+  doğrular. Her iki authority dosyasının eski yarış penceresinde değiştirilmesi
+  runner çağrısı `0` iken fail-closed oldu. Runner sırasında private/approval/
+  runner drift'i de post-run kapıda reddedilir; receipt admitted stable byte
+  hashlerini taşır, geç path re-read'i kullanmaz.
+- Exact post-commit sonuç: tier sözleşmeleri **240 PASS**; Ruff format/lint,
+  MyPy strict ratchet 14 kaynak ve diff-check PASS. İki bağımsız adversarial review
+  `APPROVE`, P0/P1/P2 `0` verdi.
+- Pending gerçek dossier probe'u exit `3`, output yok,
+  `provider_invoked=false`; yani bu hardening insan kararını veya model koşusunu
+  sessizce üretmedi. External internal pack/dossier directory izinleri `0700`,
+  dosyalar `0600` yapıldı; execution/golden byte SHA'ları değişmedi.
+- Public-safe kanıt:
+  `document-rag-platform/artifacts/evals/2026-09-05-a9-stable-approval-inputs/`.
+  Raw private pack Git'e alınmadı; DB/MinIO/index, model cache ve remote state
+  değiştirilmedi.
+- Açık kapı değişmedi: altı execution/golden çiftinin gerçek owner review'ü,
+  final private manifest, exact insan approval+bütçe/zaman sınırları, approved
+  run sonrası bağımsız non-transfer receipt ve ilk baseline insan seal'i gerekir.
+  Bunlar model/alt ajan tarafından verilemez; §16.3, §16.6 ve §16.8 açık, A11
+  başlatılmadı.
+
 ---
 
 ## 17. AŞAMA 10 — Frontend ve ürün sözleşmesi

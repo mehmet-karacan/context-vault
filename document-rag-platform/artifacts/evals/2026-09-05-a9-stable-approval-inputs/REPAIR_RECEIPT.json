@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0",
+  "status": "PASS_LOCAL_HARDENING_HUMAN_GATE_OPEN",
+  "observed_at_utc": "2026-09-05T06:35:43Z",
+  "baseline_revision": "168720ca2c4aaee24ab651efb4ac0891a2f14c01",
+  "implementation_revision": "6b39aba248c474bbc69e89bb7bd83b795278e8eb",
+  "scope": "A9 external private-pack and approval-manifest admission stability",
+  "test_evidence": {
+    "red_phase": "2 focused tests failed before implementation",
+    "tier_contracts": "PASS_240",
+    "ruff_format": "PASS",
+    "ruff_lint": "PASS",
+    "mypy_strict_ratchet": "PASS_14_SOURCE_FILES",
+    "independent_review_primary": "APPROVE_P0_0_P1_0_P2_0",
+    "independent_review_parallel": "APPROVE_P0_0_P1_0_P2_0"
+  },
+  "verified_behavior": [
+    "Private-pack and approval manifests are read as bounded regular files without following final symlinks.",
+    "Parsed payload and projected hash use the same stable bytes.",
+    "Preflight rechecks the private manifest before returning a fingerprint.",
+    "Approval check rechecks both authority files before returning a valid receipt.",
+    "Real benchmark rechecks both authority files immediately before dispatch and after runner completion.",
+    "Approval, private manifest, runner or environment drift fails before a valid receipt; pre-dispatch drift invokes no runner."
+  ],
+  "external_input_hashes": {
+    "candidate_bindings_sha256": "53a7d000533b3a6f63434cf8801c7660cc8791263e86525622614fc865b51ec6",
+    "pending_private_manifest_sha256": "83625848cbf2aecb1211989ec59c4d0188574d052730109fc02b6f53bca1d670",
+    "pending_approval_template_sha256": "18f8f46aa0d9eeb032d7638fbcc2ddc4d4cd17de68ba9e8c50b4c33556be39f7",
+    "dossier_readme_sha256": "9946c09c38c2b9b0551bbff30914af01c7ff49bddd519c76107286b17d0d2e15",
+    "execution_dataset_sha256": "2facc380039aba17796f529d90d574a2788d026894ce5c3be1c76f95ce45b0d0",
+    "golden_dataset_sha256": "5536cfa362078cabdb1eb62fce5011e7190d728644f32583691fafd79fcf9e1e"
+  },
+  "external_permissions": {
+    "dossier_directory": "0700",
+    "dossier_files": "0600",
+    "private_pack_directories": "0700",
+    "private_pack_files": "0600"
+  },
+  "pending_manifest_probe": {
+    "exit_code": 3,
+    "output_created": false,
+    "result": "ENVIRONMENT_UNAVAILABLE",
+    "reason": "private pack manifest fails schema validation",
+    "provider_invoked": false
+  },
+  "open_human_gates": [
+    "Owner review of all six execution/golden record pairs",
+    "Final approved private-pack manifest",
+    "Exact human approval validity window and bounded limits",
+    "Independent request-boundary/non-transfer receipt after an approved run",
+    "Human review and seal of the first approved baseline"
+  ],
+  "data_safety": {
+    "raw_private_content_copied_to_git": false,
+    "provider_or_model_invoked": false,
+    "database_or_object_mutation": false,
+    "remote_mutation": false
+  }
+}
