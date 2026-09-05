@@ -29,6 +29,7 @@ class AnswerValidationCode(StrEnum):
     UNANSWERABLE_CITATIONS_PRESENT = "answer_validation.unanswerable_citations_present"
     CLAIM_SOURCE_LABELS_INVALID = "answer_validation.claim_source_labels_invalid"
     CLAIM_TEXT_NOT_IN_ANSWER = "answer_validation.claim_text_not_in_answer"
+    CLAIM_TEXT_NOT_IN_EVIDENCE = "answer_validation.claim_text_not_in_evidence"
     USED_SOURCE_LABELS_MISMATCH = "answer_validation.used_source_labels_mismatch"
 
 

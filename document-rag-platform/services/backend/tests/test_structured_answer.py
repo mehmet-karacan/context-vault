@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from src.application.answer_service import (
     StructuredGenerationDiagnostics,
+    _parse_envelope,
     generate_answer,
 )
 from src.application.retrieval_service import RetrievalResult
@@ -191,6 +192,155 @@ def test_grounding_failures_expose_only_bounded_codes(payload, expected):
     assert str(failure.value) == "structured answer validation failed"
     assert "SECRET" not in str(failure.value)
     assert "S999" not in str(failure.value)
+
+
+def test_used_label_mismatch_does_not_bypass_evidence_grounding():
+    payload = {
+        "answerable": True,
+        "no_answer_reason": None,
+        "answer_text": "SECRET_NOT_IN_EVIDENCE",
+        "claims": [
+            {
+                "claim_text": "SECRET_NOT_IN_EVIDENCE",
+                "source_labels": ["S1"],
+            },
+        ],
+        "used_source_labels": [],
+        "uncertainty": [],
+        "safety_flags": [],
+    }
+
+    with pytest.raises(AnswerValidationError) as failure:
+        _parse_envelope(
+            payload,
+            {"S1"},
+            evidence_by_label={"S1": "Only benign evidence."},
+        )
+
+    assert failure.value.code is AnswerValidationCode.USED_SOURCE_LABELS_MISMATCH
+    assert "SECRET_NOT_IN_EVIDENCE" not in str(failure.value)
+
+
+def test_unknown_model_authored_used_label_remains_fail_closed():
+    payload = {
+        **_envelope("doğrulanmış cevap", ["S1"]),
+        "used_source_labels": ["S999"],
+    }
+
+    with pytest.raises(AnswerValidationError) as failure:
+        _parse_envelope(payload, {"S1"})
+
+    assert failure.value.code is AnswerValidationCode.USED_SOURCE_LABELS_MISMATCH
+
+
+def test_evidence_literal_claim_can_replace_ungrounded_answer_paraphrase():
+    result = _result()
+    claim = "Saklama süresi 30 gündür."
+    candidate_id = result.ranked_candidates[0].chunk_id
+    diagnostics = StructuredGenerationDiagnostics()
+    llm = StructuredLLM(
+        {
+            **_envelope("Politika yaklaşık bir ay sürer.", ["S1"]),
+            "claims": [{"claim_text": claim, "source_labels": ["S1"]}],
+            "used_source_labels": [],
+        }
+    )
+
+    response = generate_answer(
+        query=result.query,
+        retrieval_result=result,
+        chunk_resolver=lambda chunk_id: (
+            {
+                "chunk_id": chunk_id,
+                "content": f"Kanonik kayıt: {claim}",
+                "metadata": {
+                    "document_name": "policy.txt",
+                    "source_type": "document",
+                    "classification": "internal",
+                    "permit_remote_generation": True,
+                },
+            }
+            if chunk_id == candidate_id
+            else None
+        ),
+        llm_client=llm,
+        generation_diagnostics=diagnostics,
+    )
+
+    assert len(llm.calls) == 1
+    assert response["answer"] == claim
+    assert response["answerable"] is True
+    assert [citation["label"] for citation in response["citations"]] == ["S1"]
+    assert diagnostics.terminal_validation_code is None
+
+
+def test_nonliteral_claim_canonicalization_stays_bounded_and_fail_closed():
+    result = _result()
+    secret = "SECRET_NOT_IN_EVIDENCE"
+    malformed = {
+        **_envelope("Politika yaklaşık bir ay sürer.", ["S1"]),
+        "claims": [{"claim_text": secret, "source_labels": ["S1"]}],
+    }
+    llm = StructuredLLM(malformed, malformed)
+    diagnostics = StructuredGenerationDiagnostics()
+
+    response = generate_answer(
+        query=result.query,
+        retrieval_result=result,
+        chunk_resolver=_resolver(result),
+        llm_client=llm,
+        generation_diagnostics=diagnostics,
+    )
+
+    assert len(llm.calls) == 2
+    assert secret not in llm.calls[1][1]
+    assert response["answerable"] is False
+    assert response["citations"] == []
+    assert (
+        diagnostics.terminal_validation_code
+        is AnswerValidationCode.CLAIM_TEXT_NOT_IN_EVIDENCE
+    )
+
+
+def test_claim_outside_citation_snippet_is_not_canonicalized():
+    result = _result()
+    claim = "Bu gerçek yalnız kırpılan bölümün sonrasında bulunur."
+    candidate_id = result.ranked_candidates[0].chunk_id
+    malformed = {
+        **_envelope("Bu, görünür alıntıda desteklenmeyen bir özet.", ["S1"]),
+        "claims": [{"claim_text": claim, "source_labels": ["S1"]}],
+    }
+    llm = StructuredLLM(malformed, malformed)
+    diagnostics = StructuredGenerationDiagnostics()
+
+    response = generate_answer(
+        query=result.query,
+        retrieval_result=result,
+        chunk_resolver=lambda chunk_id: (
+            {
+                "chunk_id": chunk_id,
+                "content": f"{'x' * 220}{claim}",
+                "metadata": {
+                    "document_name": "policy.txt",
+                    "source_type": "document",
+                    "classification": "internal",
+                    "permit_remote_generation": True,
+                },
+            }
+            if chunk_id == candidate_id
+            else None
+        ),
+        llm_client=llm,
+        generation_diagnostics=diagnostics,
+    )
+
+    assert len(llm.calls) == 2
+    assert response["answerable"] is False
+    assert response["citations"] == []
+    assert (
+        diagnostics.terminal_validation_code
+        is AnswerValidationCode.CLAIM_TEXT_NOT_IN_EVIDENCE
+    )
 
 
 def test_unknown_label_repairs_before_any_persistence():

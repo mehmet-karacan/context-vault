@@ -116,6 +116,7 @@ ANSWER_VALIDATION_ERROR_CODES = frozenset(
         "answer_validation.unanswerable_citations_present",
         "answer_validation.claim_source_labels_invalid",
         "answer_validation.claim_text_not_in_answer",
+        "answer_validation.claim_text_not_in_evidence",
         "answer_validation.used_source_labels_mismatch",
     }
 )

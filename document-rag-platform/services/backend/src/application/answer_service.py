@@ -582,13 +582,70 @@ def _bounded_evidence(
     return selected
 
 
-def _parse_envelope(payload: Any, labels: set[str]) -> AnswerEnvelope:
+def _claimed_labels(envelope: AnswerEnvelope, labels: set[str]) -> tuple[str, ...]:
+    claimed: list[str] = []
+    for claim in envelope.claims:
+        claim_labels = tuple(dict.fromkeys(claim.source_labels))
+        if not claim_labels or not set(claim_labels).issubset(labels):
+            raise AnswerValidationError(
+                AnswerValidationCode.CLAIM_SOURCE_LABELS_INVALID
+            )
+        claimed.extend(label for label in claim_labels if label not in claimed)
+    return tuple(claimed)
+
+
+def _canonicalize_grounding(
+    envelope: AnswerEnvelope,
+    *,
+    labels: set[str],
+    evidence_by_label: Mapping[str, str] | None,
+    failure: AnswerValidationError,
+) -> AnswerEnvelope:
+    if failure.code is not AnswerValidationCode.CLAIM_TEXT_NOT_IN_ANSWER:
+        raise failure
+    claimed = _claimed_labels(envelope, labels)
+    if not set(envelope.used_source_labels).issubset(labels):
+        raise AnswerValidationError(AnswerValidationCode.USED_SOURCE_LABELS_MISMATCH)
+    if evidence_by_label is None:
+        raise failure
+    for claim in envelope.claims:
+        normalized_claim = " ".join(claim.claim_text.casefold().split())
+        if not normalized_claim or any(
+            normalized_claim
+            not in " ".join(evidence_by_label.get(label, "").casefold().split())
+            for label in dict.fromkeys(claim.source_labels)
+        ):
+            raise AnswerValidationError(AnswerValidationCode.CLAIM_TEXT_NOT_IN_EVIDENCE)
+    updates: dict[str, Any] = {
+        "used_source_labels": claimed,
+        "answer_text": "\n\n".join(claim.claim_text for claim in envelope.claims),
+    }
+    candidate = AnswerEnvelope.model_validate(
+        {**envelope.model_dump(mode="python"), **updates}
+    )
+    return validate_grounding(candidate, allowed_labels=labels)
+
+
+def _parse_envelope(
+    payload: Any,
+    labels: set[str],
+    *,
+    evidence_by_label: Mapping[str, str] | None = None,
+) -> AnswerEnvelope:
     envelope = (
         payload
         if isinstance(payload, AnswerEnvelope)
         else AnswerEnvelope.model_validate(payload)
     )
-    return validate_grounding(envelope, allowed_labels=labels)
+    try:
+        return validate_grounding(envelope, allowed_labels=labels)
+    except AnswerValidationError as exc:
+        return _canonicalize_grounding(
+            envelope,
+            labels=labels,
+            evidence_by_label=evidence_by_label,
+            failure=exc,
+        )
 
 
 def _validation_code(exc: Exception) -> AnswerValidationCode:
@@ -613,6 +670,7 @@ def _structured_generation(
     prompt: Dict[str, str],
     labels: set[str],
     model: Optional[str],
+    evidence_by_label: Mapping[str, str] | None = None,
 ) -> AnswerEnvelope:
     complete = getattr(llm_client, "complete_structured", None)
     if not callable(complete):
@@ -627,7 +685,7 @@ def _structured_generation(
                 schema=AnswerEnvelope.json_schema_contract(),
                 model=model,
             )
-            return _parse_envelope(payload, labels)
+            return _parse_envelope(payload, labels, evidence_by_label=evidence_by_label)
         except (ValidationError, AnswerValidationError, ValueError, TypeError) as exc:
             last_code = _validation_code(exc)
             if attempt >= settings.ANSWER_SCHEMA_REPAIR_ATTEMPTS:
@@ -1110,6 +1168,7 @@ def generate_answer(
                     prompt=prompt,
                     labels={item.label for item in usable},
                     model=selected_model,
+                    evidence_by_label={item.label: item.snippet for item in usable},
                 )
             except AnswerValidationError as exc:
                 if generation_diagnostics is not None:
