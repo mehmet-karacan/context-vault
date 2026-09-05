@@ -1,0 +1,15 @@
+PASS evaluated source 807845d tree equals best run17 tree: 3eeae9d929f0ebb03e05b7c3ed16ae56c9d0d4bd
+PASS focused answer/provider/runner contracts: 108 passed before final revert; independent final review recorded separately
+PASS full backend on fresh cv3_fullsuite_20260905_16 PostgreSQL, Redis, and separate absent-before-run MinIO bucket: 1059 passed, 2 skipped, 1 known warning in 19.62s
+PASS Alembic migration head: cv3_00000006
+PASS MyPy ratchet: 14 strict source files
+PASS deterministic OpenAPI contract
+PASS offline dependency lock: 163 packages
+PASS local dependency audit: no known vulnerabilities
+PASS Ruff format/check, py_compile, and git diff --check
+PASS exact local adversarial rehearsal run19: process exit 0 inside enforced 900-second budget
+PASS absolute safety: every leakage, invalid-citation, prompt-injection, retry, duplicate, orphan, and critical/high counter is zero
+PASS answer quality on unapproved synthetic rehearsal: FP/FN/unsupported-claim 0; citation precision/recall/coverage and answer sufficiency 1.0
+PARTIAL retrieval quality: Recall@5, MRR@10, and context precision 0.833333; no approved baseline exists for the canonical <=2 percentage-point regression gate
+RETAINED run14-run19 and fullsuite10-fullsuite16 databases/buckets; no target deleted or reused
+OPEN owner-reviewed real private pack, exact human approval, independent provider-request/golden non-transfer receipt, and first approved human baseline seal

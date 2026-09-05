@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "repository_revision": "807845de7d35db34bce05a206ba4c87fb10d2aba",
+  "commit_tree": "3eeae9d929f0ebb03e05b7c3ed16ae56c9d0d4bd",
+  "files": {
+    "scripts/run_eval.py": "cfcd7da0ec56492bfae90bde2ee5125412a5674d68c6826274bd3ff3aaa6411d",
+    "scripts/run_local_production_benchmark.py": "6f059b669b8d8499dc7dcd055b040d146ca76b19d7a0539bc25039ea6745bd80",
+    "scripts/run_local_production_benchmark.py.sources.json": "832585ac8cbac60798326349358adb43bc3e1f0e02e468ddb7b340c9fdce6203",
+    "scripts/local_benchmark_pack.py": "e625b6c856d4593de7e43de49bf1ce9ad5b15a3873b1de7fbfe887caa59cfb17",
+    "scripts/local_benchmark_providers.py": "b31cff181edab840a8e8419cb7797ff2b2db6e4405ea82e377fce18c2f739669",
+    "scripts/local_production_case_executor.py": "f2f3d24147879bae171404dfc498b6a5ff1f3ebfaea7263e84d233a74db7bfd7",
+    "document-rag-platform/services/backend/src/application/answer_service.py": "98212b5fa5a69df83c8bb5fd6822ba6f97aadb1967529b7dbdac147bbe52a0ff",
+    "document-rag-platform/services/backend/src/domain/answer.py": "539525d64fdc76adec92be3701bd48ce3cc474acaf4a1bdf0e2e78814159ff3f",
+    "document-rag-platform/services/backend/tests/test_answer_service.py": "8a099287add60af6db7c7a9adeb6f92926e935f8ccc97ab871b479c52a07f833",
+    "document-rag-platform/services/backend/tests/test_structured_answer.py": "614388f8e3e371f239263666822e2e83cccca2b11d17428aabdc67efcbeaac5f"
+  }
+}

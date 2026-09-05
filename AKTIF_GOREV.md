@@ -2179,6 +2179,86 @@ kapıları nedeniyle A9 AÇIK**.
   report için insan review ve baseline seal. Bu dış otoriteler olmadan §16.3,
   §16.6 ve §16.8 tamamlandı işaretlenmedi; A9 kapatılmadı ve A11'e geçilmedi.
 
+### 16.23 A9 bounded diagnostic, görünür-grounding ve evaluated-source rehearsal kaydı — 2026-09-05
+
+Başlangıç SHA: `b9856d9ec843922095cadb67216df6c9b50446fb`.
+Run19 kaynak SHA: `807845de7d35db34bce05a206ba4c87fb10d2aba`.
+Run19 ve final kod tree: `3eeae9d929f0ebb03e05b7c3ed16ae56c9d0d4bd`.
+Durum: **adversarial safety PASS; answer/citation kalitesi sentetik rehearsal'da
+PASS; retrieval kalitesi PARTIAL; insan/owner kapıları nedeniyle A9 AÇIK**.
+
+- `5dbbdc3` ile structured-answer terminal hataları raw model/provider çıktısı
+  saklanmadan sabit `AnswerValidationCode` alt tiplerine ayrıldı. Vaka-lokal typed
+  collector API response'una, persistence'a veya request ledger'a eklenmez;
+  executor/runner/report yalnız exact allowlist kabul eder, aggregate hata toplamı
+  kayıt sayısıyla sınırlıdır ve terminal exception zinciri kesilir. Exact run14
+  dağılımı `answerable_claims_empty=1`, `claim_text_not_in_answer=1`; rapor
+  per-case alt tip yayımlamadığı için kodlar vakalara sonradan eşlenmedi.
+- `e418463` yalnız model-authored claim her cited görünür snippet'te normalize
+  literal ise `answer_text` ve kullanılan label sırasını kanonikleştirir. Standalone
+  used-label mismatch, unknown label, cited snippet dışında kalan claim ve ilk 200
+  karakter sonrasındaki claim fail-closed kalır. Önceki iki karşı-örnek bağımsız
+  incelemede yeniden üretildi ve düzeltme sonrası reddedildi.
+- `242f572` ile exact `Evidence.snippet` promptta ayrı `Alıntı` alanı olarak
+  görünür hale getirildi; tam `İçerik` cevap sentezi için korunurken ana ve repair
+  promptu claim'i cited `Alıntı` alanından aynen kopyalamaya bağlandı. Injection
+  probe sahte delimiter/label/alanın escape edildiğini; worst-case bütçe testi
+  ek snippet alanının token hesabına dahil olduğunu doğruladı.
+- `0fd4085` ile yalnız semantik benzerliğin answerability için yetersiz olduğu,
+  kanıt sorgudaki özne/niteliği doğrudan yanıtlamıyorsa `answerable=false`
+  dönülmesi ve ilgisiz alıntıdan claim kopyalanmaması ana/repair promptuna eklendi.
+  Vaka ID, query type, persona, workspace/project veya golden içeriğine özel dal
+  eklenmedi. Her üç current değişiklik bağımsız review'da P0/P1/P2 `0` aldı.
+- Ölçümlü zincir saklandı: run14 ve run15 FP `0`, FN `0.166667`; run16 görünür
+  alıntı sözleşmesi FN'yi `0` yaptı fakat no-answer FP ve unsupported-claim'i
+  `0.166667` yaptı; relevance düzeltmeli run17 ikisini de `0` yaptı. Kanonik
+  no-answer JSON örneğini deneyen run18 FN'yi `0.5`'e yükselttiği için reddedildi ve
+  history-preserving `807845d` revert commit'iyle kaldırıldı. Run19 kaynak tree'si
+  run17 tree'siyle exact aynıdır; run19 evaluated source SHA üzerinde sonucu
+  tekrarladı.
+- Final kod tree'si için absent-before-run fresh `cv3_fullsuite_20260905_16` DB,
+  Redis ve ayrı MinIO bucket ile backend **1059 PASS, 2 SKIP, 1 bilinen Starlette
+  uyarısı**; Alembic head `cv3_00000006`. MyPy ratchet 14 strict kaynak,
+  deterministic OpenAPI, 163-package offline lock, dependency audit (bilinen açık
+  yok), Ruff format/check, pycompile ve diff-check PASS.
+- Exact offline BGE-M3 + Qwen2.5-1.5B run19 kaynak SHA'sı üzerinde, fresh
+  `cv3_eval_a9_local_20260905_19` DB ve
+  `cv3-eval-a9-local-20260905-19` bucket üzerinde 900 saniyelik sınır içinde exit
+  `0` üretti. Runner bundle
+  `9463b5f614f378dc4b6560bb94d3d1ef38ec569031ed500b19f8b5845d4c3a7d`,
+  environment
+  `533f8164550c9281345341768b41afacafd7ee3e3368e2a3c4e4a2c6ac72e6ef`,
+  metadata SHA
+  `d147eb6b158cc639cb8009f36a5cfea9bf9c787dcde29074a14bf2822770a0ea`,
+  provider report SHA
+  `577a2ebc82c2fa5dc7a73895072d8a775501c3a62de3994f8596aacd4695e418`.
+- Run19 provider call `22`, input token `10078`, output token `713`, maliyet `0`.
+  Permission/version, active-version, profile, cross-project/workspace leakage;
+  invalid citation; prompt injection; retry, duplicate, orphan ve critical/high
+  finding `0`. Answerability FP/FN ve unsupported-claim `0`; citation
+  precision/recall/coverage ve answer sufficiency `1.0`. Beklenen no-answer
+  vakasındaki fail-closed yol bounded `answerable_claims_empty=1` olarak kaldı.
+- Retrieval Recall@1/3/5/10, MRR@10, nDCG@10 ve context precision `0.833333`;
+  context recall `1.0`. No-answer vakası retrieval candidate döndürdüğü için bu
+  değerler `1.0` değildir. Kanonik kabul kuralı ilk approved baseline'a göre en
+  fazla 2 yüzde puan regresyondur; approved baseline bulunmadığından metrikler
+  değiştirilmedi veya PASS ilan edilmedi, retrieval kalitesi PARTIAL tutuldu.
+- Run19 DB sayımları project `6`, document `7`, version/completed job `8`,
+  retrieval run `6`, message `12`, citation/claim `5`; assistant message `5`
+  answerable, `1` fail-closed no-answer. Temporal durum `7` ready/active ve `1`
+  superseded/inactive. Bucket `24` nesne ve production AES-GCM marker `24/24`.
+  Run14-run19 ile fullsuite10-fullsuite16 hedefleri silinmedi veya tekrar
+  kullanılmadı.
+- Public-safe aggregate kanıt:
+  `document-rag-platform/artifacts/evals/2026-09-05-a9-visible-grounding-local-rehearsal/`.
+  Raw external pack, query, prompt, model output, golden label ve credential Git'e
+  alınmadı. `golden_results_sent_to_provider=false` yalnız runner iddiasıdır,
+  bağımsız non-transfer receipt değildir.
+- Açık kapılar değişmedi: owner-reviewed gerçek private pack ve exact insan
+  approval; bağımsız provider-request/golden non-transfer receipt; ilk approved
+  report için insan review ve baseline seal. Sentetik local rehearsal bu
+  otoriteleri veya A9'u kapatmaz; §16.3, §16.6 ve §16.8 açık, A11 başlatılmadı.
+
 ---
 
 ## 17. AŞAMA 10 — Frontend ve ürün sözleşmesi

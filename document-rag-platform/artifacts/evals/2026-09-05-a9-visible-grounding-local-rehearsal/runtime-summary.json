@@ -1,0 +1,105 @@
+{
+  "schema_version": "1.0",
+  "status": "SAFETY_AND_ANSWER_QUALITY_PASS_RETRIEVAL_PARTIAL_A9_OPEN",
+  "repository_revision": "807845de7d35db34bce05a206ba4c87fb10d2aba",
+  "commit_tree": "3eeae9d929f0ebb03e05b7c3ed16ae56c9d0d4bd",
+  "runner_bundle_sha256": "9463b5f614f378dc4b6560bb94d3d1ef38ec569031ed500b19f8b5845d4c3a7d",
+  "environment_hash": "533f8164550c9281345341768b41afacafd7ee3e3368e2a3c4e4a2c6ac72e6ef",
+  "pack_bundle_sha256": "5f43b2cca095d9ac74ffcc452db4a37fd3088f3004554f545868f6ecfe9dab76",
+  "execution_projection_sha256": "ac11ebbd1605c90f4433e1b10411741e470f7908947d29fc24b4c24632097c35",
+  "unapproved_metadata_sha256": "d147eb6b158cc639cb8009f36a5cfea9bf9c787dcde29074a14bf2822770a0ea",
+  "provider_report_sha256": "577a2ebc82c2fa5dc7a73895072d8a775501c3a62de3994f8596aacd4695e418",
+  "migration_head": "cv3_00000006",
+  "run19": {
+    "database": "cv3_eval_a9_local_20260905_19",
+    "bucket": "cv3-eval-a9-local-20260905-19",
+    "records": 6,
+    "provider_calls": 22,
+    "input_tokens": 10078,
+    "output_tokens": 713,
+    "cost_usd": 0.0,
+    "database_counts": {
+      "projects": 6,
+      "documents": 7,
+      "document_versions": 8,
+      "completed_ingestion_jobs": 8,
+      "retrieval_runs": 6,
+      "messages": 12,
+      "message_citations": 5,
+      "message_claims": 5
+    },
+    "assistant_message_counts": {
+      "answerable": 5,
+      "unanswerable": 1,
+      "malformed_response": 1
+    },
+    "temporal_version_counts": {
+      "ready_active": 7,
+      "superseded_inactive": 1
+    },
+    "bucket_objects": 24,
+    "encrypted_objects": 24
+  },
+  "experiment_chain": {
+    "run14": {
+      "revision": "5dbbdc3e97297d851c4aaab24ef245e91716b800",
+      "report_sha256": "ad93c10ee06cbe359315fbe38cf80b943d5ee9f2098bd30d4578bf210ad5d342",
+      "answerability_false_positive_rate": 0.0,
+      "answerability_false_negative_rate": 0.16666666666666666,
+      "unsupported_claim_rate": 0.0
+    },
+    "run15": {
+      "revision": "e418463eb9dcf197383a6d2f09fee1e10fe6de8b",
+      "report_sha256": "e9fbc403e76b8a69f240cb9ea38011d2f98c860998a381d82ba45d750b681297",
+      "answerability_false_positive_rate": 0.0,
+      "answerability_false_negative_rate": 0.16666666666666666,
+      "unsupported_claim_rate": 0.0
+    },
+    "run16": {
+      "revision": "242f572f01a0d20d63aaec544dab53dbead88d8d",
+      "report_sha256": "ebe1971a4b2b6c23eb1b5f22881127bc7558a8ed42a61e8701ebdcbe762c0382",
+      "answerability_false_positive_rate": 0.16666666666666666,
+      "answerability_false_negative_rate": 0.0,
+      "unsupported_claim_rate": 0.16666666666666666
+    },
+    "run17": {
+      "revision": "0fd4085fb25448f647c24cfffb3f2242c04ee435",
+      "tree": "3eeae9d929f0ebb03e05b7c3ed16ae56c9d0d4bd",
+      "report_sha256": "918b4639004a36a8fd81b2f032342435a5993caaef26d11d48e46d037e2277f8",
+      "answerability_false_positive_rate": 0.0,
+      "answerability_false_negative_rate": 0.0,
+      "unsupported_claim_rate": 0.0
+    },
+    "run18_rejected": {
+      "revision": "4ca1e7010dbe24c1418d6caa5d30a185583bbc04",
+      "report_sha256": "a3942d76165ae89a47d81f8b3fdda9931839145826c9a2d2d039073f5efdf614",
+      "answerability_false_positive_rate": 0.0,
+      "answerability_false_negative_rate": 0.5,
+      "unsupported_claim_rate": 0.0,
+      "reverted_by": "807845de7d35db34bce05a206ba4c87fb10d2aba"
+    }
+  },
+  "run19_metrics": {
+    "recall_at_5": 0.8333333333333334,
+    "mrr_at_10": 0.8333333333333334,
+    "context_precision": 0.8333333333333334,
+    "context_recall": 1.0,
+    "citation_precision": 1.0,
+    "citation_recall": 1.0,
+    "citation_coverage": 1.0,
+    "answer_sufficiency": 1.0,
+    "answerability_false_positive_rate": 0.0,
+    "answerability_false_negative_rate": 0.0,
+    "unsupported_claim_rate": 0.0,
+    "error_code_distribution": {
+      "answer_validation.answerable_claims_empty": 1
+    }
+  },
+  "absolute_safety": "PASS",
+  "answer_quality": "PASS_ON_UNAPPROVED_SYNTHETIC_REHEARSAL",
+  "retrieval_quality": "PARTIAL_NO_APPROVED_BASELINE",
+  "owner_review_complete": false,
+  "independent_non_transfer_receipt_present": false,
+  "human_baseline_seal_present": false,
+  "release_gate_eligible": false
+}
