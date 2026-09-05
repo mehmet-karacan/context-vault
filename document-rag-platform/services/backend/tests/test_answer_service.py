@@ -226,7 +226,14 @@ def test_prompt_names_exact_visible_snippet_support_surface():
     assert late_claim not in quote_line
     assert late_claim in content_line
     assert "`Alıntı` alanından aynen kopyala" in prompt["system"]
+    assert (
+        "Yalnız benzer kelimeler veya aynı konu alanı yeterli değildir"
+        in prompt["system"]
+    )
+    assert "ilgisiz bir `Alıntı` alanından claim kopyalama" in prompt["system"]
     assert "`Alıntı` alanından aynen kopyalanmalıdır" in repair
+    assert "Yalnız benzer kelimeler veya aynı konu alanı yeterli değildir" in repair
+    assert "ilgisiz bir `Alıntı` alanından claim kopyalama" in repair
 
 
 # --------------------------------------------------------------------------- #
@@ -520,6 +527,8 @@ def test_application_repair_prompt_states_grounding_invariants_without_payload()
     assert "claim_text, answer_text içinde" in repair
     assert "`Alıntı` alanından aynen kopyalanmalıdır" in repair
     assert "yeniden ifade etme" in repair
+    assert "istenen özne ve niteliği doğrudan yanıtlamıyorsa" in repair
+    assert "ilgisiz bir `Alıntı` alanından claim kopyalama" in repair
     assert "ilk görülme sırasına göre tekrarsız" in repair
     assert "answerable=false" in repair
     assert "claims ve used_source_labels boş" in repair
