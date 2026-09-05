@@ -597,9 +597,15 @@ def _bind_runner_source_closure(digest: Any, entrypoint: Path) -> None:
         for path in root.rglob("*"):
             if path.is_symlink() or _path_has_symlink(path, repo_root):
                 raise EnvironmentUnavailable("runner source closure contains a symlink")
+            relative_to_root = path.relative_to(root)
+            if "__pycache__" in relative_to_root.parts:
+                if path.is_file() and path.suffix.lower() not in {".pyc", ".pyo"}:
+                    raise EnvironmentUnavailable(
+                        "runner source closure cache contains a non-bytecode member"
+                    )
+                continue
             if (
-                path.name == "__pycache__"
-                or path.suffix.lower() in NON_SOURCE_IMPORT_SUFFIXES
+                path.suffix.lower() in NON_SOURCE_IMPORT_SUFFIXES
             ):
                 raise EnvironmentUnavailable(
                     "runner source closure contains a non-source import artifact"
@@ -679,6 +685,7 @@ def _environment_sha256() -> str:
         "runner_path": _runner_path(),
         "python_dont_write_bytecode": "1",
         "python_no_user_site": "1",
+        "python_pycache_mode": "isolated-work-directory",
     }
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
@@ -1066,6 +1073,7 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
         "LANG": "C.UTF-8",
         "PYTHONDONTWRITEBYTECODE": "1",
         "PYTHONNOUSERSITE": "1",
+        "PYTHONPYCACHEPREFIX": str(work / "isolated-pycache"),
         "CV_EVAL_OUTPUT": str(output),
     }
     env.update(

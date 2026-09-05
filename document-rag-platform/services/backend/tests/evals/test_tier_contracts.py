@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import py_compile
 import subprocess
 import sys
 from pathlib import Path
@@ -521,7 +522,6 @@ def test_runner_source_sidecar_rejects_escape_or_symlink(
         "module.pyd",
         "module.dylib",
         "module.dll",
-        "__pycache__/module.pyc",
     ],
 )
 def test_runner_source_sidecar_rejects_importable_non_source_artifacts(
@@ -549,6 +549,91 @@ def test_runner_source_sidecar_rejects_importable_non_source_artifacts(
 
     with pytest.raises(
         run_eval.EnvironmentUnavailable, match="non-source import artifact"
+    ):
+        run_eval._runner_bundle_sha256([str(entrypoint)])
+
+
+def test_runner_source_cache_is_ignored_only_with_isolated_child_pycache(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(run_eval, "REPO", tmp_path)
+    entrypoint = tmp_path / "runner"
+    entrypoint.write_text("#!/bin/sh\nexit 0\n")
+    entrypoint.chmod(0o700)
+    source_root = tmp_path / "src"
+    source_root.mkdir()
+    source = source_root / "victim.py"
+    source.write_text("VALUE = 'unapproved'\n")
+    cache_file = Path(importlib.util.cache_from_source(str(source)))
+    py_compile.compile(
+        str(source),
+        cfile=str(cache_file),
+        doraise=True,
+        invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH,
+    )
+    source.write_text("VALUE = 'approved-source'\n")
+    entrypoint.with_name(f"{entrypoint.name}.sources.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "python_roots": ["src"],
+                "files": [],
+            }
+        )
+    )
+
+    first = run_eval._runner_bundle_sha256([str(entrypoint)])
+    cache_file.write_bytes(cache_file.read_bytes() + b"ignored-cache-drift")
+    assert run_eval._runner_bundle_sha256([str(entrypoint)]) == first
+
+    isolated_cache = tmp_path / "isolated-pycache"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                f"sys.path.insert(0, {str(source_root)!r}); "
+                "import victim; print(victim.VALUE)"
+            ),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        env={
+            "PATH": run_eval._runner_path(),
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONNOUSERSITE": "1",
+            "PYTHONPYCACHEPREFIX": str(isolated_cache),
+        },
+    )
+    assert completed.stdout.strip() == "approved-source"
+
+
+@pytest.mark.parametrize("name", ["payload.py", "payload.so", "payload.txt"])
+def test_runner_source_cache_rejects_non_bytecode_members(
+    tmp_path, monkeypatch, name
+):
+    monkeypatch.setattr(run_eval, "REPO", tmp_path)
+    entrypoint = tmp_path / "runner"
+    entrypoint.write_text("#!/bin/sh\nexit 0\n")
+    entrypoint.chmod(0o700)
+    cache = tmp_path / "src" / "__pycache__"
+    cache.mkdir(parents=True)
+    (tmp_path / "src" / "approved.py").write_text("VALUE = 'approved'\n")
+    (cache / name).write_bytes(b"unapproved")
+    entrypoint.with_name(f"{entrypoint.name}.sources.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "python_roots": ["src"],
+                "files": [],
+            }
+        )
+    )
+
+    with pytest.raises(
+        run_eval.EnvironmentUnavailable, match="cache contains a non-bytecode"
     ):
         run_eval._runner_bundle_sha256([str(entrypoint)])
 
@@ -938,6 +1023,7 @@ def test_golden_transfer_is_a_failure_and_unknown_fields_never_escape(
     assert child_env["PATH"] == run_eval._runner_path()
     assert child_env["PYTHONDONTWRITEBYTECODE"] == "1"
     assert child_env["PYTHONNOUSERSITE"] == "1"
+    assert child_env["PYTHONPYCACHEPREFIX"] == str(tmp_path / "isolated-pycache")
     assert "HOME" not in child_env and "CODEX_SESSION_ID" not in child_env
 
 
