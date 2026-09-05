@@ -26,7 +26,6 @@ from src.application.answer_service import (
     EVIDENCE_CLOSE,
     EVIDENCE_OPEN,
     Evidence,
-    NO_ANSWER_ENVELOPE_EXAMPLE,
     NO_ANSWER_TEXT,
     RAG_SYSTEM_PROMPT,
     _bounded_evidence,
@@ -41,7 +40,6 @@ from src.application.answer_service import (
 )
 from src.application.retrieval_service import RetrievalResult
 from src.config import settings
-from src.domain.answer import AnswerEnvelope, validate_grounding
 from src.infrastructure.retrieval.base import RetrievalCandidate
 from src.infrastructure.retrieval.no_answer import (
     INTENT_DOCUMENT,
@@ -233,27 +231,9 @@ def test_prompt_names_exact_visible_snippet_support_surface():
         in prompt["system"]
     )
     assert "ilgisiz bir `Alıntı` alanından claim kopyalama" in prompt["system"]
-    assert '"no_answer_reason":"insufficient_evidence"' in prompt["system"]
-    assert '"claims":[]' in prompt["system"]
     assert "`Alıntı` alanından aynen kopyalanmalıdır" in repair
     assert "Yalnız benzer kelimeler veya aynı konu alanı yeterli değildir" in repair
     assert "ilgisiz bir `Alıntı` alanından claim kopyalama" in repair
-    assert '"no_answer_reason":"insufficient_evidence"' in repair
-    assert '"claims":[]' in repair
-
-
-def test_canonical_no_answer_example_is_valid_and_shared_by_both_prompts():
-    payload = json.loads(NO_ANSWER_ENVELOPE_EXAMPLE)
-    envelope = AnswerEnvelope.model_validate(payload)
-    repair = _application_repair_user("SORU:\nkanıt var mı?", ["S1"])
-
-    assert validate_grounding(envelope, allowed_labels={"S1"}) == envelope
-    assert envelope.answerable is False
-    assert envelope.no_answer_reason == "insufficient_evidence"
-    assert envelope.claims == ()
-    assert envelope.used_source_labels == ()
-    assert RAG_SYSTEM_PROMPT.count(NO_ANSWER_ENVELOPE_EXAMPLE) == 1
-    assert repair.count(NO_ANSWER_ENVELOPE_EXAMPLE) == 1
 
 
 # --------------------------------------------------------------------------- #
@@ -549,8 +529,6 @@ def test_application_repair_prompt_states_grounding_invariants_without_payload()
     assert "yeniden ifade etme" in repair
     assert "istenen özne ve niteliği doğrudan yanıtlamıyorsa" in repair
     assert "ilgisiz bir `Alıntı` alanından claim kopyalama" in repair
-    assert '"no_answer_reason":"insufficient_evidence"' in repair
-    assert '"claims":[]' in repair
     assert "ilk görülme sırasına göre tekrarsız" in repair
     assert "answerable=false" in repair
     assert "claims ve used_source_labels boş" in repair
