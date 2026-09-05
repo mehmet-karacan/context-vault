@@ -1,0 +1,38 @@
+x-ci-backend-image: &ci-backend-image
+  image: context-vault-backend:ci
+  build:
+    context: ./services/backend
+    dockerfile: Dockerfile
+
+services:
+  migration:
+    <<: *ci-backend-image
+  backend:
+    <<: *ci-backend-image
+    environment:
+      APP_ENV: test
+      LITELLM_BASE_URL: https://provider-disabled.example.invalid/v1
+      PROVIDER_REQUEST_RETENTION: none
+  worker:
+    <<: *ci-backend-image
+    environment:
+      APP_ENV: test
+      LITELLM_BASE_URL: https://provider-disabled.example.invalid/v1
+      PROVIDER_REQUEST_RETENTION: none
+  scheduler:
+    <<: *ci-backend-image
+    environment:
+      APP_ENV: test
+      LITELLM_BASE_URL: https://provider-disabled.example.invalid/v1
+      PROVIDER_REQUEST_RETENTION: none
+
+# CI jobs use a unique Compose project name and remove these volumes with
+# `docker compose down -v`. tmpfs-backed named volumes ensure their contents
+# never persist on the runner even when a job is interrupted before cleanup.
+volumes:
+  postgres_data:
+    driver_opts: {type: tmpfs, device: tmpfs, o: size=512m}
+  redis_data:
+    driver_opts: {type: tmpfs, device: tmpfs, o: size=128m}
+  minio_data:
+    driver_opts: {type: tmpfs, device: tmpfs, o: size=512m}

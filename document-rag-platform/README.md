@@ -21,7 +21,11 @@ Kanonik uygulama dizini: **`document-rag-platform/`** (repo kökü, `AKTIF_GOREV
 
 ## Servisler
 
-`docker-compose.yml` aşağıdakileri ayağa kaldırır:
+Güvenli ortak taban `compose.yaml`'dır. `compose.override.yaml` geliştirme
+overlay'ini varsayılan olarak yükler; CI ve production açıkça kendi overlay
+dosyalarını seçer. Legacy `docker-compose.yml` geçiş süresince korunur.
+
+Varsayılan development Compose aşağıdakileri ayağa kaldırır:
 
 | Servis | Image / komut | Port | Rol |
 |---|---|---|---|
@@ -52,7 +56,11 @@ Frontend (`apps/web`, Next.js) compose'un dışında `npm run dev` ile ayrı ça
    cp .env.example .env
    ```
 
-   Zorunlu alanlar: `DATABASE_URL` (compose tarafından `POSTGRES_*`'den üretilir), `LITELLM_API_KEY`, `LITELLM_BASE_URL`. Model/eşik/güvenlik ayarları `services/backend/src/config.py`'deki varsayılanlarla çalışır.
+   `replace-with-*` değerlerini ve örnek image digest'ini gerçek local
+   değerlerle değiştir. Production'da `DATABASE_MIGRATION_URL` ayrı migration
+   owner'ını, `DATABASE_RUNTIME_URL` ise least-privilege application rolünü
+   göstermelidir. Redis URL'sindeki parola `REDIS_PASSWORD` ile; MinIO app
+   credential'ı bootstrap için verilen app credential ile aynı olmalıdır.
 
 2. Servisleri ayağa kaldır:
 
@@ -60,11 +68,8 @@ Frontend (`apps/web`, Next.js) compose'un dışında `npm run dev` ile ayrı ça
    docker compose up -d --build
    ```
 
-3. Migration'ı uygula (bkz. `services/backend/MIGRATION_RUNBOOK.md`):
-
-   ```bash
-   docker compose exec backend alembic upgrade head
-   ```
+3. `migration` one-shot servisi başarıyla bitmeden backend başlamaz. Durumu
+   `docker compose ps --all` ile doğrula; manuel `alembic upgrade` çalıştırma.
 
 4. Frontend'i başlat:
 
@@ -76,7 +81,7 @@ Frontend (`apps/web`, Next.js) compose'un dışında `npm run dev` ile ayrı ça
 
    Tarayıcıda `http://localhost:3000`. Backend tek başına `http://localhost:8000`, Swagger `http://localhost:8000/docs`.
 
-> Backend'e veritabanı tarafında erişim için: `docker exec -it rag-postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'`.
+> Backend'e veritabanı tarafında erişim için: `docker compose exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'`.
 
 ## API uçları
 
