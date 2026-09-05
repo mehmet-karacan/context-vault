@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "status": "PASS_LOCAL_WITH_REMOTE_GATES_OPEN",
+  "implementation_commit": "ee0b95891447b5d9a146468474372da2e91bc8b1",
+  "implementation_tree": "e7ecfff9b43d858246f8503eebb27831412ccb90",
+  "source_diff_sha256": "0dae58babcfbb12a0df0e7662faa8a2b53b197ce8166a254b82a8b77d8830bd8",
+  "checks": {
+    "ruff": "PASS",
+    "projection_unit_tests": "PASS_3",
+    "combined_repository_contract_tests": "PASS_6",
+    "deterministic_openapi": "PASS",
+    "workflow_yaml_parse": "PASS_5_FILES",
+    "public_tree": "PASS_279_TRACKED_FILES",
+    "clean_worktree_status_projection": "PASS_GENERATED",
+    "single_migration_head": true,
+    "required_local_evidence_present": true,
+    "no_root_application_skeletons": true,
+    "adr_index_complete": true,
+    "runbook_index_complete": true,
+    "historical_projection_errors": [],
+    "historical_projection_stale_count": 4
+  },
+  "generated_status": {
+    "sha256": "e03cad7e5923ea82c0a2bcef7c89e41e6e83c1eca15ab8d7044615703241c850",
+    "head_sha": "ee0b95891447b5d9a146468474372da2e91bc8b1",
+    "verified": false,
+    "remote_ci_evidence_present": false,
+    "main_ruleset_evidence_present": false
+  },
+  "public_tree_report_sha256": "08e6d6f282d60dcf235645b07abe9cf6d815c09db69f65dce0c280ad7870a924",
+  "data_safety": {
+    "database_mutation": false,
+    "object_store_mutation": false,
+    "remote_mutation": false
+  },
+  "open_gates": [
+    "Owner must choose the public repository license or an explicit proprietary/no-license notice.",
+    "Exact-HEAD verified=true requires real remote CI and main-ruleset receipts."
+  ]
+}

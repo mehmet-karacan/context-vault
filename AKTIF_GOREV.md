@@ -617,63 +617,87 @@ Bir ajanın veya geliştiricinin hangi dosyanın gerçek, hangi dizinin placehol
 
 ### 10.2 Ağaç temizliği
 
-- [ ] Root ve nested tree inventory alınacak.
-- [ ] ADR-001'e uygun biçimde yalnız `.gitkeep` içeren root skeleton dizinleri silinecek.
-- [ ] Gerçek içerik taşıyan root dizin otomatik silinmeyecek; sınıflandırma ve ayrı karar gerekecek.
-- [ ] Dolu dizinlerde gereksiz `.gitkeep` kaldırılacak.
-- [ ] Aynı işleve ait birden fazla compose/env/config/workflow kaynağı kalmayacak.
-- [ ] `document-rag-platform/` altındaki path'ler README, workflow, Docker, runbook ve script'lerde tek biçimde kullanılacak.
-- [ ] Tree cleanup commit'i davranış değişikliği içermeyecek.
+- [x] Root ve nested tree inventory alınacak.
+- [x] ADR-001'e uygun biçimde yalnız `.gitkeep` içeren root skeleton dizinleri silinecek.
+- [x] Gerçek içerik taşıyan root dizin otomatik silinmeyecek; sınıflandırma ve ayrı karar gerekecek.
+- [x] Dolu dizinlerde gereksiz `.gitkeep` kaldırılacak.
+- [x] Aynı işleve ait birden fazla compose/env/config/workflow kaynağı kalmayacak.
+- [x] `document-rag-platform/` altındaki path'ler README, workflow, Docker, runbook ve script'lerde tek biçimde kullanılacak.
+- [x] Tree cleanup commit'i davranış değişikliği içermeyecek.
 
 ### 10.3 Durum dokümanlarını düzeltme
 
-- [ ] `context-summary.md`, `active/current-tasks.md`, `IMPLEMENTATION_CHECKLIST.md` ve `done/completed-tasks.md` yeniden sınıflandırılacak:
+- [x] `context-summary.md`, `active/current-tasks.md`, `IMPLEMENTATION_CHECKLIST.md` ve `done/completed-tasks.md` yeniden sınıflandırılacak:
   - current truth değil, insan görünümü;
   - last_verified_sha;
   - last_verified_at;
   - evidence_manifest;
   - stale olduğunda otomatik uyarı.
-- [ ] `status/verified-state.json` oluşturulacak ve script tarafından üretilecek.
-- [ ] `scripts/generate_verified_status.py`:
+- [x] `status/verified-state.json` oluşturulacak ve script tarafından üretilecek.
+- [x] `scripts/generate_verified_status.py`:
   - Git SHA, migration head, CI sonuç referansları, test/eval artifact hash'leri ve doküman drift'ini toplar;
   - elle yazılmış “tamamlandı” iddiasını kabul etmez;
   - repo dirty veya evidence eksikse `verified=false` üretir.
-- [ ] Checklist'teki ADR-005/006 gibi mevcut dosyayla çelişen maddeler temizlenecek.
-- [ ] History rewrite sonrası geçersiz SHA referansları kaldırılacak veya “historical/non-canonical” olarak işaretlenecek.
-- [ ] README yalnız kanonik kurulum ve doğrulanmış özellikleri anlatacak; roadmap'i mevcut özellik gibi sunmayacak.
+- [x] Checklist'teki ADR-005/006 gibi mevcut dosyayla çelişen maddeler temizlenecek.
+- [x] History rewrite sonrası geçersiz SHA referansları kaldırılacak veya “historical/non-canonical” olarak işaretlenecek.
+- [x] README yalnız kanonik kurulum ve doğrulanmış özellikleri anlatacak; roadmap'i mevcut özellik gibi sunmayacak.
 
 ### 10.4 Governance belgeleri
 
-- [ ] Root `SECURITY.md` eklenecek:
+- [x] Root `SECURITY.md` eklenecek:
   - secret bildirimi;
   - public/private veri sınırı;
   - supported versions;
   - vulnerability handling;
   - history rewrite/rotation kararı.
-- [ ] `CONTRIBUTING.md` yalnız commit sahipliği değil; branch, test, migration, formatting, data-policy ve review akışını da kapsayacak.
-- [ ] CODEOWNERS, PR template ve issue template eklenecek.
+- [x] `CONTRIBUTING.md` yalnız commit sahipliği değil; branch, test, migration, formatting, data-policy ve review akışını da kapsayacak.
+- [x] CODEOWNERS, PR template ve issue template eklenecek.
 - [ ] Public reponun lisans modeli açık karara bağlanacak: uygun `LICENSE` veya açık proprietary/no-license bildirimi. Varsayım yapılmayacak.
-- [ ] ADR index'i oluşturulacak; status, supersedes, evidence ve owner alanları standardize edilecek.
-- [ ] Runbook index'i ve son doğrulama tarih/SHA'sı eklenecek.
+- [x] ADR index'i oluşturulacak; status, supersedes, evidence ve owner alanları standardize edilecek.
+- [x] Runbook index'i ve son doğrulama tarih/SHA'sı eklenecek.
 
 ### 10.5 Public-safe kaynak temizliği
 
-- [ ] `ttroot-g3.crt` için sahiplik/provenance/politika kararı alınacak.
-- [ ] Kuruma özel CA ise public tree'den çıkarılacak; deployment sırasında secret/mount/build-arg ile inject edilecek.
-- [ ] Public ve dağıtılabilir bir CA ise bile kaynak, lisans, checksum ve neden gerektiği belgelenmeden repoda tutulmayacak.
-- [ ] Corporate endpoint varsayılanları `.env.example` ve `config.py` içinden çıkarılacak; `*.example.invalid` benzeri nötr örnek kullanılacak.
-- [ ] Kurum içi deployment değerleri public repodan ayrı overlay'de tutulacak.
-- [ ] Tüm Git geçmişi secret/certificate/private endpoint açısından taranacak.
-- [ ] Gerçek credential bulunduysa rotation derhal yapılacak; history rewrite ayrı insan onayı olmadan uygulanmayacak.
+- [x] `ttroot-g3.crt` için sahiplik/provenance/politika kararı alınacak.
+- [x] Kuruma özel CA ise public tree'den çıkarılacak; deployment sırasında secret/mount/build-arg ile inject edilecek.
+- [x] Public ve dağıtılabilir bir CA ise bile kaynak, lisans, checksum ve neden gerektiği belgelenmeden repoda tutulmayacak.
+- [x] Corporate endpoint varsayılanları `.env.example` ve `config.py` içinden çıkarılacak; `*.example.invalid` benzeri nötr örnek kullanılacak.
+- [x] Kurum içi deployment değerleri public repodan ayrı overlay'de tutulacak.
+- [x] Tüm Git geçmişi secret/certificate/private endpoint açısından taranacak.
+- [x] Gerçek credential bulunduysa rotation derhal yapılacak; history rewrite ayrı insan onayı olmadan uygulanmayacak.
 
 ### 10.6 Kabul kriterleri
 
-- [ ] Repo kökünde kanonik olmayan boş app skeleton'ı yok.
-- [ ] README → workflow → compose → source path'leri tutarlı.
+- [x] Repo kökünde kanonik olmayan boş app skeleton'ı yok.
+- [x] README → workflow → compose → source path'leri tutarlı.
 - [ ] `verified-state.json` exact HEAD için üretilmiş ve `verified=true` yalnız tüm kanıtlar geçince oluşuyor.
-- [ ] Stale doküman CI'da yakalanıyor.
-- [ ] Public source tree corporate endpoint/özel trust bundle/secret/raw runtime veri taramasından geçiyor.
-- [ ] ADR ve runbook index'leri mevcut dosyaları eksiksiz listeliyor.
+- [x] Stale doküman CI'da yakalanıyor.
+- [x] Public source tree corporate endpoint/özel trust bundle/secret/raw runtime veri taramasından geçiyor.
+- [x] ADR ve runbook index'leri mevcut dosyaları eksiksiz listeliyor.
+
+### 10.7 A3 yerel kapanış kaydı — 2026-09-05
+
+- Durum: `PASS_LOCAL_WITH_REMOTE_GATES_OPEN`; implementation commit'i
+  `ee0b95891447b5d9a146468474372da2e91bc8b1`, tree
+  `e7ecfff9b43d858246f8503eebb27831412ccb90`.
+- README gerçek `/api/v1` prefix'i, tek durable ingestion yolu,
+  `FEATURE_REPOSITORY_INGESTION=false`, scheduler ve runtime lock kaynaklarıyla
+  hizalandı. Dolu iki dizindeki gereksiz `.gitkeep` kaldırıldı.
+- Dört tarihsel insan projeksiyonundaki ADR/runbook çelişkileri superseded
+  olarak işaretlendi. Status generator recorded SHA'yı exact checkout ile
+  kıyaslıyor; stale projeksiyon provenance/uyarı taşımıyorsa CI fail ediyor.
+- Clean checkout'ta generated status exact
+  `ee0b95891447b5d9a146468474372da2e91bc8b1` SHA'sını taşıdı;
+  root skeleton, tek migration head, local evidence, ADR/runbook completeness ve
+  projection safety geçti. `verified=false` sonucu doğrudur: remote CI ve main
+  ruleset receipt'leri yoktur.
+- Public tree `279` tracked dosyada PASS; deterministic OpenAPI ve altı
+  repository/status regression testi PASS.
+- Public-safe kanıt:
+  `artifacts/repository/2026-09-05-a3-closeout/`.
+- Açık kapılar: public lisans/proprietary kararı owner authority gerektirir;
+  `verified-state.json verified=true` exact remote CI + ruleset kanıtına
+  bağlıdır. Bu iki kutu bilerek açık tutuldu.
 
 ---
 
