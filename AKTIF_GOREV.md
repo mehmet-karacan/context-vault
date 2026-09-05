@@ -705,6 +705,39 @@ Bir ajanın veya geliştiricinin hangi dosyanın gerçek, hangi dizinin placehol
   `verified-state.json verified=true` exact remote CI + ruleset kanıtına
   bağlıdır. Bu iki kutu bilerek açık tutuldu.
 
+### 10.8 A3 remote-authority doğrulayıcı onarımı — 2026-09-05
+
+- Durum: `PASS_LOCAL_WITH_REMOTE_GATES_OPEN`; doğrulanan kaynak SHA
+  `2e7d301cab6987f0d199f82017bd5cb322fd99a9`.
+- İlk bağımsız inceleme, yerel JSON alanlarının kendi beyanıyla uzaktan kanıt
+  taklit edebildiğini ve A2 precommit receipt'inin geçmiş zaman damgası korunarak
+  değiştirildiğini yeniden üretti. CI receipt doğrulaması artık her run/workflow
+  id'sini authenticated GitHub REST state'inde repository, exact SHA, otomatik
+  event, completed/success durumu, attempt, URL, workflow adı/yolu ve active state
+  ile eşliyor. API/auth yokluğu veya sapması fail-closed `valid=false` olur.
+- Ruleset doğrulaması authenticated repository, `main` branch ve ruleset detail
+  endpoint'lerini eşliyor. Default-branch alias'ı yalnız GitHub gerçekten `main`
+  bildirirse kabul edilir; dedicated ruleset için ref exclude listesi boş olmalı;
+  gerçek job/check context'lerinin tamamı GitHub Actions integration id `15368`e
+  bağlı olmalıdır. Ruleset'in direct-push rejection probe'u kanıtlamadığı açıkça
+  ayrıldı ve §9.6 kutusu açık kaldı.
+- Özgün A2 `PRECOMMIT_RECEIPT.json` byte-identical SHA
+  `5c16cb03645266a9d21c72be45b19f64526ac92cd81ddf6fa661ccb9e544dc38`
+  olarak geri getirildi. `2026-09-05T05:52:30Z` zamanlı yeni correction receipt
+  bu exact hash'i supersede eder; binding ve dört dosyalı checksum zinciri PASS.
+- Exact kaynakta 14 focused regression testi, Ruff format/lint, 280 tracked
+  dosyalı public-tree scan, projection safety ve clean-tree kontrolü PASS. İki
+  bağımsız final review ayrı ayrı `APPROVE`, P0/P1/P2 `0` verdi.
+- `2026-09-05T06:10:45Z` salt-okunur GitHub gözlemi: repository default branch
+  `main`, remote main SHA `6b99a53d19e7f5f7b07b403e751c629f79ab7663`,
+  `protected=false`, ruleset listesi boş ve local candidate remote'da yok. Bu
+  nedenle remote CI/ruleset receipt'leri üretilmedi ve exact status doğru biçimde
+  `verified=false` kaldı; A2/A3 remote kapıları tamamlandı sayılmadı.
+- Public-safe kanıt:
+  `document-rag-platform/artifacts/repository/2026-09-05-a3-remote-authority-repair/`.
+- Kullanıcı DB/MinIO/index/proje dosyası ve GitHub ayarı değiştirilmedi; push, PR,
+  merge veya release yapılmadı.
+
 ---
 
 ## 11. AŞAMA 4 — Kimlik, workspace/project scope ve fail-closed API
