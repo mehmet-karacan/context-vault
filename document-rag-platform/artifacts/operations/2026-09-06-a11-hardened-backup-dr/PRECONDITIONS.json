@@ -1,0 +1,22 @@
+{
+  "evidence_type": "fresh-target-preconditions",
+  "repository_revision": "bde49aca525f7ccc40b21c039af003413621223c",
+  "schema_version": "1.0",
+  "source_container_id_sha256": "4c268e756fe7c60bdf37605ed2c9bb7d19f80754e11a1fa65a7531b53d1bbb7b",
+  "source_minio": {
+    "object_version_count": 1,
+    "object_versions_sha256": "023bf3cd29021b2ed12cc8d2977fc6373c347da09aae65aaccccbbc0f8b8a02a"
+  },
+  "source_postgres": {
+    "alembic_head": "cv3_00000006",
+    "storage_reference_count": 1,
+    "storage_rows_sha256": "38b5a12327242674a52ed439d31fec95c3df4898cffd6332118f96e34b72b8df",
+    "system_identifier_sha256": "559be260f959ee04b16d7a13c9a1aeead745d7d37e1c1d9470643ccd921e62dd"
+  },
+  "source_versioning": "Enabled",
+  "target_bucket_exists": false,
+  "target_container_id_sha256": "d20416ab57ce32975eb3cff64a8ba68c487a0c25e2c0a77bcdd6f8aeafae2b7a",
+  "target_database_exists": false,
+  "target_restore_label": "true",
+  "target_system_identifier_sha256": "f441f8dd60d2c59aa642a002631fd8978649e0895d0e615744d73bed37fa7fee"
+}

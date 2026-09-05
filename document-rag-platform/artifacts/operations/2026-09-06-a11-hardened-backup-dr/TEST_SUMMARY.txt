@@ -1,0 +1,56 @@
+A11 HARDENED BACKUP/RESTORE EVIDENCE SUMMARY
+
+Exact repository revision:
+bde49aca525f7ccc40b21c039af003413621223c
+
+Runtime:
+- PostgreSQL source and target: pgvector/pgvector:pg16 digest
+  ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b
+- MinIO source and target: minio/minio digest
+  14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+- Four uniquely labelled disposable containers; four anonymous volumes.
+- No existing user resource was targeted.
+
+Admission:
+- Clean repository provenance gate: PASS.
+- Source Alembic head cv3_00000006: PASS.
+- Source bucket versioning Enabled: PASS.
+- Source/target immutable container and PostgreSQL cluster separation: PASS.
+- Target restore label present: PASS.
+- Target DB absent and target bucket absent before first restore effect: PASS.
+- External manifest SHA-256 binding: PASS.
+
+Negative fixture result:
+- A first setup payload contained a literal escaped header rather than the seven-byte
+  CVENC1 NUL-terminated header. The backup tool failed closed before emitting a
+  completed manifest; no restore was attempted. The synthetic fixture was removed
+  from its unique bucket and rebuilt correctly.
+
+Successful backup:
+- Status PASS; one object, 90 bytes, one authenticated encrypted envelope.
+- Manifest SHA-256:
+  30d15d82a0056753f522c27f2c361280fb50d378018caf52d93cce48338c7b23
+- Independently calculated manifest SHA matched the receipt.
+- Private directory mode 0700; dump, manifest and object modes 0600; no symlinks.
+
+Successful restore:
+- Status PASS; fresh target verified.
+- Migration/auth/retrieval/citation smoke: all true.
+- Reconciliation: one DB reference, one object, zero missing, zero orphan.
+- RPO 16.184 seconds; RTO 0.794 seconds.
+- Independent target envelope authentication: PASS.
+- Database rows and object payloads match source: PASS.
+- Source pre/post snapshot unchanged: PASS.
+
+Tests:
+- pytest test_backup_restore_ops.py: 18 passed in 0.41s.
+- ruff check: PASS.
+- ruff format --check: PASS.
+
+Cleanup:
+- Four exact disposable containers removed with their four anonymous volumes.
+- Remaining resources with the drill ownership label: 0.
+
+Limit:
+- This is a local synthetic restore drill, not a production restore or release
+  approval. Both tool receipts correctly remain release-gate ineligible.

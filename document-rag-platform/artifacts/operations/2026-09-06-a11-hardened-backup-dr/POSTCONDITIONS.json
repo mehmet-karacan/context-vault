@@ -1,0 +1,22 @@
+{
+  "clusters_distinct": true,
+  "database_rows_match_source": true,
+  "evidence_type": "restore-postconditions",
+  "object_payloads_match_source": true,
+  "repository_revision": "bde49aca525f7ccc40b21c039af003413621223c",
+  "schema_version": "1.0",
+  "source_snapshot_sha256": "bc615de3bfceb3158ef14d9a5542a446be0db6c197bc636b330f914a828ff724",
+  "source_unchanged": true,
+  "target_container_id_sha256": "d20416ab57ce32975eb3cff64a8ba68c487a0c25e2c0a77bcdd6f8aeafae2b7a",
+  "target_envelope_authenticated": true,
+  "target_object_count": 1,
+  "target_object_current_digest_sha256": "b0efd9aea1abd164708827c5e3d450ee0829b5454f5628bcbfca1b82ae78f1d8",
+  "target_postgres": {
+    "alembic_head": "cv3_00000006",
+    "storage_reference_count": 1,
+    "storage_rows_sha256": "38b5a12327242674a52ed439d31fec95c3df4898cffd6332118f96e34b72b8df",
+    "system_identifier_sha256": "f441f8dd60d2c59aa642a002631fd8978649e0895d0e615744d73bed37fa7fee"
+  },
+  "target_restore_label": "true",
+  "target_versioning": "Enabled"
+}

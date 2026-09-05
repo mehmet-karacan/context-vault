@@ -1,0 +1,14 @@
+{
+  "files": {
+    "document-rag-platform/docs/runbooks/a11-backup-restore.md": "b7e8fc4a657e47e930f79ea26ff49b5852fe9c6a0d938471a39a8ccdbb9c6f34",
+    "document-rag-platform/services/backend/tests/test_backup_restore_ops.py": "81309c7d932a83be3be1eafc7e9591320b7dcbe218fdf25e528f92d153b04ae0",
+    "scripts/backup_restore.py": "6fc5fa08f15e83687ff8bb30e6b8d2e4db06ed8827bfe26d91dd82b8bd27abb8"
+  },
+  "repository_revision": "bde49aca525f7ccc40b21c039af003413621223c",
+  "runtime_image_digests": {
+    "minio": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+    "postgres": "sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b"
+  },
+  "schema_version": "1.0",
+  "tool_version": "2.0.0"
+}
