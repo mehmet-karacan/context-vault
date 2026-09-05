@@ -1,0 +1,8 @@
+{
+  "files": {
+    "document-rag-platform/services/backend/tests/test_ops_doctor.py": "47a2d8a6a92d897d93311700c9842ff3314b3718d849a239fe6d8696c11d2f4f",
+    "scripts/ops_doctor.py": "f2d6278ff88c2cd290f327faf9e7199540ae87384defc6d90dfc62258052ef82"
+  },
+  "repository_revision": "7d36fc74143d7504113ba6ac3adeaf9d736537bc",
+  "schema_version": "1.0"
+}

@@ -36,6 +36,7 @@ from src.workers.ingestion_tasks import (
     StageTransitionError,
     run_ingestion_job,
 )
+from src.infrastructure.observability import continue_trace, current_traceparent
 
 
 # --- Fake SQLAlchemy session -------------------------------------------------
@@ -193,6 +194,52 @@ def _stub_embedder(dimension=1024):
 
 def _stub_extractor(text="hello world extracted text"):
     return lambda file_path, filename: text
+
+
+def test_celery_entry_binds_trace_before_setup_and_restores_ambient(monkeypatch):
+    parent = f"00-{'1' * 32}-{'2' * 16}-00"
+    ambient = f"00-{'a' * 32}-{'b' * 16}-01"
+    seen: list[str | None] = []
+
+    class EntrySession:
+        def close(self):
+            seen.append(current_traceparent())
+
+    class EntryOrchestrator:
+        def __init__(self, _db, _storage):
+            seen.append(current_traceparent())
+
+        def process_job(self, job_id, **kwargs):
+            seen.append(current_traceparent())
+            return {"job_id": job_id, "key": kwargs["inbox_idempotency_key"]}
+
+    from src.application import ingestion_orchestrator as orchestrator_module
+
+    monkeypatch.setattr(ingestion_tasks, "SessionLocal", EntrySession)
+    monkeypatch.setattr(ingestion_tasks, "_build_storage", lambda: object())
+    monkeypatch.setattr(orchestrator_module, "IngestionOrchestrator", EntryOrchestrator)
+
+    with continue_trace(ambient):
+        result = ingestion_tasks.process_ingestion_job.run("job-1", "key-1", parent)
+        assert current_traceparent() == ambient
+
+    assert result == {"job_id": "job-1", "key": "key-1"}
+    assert seen == [parent, parent, parent]
+
+
+def test_celery_entry_binds_and_resets_trace_when_session_setup_fails(monkeypatch):
+    parent = f"00-{'1' * 32}-{'2' * 16}-01"
+    ambient = f"00-{'a' * 32}-{'b' * 16}-01"
+
+    def fail_session():
+        assert current_traceparent() == parent
+        raise RuntimeError("synthetic setup failure")
+
+    monkeypatch.setattr(ingestion_tasks, "SessionLocal", fail_session)
+    with continue_trace(ambient):
+        with pytest.raises(RuntimeError, match="synthetic setup failure"):
+            ingestion_tasks.process_ingestion_job.run("job-1", "key-1", parent)
+        assert current_traceparent() == ambient
 
 
 # --- Tests: happy path --------------------------------------------------------

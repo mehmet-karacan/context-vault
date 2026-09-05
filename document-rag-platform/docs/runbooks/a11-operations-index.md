@@ -1,10 +1,12 @@
 # A11 Operations Runbook Index
 
-Last verified SHA: `fcddb4a49e99c05e7f225fff64c56c0a778fb970`
+Last verified code SHA: `7d36fc74143d7504113ba6ac3adeaf9d736537bc`
 Last verified date: `2026-09-06`
-Verification scope: commands were syntax-reviewed; the doctor dry-run and a fully
-disposable PostgreSQL/MinIO backup→restore drill were executed. No production or
-user-data mutation is claimed.
+Verification scope: the doctor ran against a disposable eight-service Compose
+project at the code SHA above. The fully disposable PostgreSQL/MinIO
+backup→restore drill ran at exact source SHA
+`bde49aca525f7ccc40b21c039af003413621223c`. No production or user-data mutation
+is claimed.
 
 | Required §18.7 subject | Runbook |
 |---|---|

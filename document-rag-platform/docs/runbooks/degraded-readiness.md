@@ -1,6 +1,6 @@
 # Degraded Readiness and Provider Outage
 
-Last verified SHA/date: `fcddb4a49e99c05e7f225fff64c56c0a778fb970`, `2026-09-06` (dependency doctor probes exercised).
+Last verified SHA/date: `7d36fc74143d7504113ba6ac3adeaf9d736537bc`, `2026-09-06` (real disposable dependency doctor probes PASS).
 
 ## Prerequisites
 Health endpoint access, dependency ownership and capability criticality map.

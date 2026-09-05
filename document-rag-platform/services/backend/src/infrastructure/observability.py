@@ -121,7 +121,6 @@ trace_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
 span_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("span_id", default="")
 
 _LOWER_HEX = re.compile(r"[0-9a-f]+\Z")
-_FUTURE_TRACE_FIELD = re.compile(r"[0-9a-z]+\Z")
 _MAX_TRACEPARENT_BYTES = 512
 trace_flags_var: contextvars.ContextVar[str] = contextvars.ContextVar(
     "trace_flags", default="01"
@@ -130,12 +129,19 @@ trace_flags_var: contextvars.ContextVar[str] = contextvars.ContextVar(
 
 def parse_traceparent(value: str | None) -> tuple[str, str, str] | None:
     """Parse a bounded W3C ``traceparent`` without normalizing bad input."""
-    if not value or len(value) < 55 or len(value) > _MAX_TRACEPARENT_BYTES:
+    if (
+        not value
+        or not value.isascii()
+        or len(value) < 55
+        or len(value) > _MAX_TRACEPARENT_BYTES
+    ):
         return None
-    parts = value.split("-")
-    if len(parts) < 4 or (parts[0] == "00" and len(parts) != 4):
+    if value[2] != "-" or value[35] != "-" or value[52] != "-":
         return None
-    version, trace_id, span_id, flags, *future = parts
+    version = value[:2]
+    trace_id = value[3:35]
+    span_id = value[36:52]
+    flags = value[53:55]
     if (
         len(version) != 2
         or not _LOWER_HEX.fullmatch(version)
@@ -146,8 +152,11 @@ def parse_traceparent(value: str | None) -> tuple[str, str, str] | None:
         or not _LOWER_HEX.fullmatch(span_id)
         or len(flags) != 2
         or not _LOWER_HEX.fullmatch(flags)
-        or any(not _FUTURE_TRACE_FIELD.fullmatch(part) for part in future)
     ):
+        return None
+    if version == "00" and len(value) != 55:
+        return None
+    if version != "00" and len(value) > 55 and value[55] != "-":
         return None
     if trace_id == "0" * 32 or span_id == "0" * 16:
         return None
@@ -161,7 +170,8 @@ def canonical_traceparent(value: Any) -> str | None:
     parsed = parse_traceparent(value)
     if parsed is None:
         return None
-    return f"00-{parsed[0]}-{parsed[1]}-{parsed[2]}"
+    sampled = int(parsed[2], 16) & 0x01
+    return f"00-{parsed[0]}-{parsed[1]}-{sampled:02x}"
 
 
 def current_traceparent() -> str | None:
@@ -179,7 +189,8 @@ def continue_trace(traceparent: str | None) -> Iterator[None]:
     parsed = parse_traceparent(traceparent)
     trace_token = trace_id_var.set(parsed[0] if parsed else "")
     span_token = span_id_var.set(parsed[1] if parsed else "")
-    flags_token = trace_flags_var.set(parsed[2] if parsed else "01")
+    sampled = int(parsed[2], 16) & 0x01 if parsed else 1
+    flags_token = trace_flags_var.set(f"{sampled:02x}")
     try:
         yield
     finally:
@@ -554,14 +565,9 @@ class RequestContextMiddleware:
                         headers.append(
                             (b"x-request-id", get_request_id().encode("ascii"))
                         )
-                        headers.append(
-                            (
-                                b"traceparent",
-                                f"00-{trace_id_var.get()}-{span_id_var.get()}-01".encode(
-                                    "ascii"
-                                ),
-                            )
-                        )
+                        carrier = current_traceparent()
+                        if carrier is not None:
+                            headers.append((b"traceparent", carrier.encode("ascii")))
                         message = {**message, "headers": headers}
                     await send(message)
 

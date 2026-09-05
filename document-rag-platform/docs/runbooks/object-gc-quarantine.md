@@ -1,6 +1,6 @@
 # Object GC and Quarantine
 
-Last verified SHA/date: `fcddb4a49e99c05e7f225fff64c56c0a778fb970`, `2026-09-06` (reconciliation/receipt path exercised on disposable storage).
+Last verified SHA/date: `bde49aca525f7ccc40b21c039af003413621223c`, `2026-09-06` (hardened reconciliation/receipt path exercised on disposable storage).
 
 ## Prerequisites
 Fresh inventory, DB snapshot, retention/legal-hold policy and owner-approved grace period.

@@ -1085,20 +1085,22 @@ def process_ingestion_job(
     ``run_ingestion_job`` (the actual state machine) so the logic is
     unit-testable without Celery, a real Postgres, or a real MinIO.
     """
-    db = SessionLocal()
-    try:
-        from ..application.ingestion_orchestrator import IngestionOrchestrator
+    with continue_trace(traceparent):
+        db = SessionLocal()
+        try:
+            from ..application.ingestion_orchestrator import IngestionOrchestrator
 
-        storage = _build_storage()
-        task_id = getattr(getattr(process_ingestion_job, "request", None), "id", None)
-        with continue_trace(traceparent):
+            storage = _build_storage()
+            task_id = getattr(
+                getattr(process_ingestion_job, "request", None), "id", None
+            )
             return IngestionOrchestrator(db, storage).process_job(
                 job_id,
                 celery_task_id=task_id,
                 inbox_idempotency_key=inbox_idempotency_key,
             )
-    finally:
-        db.close()
+        finally:
+            db.close()
 
 
 @celery_app.task(name="ingestion.dispatch_outbox")

@@ -1,0 +1,22 @@
+A11 DOCTOR AND TRACE REGRESSION SUMMARY
+
+Exact repository revision:
+7d36fc74143d7504113ba6ac3adeaf9d736537bc
+
+Runtime doctor:
+- Status PASS.
+- Database migration head cv3_00000006.
+- Required dependency probes PASS.
+- Missing/duplicate/unready services: 0/0/0.
+- Orphan containers/volumes: 0/0.
+- Credential values retained: false.
+- Effects performed by doctor: false.
+
+Regression:
+- Focused doctor tests: 20 passed.
+- Backend non-integration suite: 1197 passed, 9 skipped, 21 deselected.
+- Ruff check, compileall and git diff check: PASS.
+
+Cleanup:
+- The exact disposable Compose project was removed with its four volumes.
+- Remaining project-labelled containers and volumes: 0/0.

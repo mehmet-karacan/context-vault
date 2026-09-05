@@ -1,6 +1,6 @@
 # Migration, Recovery and Lineage Reset
 
-Last verified SHA/date: `fcddb4a49e99c05e7f225fff64c56c0a778fb970`, `2026-09-06` (fresh `cv3_00000006` migration and restored-head query).
+Last verified SHA/date: `7d36fc74143d7504113ba6ac3adeaf9d736537bc`, `2026-09-06` (fresh `cv3_00000006` Compose migration and doctor head query); restore source SHA `bde49aca525f7ccc40b21c039af003413621223c`.
 
 ## Prerequisites
 Valid backup+restore receipt, exact DB identity, maintenance window and `MIGRATION_RUNBOOK.md` decision record.

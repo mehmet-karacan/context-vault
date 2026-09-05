@@ -146,6 +146,7 @@ def test_middleware_continues_valid_w3c_trace_and_rejects_invalid_parent():
 
     with TestClient(app) as client:
         continued = client.get("/trace", headers={"traceparent": parent})
+        unsampled = client.get("/trace", headers={"traceparent": parent[:-2] + "00"})
         invalid = client.get("/trace", headers={"traceparent": "not-a-trace"})
         duplicate = client.get(
             "/trace",
@@ -157,6 +158,7 @@ def test_middleware_continues_valid_w3c_trace_and_rejects_invalid_parent():
 
     assert continued.headers["traceparent"].split("-")[1] == trace_id
     assert continued.headers["traceparent"].split("-")[2] != "b" * 16
+    assert unsampled.headers["traceparent"].endswith("-00")
     assert invalid.headers["traceparent"].split("-")[1] != trace_id
     assert duplicate.headers["traceparent"].split("-")[1] not in {
         trace_id,
@@ -195,9 +197,17 @@ def test_continue_trace_exposes_content_free_carrier_and_restores_context():
 
 
 def test_future_traceparent_is_accepted_and_canonicalized_to_base_fields():
-    future = f"01-{'1' * 32}-{'2' * 16}-00-vendor1"
+    future = f"01-{'1' * 32}-{'2' * 16}-00-opaque.value/vendor_x"
     assert parse_traceparent(future) == ("1" * 32, "2" * 16, "00")
     assert canonical_traceparent(future) == f"00-{'1' * 32}-{'2' * 16}-00"
+
+
+@pytest.mark.parametrize(("flags", "expected"), [("ff", "01"), ("fe", "00")])
+def test_outgoing_traceparent_masks_reserved_flag_bits(flags, expected):
+    incoming = f"00-{'1' * 32}-{'2' * 16}-{flags}"
+    assert canonical_traceparent(incoming).endswith(f"-{expected}")
+    with continue_trace(incoming):
+        assert current_traceparent().endswith(f"-{expected}")
 
 
 def test_invalid_ingress_parent_clears_ambient_trace_without_leaking_context():

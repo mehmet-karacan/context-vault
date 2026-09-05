@@ -1,8 +1,8 @@
 # A11 Backup, Restore and Object Reconciliation
 
-Last verified SHA: `fcddb4a49e99c05e7f225fff64c56c0a778fb970`
+Last verified SHA: `bde49aca525f7ccc40b21c039af003413621223c`
 Last verified date: `2026-09-06`
-Verified scope: disposable pgvector/MinIO source and fresh target, one encrypted
+Verified scope: hardened disposable pgvector/MinIO source and fresh target, one encrypted
 synthetic object, custom-format dump, restore, hash verification and reconciliation.
 
 ## Prerequisites

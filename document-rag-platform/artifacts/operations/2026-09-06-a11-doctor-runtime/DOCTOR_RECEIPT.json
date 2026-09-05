@@ -1,0 +1,42 @@
+{
+  "compose_service_count": 8,
+  "compose_volume_count": 4,
+  "credential_values_retained": false,
+  "database_check_performed": true,
+  "dependencies": {
+    "duplicate_container_services": [],
+    "expected_head": "cv3_00000006",
+    "missing_compose_services": [],
+    "missing_container_services": [],
+    "missing_dependencies": [],
+    "observed_head": "cv3_00000006",
+    "schema_at_head": true,
+    "status": "PASS",
+    "unready_container_services": []
+  },
+  "dependency_container_identifiers_retained": false,
+  "docker_context_name_hash": "fe9c6bd7a66301f49ca9b6a70b217107cd1284598bfc254700c989b916da791e",
+  "docker_host_transport": "unix",
+  "effects_performed": false,
+  "inventory": {
+    "orphan_container_count": 0,
+    "orphan_container_id_hashes": [],
+    "orphan_volume_count": 0,
+    "orphan_volume_name_hashes": []
+  },
+  "observed_at_utc": "2026-09-05T22:42:37.506293Z",
+  "planned_checks": [
+    "resolve-compose-contract",
+    "verify-local-docker-endpoint",
+    "inspect-project-containers",
+    "inspect-project-volumes",
+    "compare-repository-and-database-migration-head",
+    "probe-required-dependencies"
+  ],
+  "project_name_hash": "589e7b130bba5d12839171faefb29fa6feac487e9f26361a55571d54e43c65a3",
+  "receipt_type": "ops-doctor",
+  "repository_revision": "7d36fc74143d7504113ba6ac3adeaf9d736537bc",
+  "schema_version": "1.0",
+  "status": "PASS",
+  "tool_version": "1.1.0"
+}
