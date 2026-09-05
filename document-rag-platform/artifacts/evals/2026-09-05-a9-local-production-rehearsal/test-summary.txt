@@ -1,0 +1,20 @@
+PASS focused pytest: 279 passed in 4.18s
+  command: .venv/bin/python -m pytest tests/evals/test_tier_contracts.py tests/evals/test_local_benchmark_pack.py tests/evals/test_local_benchmark_providers.py tests/evals/test_local_production_benchmark.py tests/evals/test_local_production_case_executor.py -q
+PASS scoped Ruff: runner, pack, provider, concrete executor, and A9 contract tests
+  command: .venv/bin/ruff check ../../../scripts/run_eval.py ../../../scripts/local_benchmark_pack.py ../../../scripts/local_benchmark_providers.py ../../../scripts/run_local_production_benchmark.py ../../../scripts/local_production_case_executor.py tests/evals/test_tier_contracts.py tests/evals/test_local_benchmark_pack.py tests/evals/test_local_benchmark_providers.py tests/evals/test_local_production_benchmark.py tests/evals/test_local_production_case_executor.py
+PASS full backend on fresh cv3_eval_fullsuite_20260905_02 PostgreSQL, Redis, and separate MinIO bucket: 950 passed, 2 skipped, 1 known warning in 20.42s
+  command: DATABASE_URL=[REDACTED] REDIS_URL=[REDACTED] MINIO_ENDPOINT=[LOOPBACK] MINIO_ACCESS_KEY=[REDACTED] MINIO_SECRET_KEY=[REDACTED] MINIO_BUCKET=cv3-eval-fullsuite-20260905-02 OBJECT_STORAGE_ENCRYPTION_KEY=[REDACTED] LITELLM_API_KEY=[TEST_ONLY] .venv/bin/python -m pytest -q
+PASS MyPy ratchet: 14 source files
+  command: .venv/bin/python ../../../scripts/check_mypy_ratchet.py
+PASS deterministic OpenAPI contract
+  command: .venv/bin/python ../../../scripts/generate_openapi.py --check
+PASS offline dependency lock: 163 packages
+  command: /opt/homebrew/bin/uv lock --check --offline
+PASS local dependency audit: no known vulnerabilities
+  command: .venv/bin/python -m pip_audit --local --progress-spinner off
+PASS git diff --check
+PASS exact local DB inventory: all four databases at cv3_00000006
+PASS retained storage inventory: 3 objects per bucket, all envelope-encrypted
+PARTIAL production core: run 02 persisted 2 messages after ingestion/retrieval
+FAIL approved benchmark: no approved owner-reviewed pack or human baseline seal
+FAIL duration gate: 64-token local Qwen MPS runs exceeded 900 seconds

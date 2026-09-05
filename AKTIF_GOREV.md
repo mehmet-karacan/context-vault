@@ -1923,6 +1923,66 @@ ve A9 kapısı AÇIK**.
   request/non-transfer kanıtı ve ilk insan baseline seal'i gerekir. Bunlar
   tamamlanmadan A9 kapatılmaz ve A11 başlatılmaz.
 
+### 16.19 A9 trusted-local production-core rehearsal kaydı — 2026-09-05
+
+Başlangıç SHA: `1ba3c00b71ea8eced3e2a8d65e0b934a11ec314a`.
+Durum: **production-core entegrasyonu PARTIAL PASS; local generation duration
+gate FAIL; approved benchmark ve A9 kapısı AÇIK**.
+
+- Concrete runner; exact local BGE-M3 ve Qwen snapshot'larını production
+  `IngestionOrchestrator.accept_source/process_job`, gerçek dense/lexical/
+  identifier retrieval, `ContextBundle`, structured answer ve citation/message
+  persistence yoluna bağladı. Celery delivery çalıştırıldığı iddia edilmez;
+  Redis rolü açıkça `health-only` kaldı.
+- Runner raporundaki embedding profile ve prompt hashleri artık sentetik runner
+  nesnesinden değil production runtime'ın gerçek `profile_config_hash`,
+  AnswerEnvelope schema/system prompt ve pipeline config attestasyonundan gelir.
+  Attestasyon prepare sonrası ve finalize öncesi yeniden doğrulanır.
+- Fresh V3 migration'ın zorunlu inactive legacy principal/workspace/membership
+  seed'i exact değerleriyle kabul edilir; ekstra satır fail-closed'dur. Silinmiş
+  staging registry kayıtları fiziksel MinIO envanterine yanlışlıkla dahil
+  edilmez. Dört retained bucket'ın her birinde üç nesne vardır ve tamamı AES-GCM
+  envelope marker denetiminden geçti.
+- Runner yalnız loopback PostgreSQL/Redis/MinIO endpoint'i ve yeni `cv3_eval_*` /
+  `cv3-eval-*` hedefleri kabul eder. Ölçemediği locator/symbol/must-contain veya
+  inactive-version golden constraint'ini sessizce düşürmek yerine reddeder.
+  Unsupported-claim sayacı artık bütün claim'leri otomatik desteklenmiş saymaz;
+  her cited snippet içinde literal claim desteğini konservatif arar.
+- Production state ve idempotency kimlikleri full execution+golden bundle
+  hashinden değil, yalnız execution projection hashinden türetilir. Label-only
+  değişikliğin runtime kimliği veya provider çağrısını değiştiremediği regression
+  testiyle doğrulandı. Source closure `__pycache__` altında yalnız `.pyc/.pyo`
+  kabul eder; source/native/data payload'ı fail-closed reddeder. Forbidden source
+  bulunmayan adversarial label, yanlış sıfır prompt-injection sonucu yerine
+  konservatif failure üretir.
+- Model snapshot byte'ları admission ve finalde tam SHA-256 ile doğrulanır;
+  inference çevresinde metadata fingerprint drift kontrolü kullanılır. Qwen
+  çağrısı `torch.inference_mode()` ve KV cache ile çalışır; request ledger yine
+  yalnız hash taşır ve golden label ancak ledger freeze sonrasında açılır.
+- Unapproved tek-kayıtlı rehearsal pack ile dört ayrı, yeni ve silinmeyen DB/
+  bucket kullanıldı. Tümü Alembic `cv3_00000006`, completed ingestion `1`,
+  retrieval run `1`, şifreli nesne `3` üretti. `02` koşusu answer persistence'a
+  ulaşıp `2` message yazdı; ardından rehearsal `dataset_version` semver olmadığı
+  için doğru post-request label gate'inde reddedildi. Fixture `0.0.1` olarak
+  düzeltilip label loader ile bağımsız doğrulandı.
+- Düzeltilmiş 64-token Qwen/Transformers MPS `03` ve `04` koşuları 900 saniyelik
+  duration bütçesini aştı; exact prosesler sonlandırıldı, rapor üretmediler ve
+  başarı sayılmadılar. DB/bucket kanıtları korunup yeniden kullanılmadı.
+- Final odaklı doğrulama: **279/279 PASS**. Ayrı fresh
+  `cv3_eval_fullsuite_20260905_02` PostgreSQL, gerçek Redis ve ayrı MinIO bucket
+  ile tam backend **950 PASS, 2 SKIP, 1 bilinen uyarı**; scoped Ruff,
+  `git diff --check`, 14-source MyPy ratchet, deterministic OpenAPI, 163-package
+  offline lock ve local dependency audit (bilinen açık yok) PASS. Source
+  revision `b9155103e952401550ebc7f81cfcae7bfafb9039`, runner bundle
+  `9bfbb788a3733e179f6fbd55d8d7699ce0236662a77b3751bf060aa261f082d6`
+  ve ilgili source/test byte'ları public-safe `SOURCE_MANIFEST.json` ile bağlıdır.
+  Public-safe kanıt:
+  `document-rag-platform/artifacts/evals/2026-09-05-a9-local-production-rehearsal/`.
+- Açık kapılar: owner-reviewed private pack ve exact approval manifesti;
+  adversarial permission/version/cross-scope kapsamı; bağımsız request ve golden
+  non-transfer kanıtı; süre bütçesini geçen approved local-generation profili;
+  ilk insan baseline seal'i. Bu rehearsal A9'u kapatmaz ve A11 başlatılmadı.
+
 ---
 
 ## 17. AŞAMA 10 — Frontend ve ürün sözleşmesi
