@@ -19,7 +19,13 @@ from ..domain.ingestion import (
     source_fingerprint,
 )
 from ..infrastructure.storage import object_keys
-from ..infrastructure.observability import current_traceparent, metrics, traced
+from ..infrastructure.observability import (
+    canonical_traceparent,
+    continue_trace,
+    current_traceparent,
+    metrics,
+    traced,
+)
 from ..models import (
     AuditEvent,
     ContentPolicyDecisionRecord,
@@ -81,14 +87,13 @@ class OutboxDispatcher:
     def __init__(
         self,
         db: Session,
-        publish: Callable[[str, str, Optional[str]], None],
+        publish: Callable[[str, str], None],
         clock: Clock,
     ):
         self.db = db
         self.publish = publish
         self.clock = clock
 
-    @traced("outbox.dispatch")
     def dispatch_one(self, event_id: uuid.UUID) -> bool:
         event = (
             self.db.query(OutboxEvent)
@@ -98,6 +103,13 @@ class OutboxDispatcher:
         )
         if event is None:
             raise IngestionAcceptanceError("outbox event not found")
+        payload = event.payload_json if isinstance(event.payload_json, dict) else {}
+        durable_parent = canonical_traceparent(payload.get("traceparent"))
+        with continue_trace(durable_parent):
+            return self._dispatch_loaded(event_id, event)
+
+    @traced("outbox.dispatch")
+    def _dispatch_loaded(self, event_id: uuid.UUID, event: OutboxEvent) -> bool:
         if event.status == "published":
             return True
         from ..config import settings
@@ -117,11 +129,7 @@ class OutboxDispatcher:
         event.attempts = (event.attempts or 0) + 1
         self.db.commit()
         try:
-            self.publish(
-                str(event.aggregate_id),
-                event.idempotency_key,
-                (event.payload_json or {}).get("traceparent"),
-            )
+            self.publish(str(event.aggregate_id), event.idempotency_key)
         except Exception as exc:
             metrics.incr("outbox.failures")
             event = self.db.get(OutboxEvent, event_id)
@@ -191,7 +199,7 @@ class IngestionOrchestrator:
         storage,
         *,
         clock: Clock = SYSTEM_CLOCK,
-        publisher: Optional[Callable[[str, str, Optional[str]], None]] = None,
+        publisher: Optional[Callable[[str, str], None]] = None,
     ):
         self.db = db
         self.storage = storage

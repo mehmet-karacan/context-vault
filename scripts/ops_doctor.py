@@ -451,6 +451,31 @@ def _parse_name_projection(output: str, *, kind: str) -> set[str]:
     return set(lines)
 
 
+def _parse_compose_contract(output: str) -> tuple[set[str], set[str]]:
+    """Extract service/volume names from one non-interpolated Compose JSON.
+
+    Docker Compose currently evaluates required variables for the dedicated
+    ``config --volumes`` projection even when ``--no-interpolate`` is supplied.
+    The complete JSON projection does not, so using it preserves the doctor's
+    secret-free subprocess environment and avoids a false operational failure.
+    """
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError as exc:
+        raise OpsDoctorError("Compose contract projection is invalid JSON") from exc
+    if not isinstance(payload, dict):
+        raise OpsDoctorError("Compose contract projection is malformed")
+    raw_services = payload.get("services")
+    raw_volumes = payload.get("volumes", {})
+    if not isinstance(raw_services, dict) or not isinstance(raw_volumes, dict):
+        raise OpsDoctorError("Compose contract projection is malformed")
+    services = _parse_name_projection("\n".join(raw_services), kind="service")
+    volumes = _parse_name_projection("\n".join(raw_volumes), kind="volume")
+    if not services:
+        raise OpsDoctorError("Compose contract contains no services")
+    return services, volumes
+
+
 def _validate_inputs(
     repo: Path, compose_files: list[Path], project: str, expected_head: str
 ) -> tuple[Path, list[Path]]:
@@ -647,6 +672,7 @@ def _docker_inventory(
             "docker",
             "ps",
             "-aq",
+            "--no-trunc",
             "--filter",
             f"label=com.docker.compose.project={project}",
         ],
@@ -821,13 +847,16 @@ def doctor(
     compose_command = ["docker", "compose", "--project-name", project]
     for path in validated_compose_files:
         compose_command.extend(["-f", str(path)])
-    expected_services = _parse_name_projection(
-        _run_text([*compose_command, "config", "--no-interpolate", "--services"]),
-        kind="service",
-    )
-    expected_volumes = _parse_name_projection(
-        _run_text([*compose_command, "config", "--no-interpolate", "--volumes"]),
-        kind="volume",
+    expected_services, expected_volumes = _parse_compose_contract(
+        _run_text(
+            [
+                *compose_command,
+                "config",
+                "--no-interpolate",
+                "--format",
+                "json",
+            ]
+        )
     )
     missing_compose_services = sorted(set(REQUIRED_DEPENDENCIES) - expected_services)
     containers, volumes = _docker_inventory(project)

@@ -22,6 +22,7 @@ from ...infrastructure.security import (
     describe_upload,
     validate_upload,
 )
+from ...infrastructure.observability import current_traceparent
 from ...infrastructure.storage.minio_storage import MinioObjectStorage
 from ...models import Document, DocumentVersion, IngestionJob, Project, StorageObject
 from src.domain.identity import PrincipalContext
@@ -144,8 +145,8 @@ def _upload_document_async(
     orchestrator = IngestionOrchestrator(
         db,
         _build_object_storage(),
-        publisher=lambda job_id, dispatch_key, traceparent: process_ingestion_job.delay(
-            job_id, dispatch_key, traceparent
+        publisher=lambda job_id, dispatch_key: process_ingestion_job.delay(
+            job_id, dispatch_key, current_traceparent()
         ),
     )
     accepted = orchestrator.accept_source(

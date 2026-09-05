@@ -22,7 +22,12 @@ from ..domain.ingestion_state import JobStatus, transition_job
 from ..domain.normalized_content import ContentUnit, NormalizedSource, UnitType
 from ..domain.version_activation import activate_document_version
 from ..infrastructure.embeddings.cache import profile_config_hash
-from ..infrastructure.observability import continue_trace, metrics, traced
+from ..infrastructure.observability import (
+    continue_trace,
+    current_traceparent,
+    metrics,
+    traced,
+)
 from ..infrastructure.security import redact_secrets
 from ..infrastructure.retrieval.indexing import (
     build_search_vector_stmt,
@@ -1105,8 +1110,8 @@ def dispatch_ingestion_outbox(limit: int = 100) -> dict:
     try:
         dispatcher = OutboxDispatcher(
             db,
-            lambda job_id, key, traceparent: process_ingestion_job.delay(
-                job_id, key, traceparent
+            lambda job_id, key: process_ingestion_job.delay(
+                job_id, key, current_traceparent()
             ),
             SYSTEM_CLOCK,
         )

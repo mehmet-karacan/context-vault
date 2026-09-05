@@ -393,10 +393,22 @@ def test_doctor_uses_only_secret_free_compose_projections(monkeypatch) -> None:
         calls.append(argv)
         if argv[:3] == ["git", "rev-parse", "HEAD"]:
             return "a" * 40 + "\n"
-        if argv[-1] == "--services":
-            return "postgres\nredis\nminio\nbackend\n"
-        if argv[-1] == "--volumes":
-            return "postgres_data\nredis_data\nminio_data\n"
+        if argv[-3:] == ["--no-interpolate", "--format", "json"]:
+            return json.dumps(
+                {
+                    "services": {
+                        "postgres": {},
+                        "redis": {},
+                        "minio": {},
+                        "backend": {},
+                    },
+                    "volumes": {
+                        "postgres_data": {},
+                        "redis_data": {},
+                        "minio_data": {},
+                    },
+                }
+            )
         raise AssertionError(f"unexpected command: {argv}")
 
     containers = [
@@ -445,12 +457,69 @@ def test_doctor_uses_only_secret_free_compose_projections(monkeypatch) -> None:
     )
     assert result["status"] == "PASS"
     compose_calls = [argv for argv in calls if "compose" in argv]
-    assert len(compose_calls) == 2
+    assert len(compose_calls) == 1
     assert all("--no-interpolate" in argv for argv in compose_calls)
-    assert {argv[-1] for argv in compose_calls} == {"--services", "--volumes"}
-    assert not any("--format" in argv or "json" in argv for argv in compose_calls)
+    assert compose_calls[0][-3:] == ["--no-interpolate", "--format", "json"]
     assert "secret connection value" not in json.dumps(result)
     module._validate_receipt(result)
+
+
+def test_compose_contract_projection_is_strict_and_bounded() -> None:
+    module = _module()
+    services, volumes = module._parse_compose_contract(
+        json.dumps(
+            {
+                "services": {"postgres": {}, "backend": {}},
+                "volumes": {"postgres_data": {}},
+            }
+        )
+    )
+    assert services == {"postgres", "backend"}
+    assert volumes == {"postgres_data"}
+
+    for malformed in (
+        "not-json",
+        "[]",
+        '{"services": []}',
+        '{"services": {"../escape": {}}}',
+        '{"services": {}}',
+    ):
+        with pytest.raises(module.OpsDoctorError):
+            module._parse_compose_contract(malformed)
+
+
+def test_docker_inventory_uses_full_container_ids(monkeypatch) -> None:
+    module = _module()
+    identifier = "a" * 64
+    calls: list[list[str]] = []
+
+    def fake_run(argv, **_kwargs):
+        calls.append(argv)
+        if argv[:3] == ["docker", "ps", "-aq"]:
+            return identifier + "\n"
+        if argv[:3] == ["docker", "volume", "ls"]:
+            return ""
+        if argv[:2] == ["docker", "inspect"]:
+            return (
+                json.dumps(identifier)
+                + "\t"
+                + json.dumps("context-vault")
+                + "\t"
+                + json.dumps("postgres")
+                + "\t"
+                + json.dumps("running")
+                + "\t"
+                + json.dumps("healthy")
+                + "\n"
+            )
+        raise AssertionError(f"unexpected command: {argv}")
+
+    monkeypatch.setattr(module, "_run_text", fake_run)
+    containers, volumes = module._docker_inventory("context-vault")
+    assert containers[0]["id"] == identifier
+    assert volumes == []
+    ps_call = next(argv for argv in calls if argv[:3] == ["docker", "ps", "-aq"])
+    assert "--no-trunc" in ps_call
 
 
 def test_caller_supplied_container_identifiers_are_rejected(monkeypatch) -> None:

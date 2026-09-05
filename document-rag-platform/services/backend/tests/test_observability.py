@@ -28,6 +28,7 @@ from src.infrastructure.observability import (
     StructuredJsonFormatter,
     begin_shutdown,
     build_default_readiness_checks,
+    canonical_traceparent,
     continue_trace,
     current_traceparent,
     get_request_id,
@@ -146,10 +147,21 @@ def test_middleware_continues_valid_w3c_trace_and_rejects_invalid_parent():
     with TestClient(app) as client:
         continued = client.get("/trace", headers={"traceparent": parent})
         invalid = client.get("/trace", headers={"traceparent": "not-a-trace"})
+        duplicate = client.get(
+            "/trace",
+            headers=[
+                ("traceparent", parent),
+                ("traceparent", f"00-{'c' * 32}-{'d' * 16}-01"),
+            ],
+        )
 
     assert continued.headers["traceparent"].split("-")[1] == trace_id
     assert continued.headers["traceparent"].split("-")[2] != "b" * 16
     assert invalid.headers["traceparent"].split("-")[1] != trace_id
+    assert duplicate.headers["traceparent"].split("-")[1] not in {
+        trace_id,
+        "c" * 32,
+    }
 
 
 @pytest.mark.parametrize(
@@ -159,8 +171,10 @@ def test_middleware_continues_valid_w3c_trace_and_rejects_invalid_parent():
         "",
         "00-" + "0" * 32 + "-" + "1" * 16 + "-01",
         "00-" + "1" * 32 + "-" + "0" * 16 + "-01",
-        "01-" + "1" * 32 + "-" + "2" * 16 + "-01",
+        "ff-" + "1" * 32 + "-" + "2" * 16 + "-01",
         "00-" + "g" * 32 + "-" + "2" * 16 + "-01",
+        "00-" + "A" * 32 + "-" + "2" * 16 + "-01",
+        "00-" + "1" * 32 + "-" + "2" * 16 + "-01-extra",
     ],
 )
 def test_traceparent_parser_rejects_invalid_or_unsafe_carriers(value):
@@ -178,6 +192,32 @@ def test_continue_trace_exposes_content_free_carrier_and_restores_context():
             assert child.split("-")[1] == "1" * 32
             assert child.split("-")[2] != "2" * 16
     assert current_traceparent() == before
+
+
+def test_future_traceparent_is_accepted_and_canonicalized_to_base_fields():
+    future = f"01-{'1' * 32}-{'2' * 16}-00-vendor1"
+    assert parse_traceparent(future) == ("1" * 32, "2" * 16, "00")
+    assert canonical_traceparent(future) == f"00-{'1' * 32}-{'2' * 16}-00"
+
+
+def test_invalid_ingress_parent_clears_ambient_trace_without_leaking_context():
+    parent = f"00-{'1' * 32}-{'2' * 16}-01"
+    with continue_trace(parent):
+        assert current_traceparent() == parent
+        with continue_trace("private-sentinel-invalid-parent"):
+            assert current_traceparent() is None
+            with trace_operation("ingestion.process"):
+                replacement = current_traceparent()
+                assert replacement is not None
+                assert replacement.split("-")[1] != "1" * 32
+        assert current_traceparent() == parent
+
+
+@pytest.mark.parametrize(
+    "value", [None, 7, {}, "private-sentinel-" * 200, "00-not-valid"]
+)
+def test_canonical_traceparent_never_forwards_unvalidated_durable_payload(value):
+    assert canonical_traceparent(value) is None
 
 
 def test_set_request_id_returns_and_defaults_to_uuid():

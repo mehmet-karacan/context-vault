@@ -120,23 +120,48 @@ trace_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
 )
 span_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("span_id", default="")
 
-_TRACEPARENT_RE = re.compile(
-    r"^00-(?P<trace_id>[0-9a-f]{32})-(?P<span_id>[0-9a-f]{16})-(?P<flags>[0-9a-f]{2})$"
+_LOWER_HEX = re.compile(r"[0-9a-f]+\Z")
+_FUTURE_TRACE_FIELD = re.compile(r"[0-9a-z]+\Z")
+_MAX_TRACEPARENT_BYTES = 512
+trace_flags_var: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "trace_flags", default="01"
 )
 
 
 def parse_traceparent(value: str | None) -> tuple[str, str, str] | None:
-    """Parse the bounded W3C ``traceparent`` v00 shape."""
-    if not value or len(value) != 55:
+    """Parse a bounded W3C ``traceparent`` without normalizing bad input."""
+    if not value or len(value) < 55 or len(value) > _MAX_TRACEPARENT_BYTES:
         return None
-    match = _TRACEPARENT_RE.fullmatch(value.strip().lower())
-    if match is None:
+    parts = value.split("-")
+    if len(parts) < 4 or (parts[0] == "00" and len(parts) != 4):
         return None
-    trace_id = match.group("trace_id")
-    span_id = match.group("span_id")
+    version, trace_id, span_id, flags, *future = parts
+    if (
+        len(version) != 2
+        or not _LOWER_HEX.fullmatch(version)
+        or version == "ff"
+        or len(trace_id) != 32
+        or not _LOWER_HEX.fullmatch(trace_id)
+        or len(span_id) != 16
+        or not _LOWER_HEX.fullmatch(span_id)
+        or len(flags) != 2
+        or not _LOWER_HEX.fullmatch(flags)
+        or any(not _FUTURE_TRACE_FIELD.fullmatch(part) for part in future)
+    ):
+        return None
     if trace_id == "0" * 32 or span_id == "0" * 16:
         return None
-    return trace_id, span_id, match.group("flags")
+    return trace_id, span_id, flags
+
+
+def canonical_traceparent(value: Any) -> str | None:
+    """Return only the validated W3C base fields, never an untrusted payload."""
+    if not isinstance(value, str):
+        return None
+    parsed = parse_traceparent(value)
+    if parsed is None:
+        return None
+    return f"00-{parsed[0]}-{parsed[1]}-{parsed[2]}"
 
 
 def current_traceparent() -> str | None:
@@ -145,21 +170,20 @@ def current_traceparent() -> str | None:
     span_id = span_id_var.get()
     if not trace_id or not span_id:
         return None
-    return f"00-{trace_id}-{span_id}-01"
+    return f"00-{trace_id}-{span_id}-{trace_flags_var.get()}"
 
 
 @contextmanager
 def continue_trace(traceparent: str | None) -> Iterator[None]:
     """Bind a validated remote/durable parent while creating local child spans."""
     parsed = parse_traceparent(traceparent)
-    if parsed is None:
-        yield
-        return
-    trace_token = trace_id_var.set(parsed[0])
-    span_token = span_id_var.set(parsed[1])
+    trace_token = trace_id_var.set(parsed[0] if parsed else "")
+    span_token = span_id_var.set(parsed[1] if parsed else "")
+    flags_token = trace_flags_var.set(parsed[2] if parsed else "01")
     try:
         yield
     finally:
+        trace_flags_var.reset(flags_token)
         span_id_var.reset(span_token)
         trace_id_var.reset(trace_token)
 
@@ -507,14 +531,16 @@ class RequestContextMiddleware:
             return
 
         request_token = request_id_var.set(uuid.uuid4().hex)
-        inbound_traceparent = None
+        inbound_traceparents: list[str] = []
         for raw_name, raw_value in scope.get("headers", []):
             if raw_name.lower() == b"traceparent":
                 try:
-                    inbound_traceparent = raw_value.decode("ascii")
+                    inbound_traceparents.append(raw_value.decode("ascii"))
                 except UnicodeDecodeError:
-                    inbound_traceparent = None
-                break
+                    inbound_traceparents.append("")
+        inbound_traceparent = (
+            inbound_traceparents[0] if len(inbound_traceparents) == 1 else None
+        )
         try:
             with continue_trace(inbound_traceparent), trace_operation("http.request"):
                 start = time.perf_counter()

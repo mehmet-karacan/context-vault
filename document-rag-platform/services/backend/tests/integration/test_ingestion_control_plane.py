@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -24,7 +25,7 @@ from src.domain.clock import FixedClock
 from src.domain.identity import PrincipalContext
 from src.domain.ingestion import SourceDescriptor
 from src.infrastructure.chunkers.base import ChunkCandidate
-from src.infrastructure.observability import continue_trace
+from src.infrastructure.observability import continue_trace, current_traceparent
 from src.infrastructure.repositories.scan_result import ScanResult, ScannedFile
 from src.models import (
     AuditEvent,
@@ -116,7 +117,7 @@ def test_accept_dispatch_process_and_redelivery_are_idempotent() -> None:
     now = datetime(2026, 9, 2, 20, 0, tzinfo=timezone.utc)
     clock = FixedClock(now)
     principal_id, workspace_id, project_id = (uuid.uuid4() for _ in range(3))
-    published: list[tuple[str, str]] = []
+    published: list[tuple[str, str, str | None]] = []
 
     try:
         principal = Principal(id=principal_id, subject=f"a6:{principal_id}")
@@ -152,8 +153,8 @@ def test_accept_dispatch_process_and_redelivery_are_idempotent() -> None:
                 db,
                 storage,
                 clock=clock,
-                publisher=lambda job_id, key, traceparent: published.append(
-                    (job_id, key, traceparent)
+                publisher=lambda job_id, key: published.append(
+                    (job_id, key, current_traceparent())
                 ),
             ).accept_source(command)
         replay = IngestionOrchestrator(db, storage, clock=clock).accept_source(command)
@@ -167,7 +168,10 @@ def test_accept_dispatch_process_and_redelivery_are_idempotent() -> None:
         event = db.get(OutboxEvent, accepted.outbox_event_id)
         assert event.status == "published"
         assert event.payload_json["traceparent"] == parent_trace
-        assert published[0][2] == parent_trace
+        dispatched_trace = published[0][2]
+        assert dispatched_trace is not None
+        assert dispatched_trace.split("-")[1] == "a" * 32
+        assert dispatched_trace.split("-")[2] != "b" * 16
 
         result = IngestionOrchestrator(db, storage, clock=clock).process_job(
             accepted.job_id,
@@ -312,7 +316,7 @@ def test_policy_outbox_lease_and_orphan_recovery_paths() -> None:
         clock.current += timedelta(seconds=31)
         assert (
             OutboxDispatcher(
-                db, lambda job_id, _key, _trace: delivered.append(job_id), clock
+                db, lambda job_id, _key: delivered.append(job_id), clock
             ).dispatch_pending()
             == 1
         )
@@ -325,7 +329,10 @@ def test_policy_outbox_lease_and_orphan_recovery_paths() -> None:
             aggregate_id=accepted.job_id,
             event_type="ingestion.job.requested",
             idempotency_key=f"stale:{uuid.uuid4()}",
-            payload_json={"job_id": str(accepted.job_id)},
+            payload_json={
+                "job_id": str(accepted.job_id),
+                "traceparent": "private-sentinel-" * 200,
+            },
             status="dispatching",
             attempts=1,
             available_at=clock.now(),
@@ -334,14 +341,22 @@ def test_policy_outbox_lease_and_orphan_recovery_paths() -> None:
         )
         db.add(stale_event)
         db.commit()
-        stale_delivered: list[str] = []
+        stale_delivered: list[tuple[str, str | None]] = []
         assert (
             OutboxDispatcher(
-                db, lambda job_id, _key, _trace: stale_delivered.append(job_id), clock
+                db,
+                lambda job_id, _key: stale_delivered.append(
+                    (job_id, current_traceparent())
+                ),
+                clock,
             ).dispatch_pending()
             == 1
         )
-        assert stale_delivered == [str(accepted.job_id)]
+        assert stale_delivered[0][0] == str(accepted.job_id)
+        assert re.fullmatch(
+            r"00-[0-9a-f]{32}-[0-9a-f]{16}-01", stale_delivered[0][1] or ""
+        )
+        assert "private-sentinel" not in (stale_delivered[0][1] or "")
         assert db.get(OutboxEvent, stale_event.id).status == "published"
 
         cancel_content = b"cancel before worker claim"
