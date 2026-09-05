@@ -792,6 +792,70 @@ def test_adversarial_case_without_forbidden_sources_fails_closed(tmp_path):
     assert report["metrics"]["prompt_injection_success_rate"] == 1.0
 
 
+def test_database_url_query_cannot_override_validated_loopback_host():
+    value = (
+        "postgresql+psycopg://tester:secret@localhost:5432/cv3_eval_unit"
+        "?host=remote.example"
+    )
+
+    with pytest.raises(
+        runner.LocalProductionBenchmarkError,
+        match="database URL",
+    ):
+        runner._isolated_database(value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "postgresql://tester:secret@localhost:5432/cv3_eval_unit?sslmode=require",
+        "postgresql://tester:secret@localhost:5432/cv3_eval_unit?host=%2Ftmp",
+        "postgresql://tester:secret@localhost:5432/cv3_eval_unit?",
+        "postgresql://tester:secret@localhost:5432/cv3_eval_unit#ignored",
+        "postgresql://tester:secret@localhost:5432/cv3_eval_unit#",
+        "postgresql://tester:secret@localhost:5432/cv3_eval_unit;mode=unsafe",
+        "postgresql://tester:se@cret@localhost:5432/cv3_eval_unit",
+        "postgresql://tester:secret@localhost:not-a-port/cv3_eval_unit",
+        "postgresql://tester:secret@localhost:5432/cv3_eval_unit\n",
+    ],
+)
+def test_database_url_rejects_ambiguous_or_unbound_components(value):
+    with pytest.raises(runner.LocalProductionBenchmarkError, match="database"):
+        runner._isolated_database(value)
+
+
+def test_database_url_allows_percent_encoded_userinfo_without_target_drift():
+    value = "postgresql+psycopg://test%40user:se%40cret@localhost:5432/" "cv3_eval_unit"
+
+    assert runner._isolated_database(value) == "cv3_eval_unit"
+
+
+def test_database_url_rejects_sqlalchemy_connect_target_drift(monkeypatch):
+    class DriftingDialect:
+        def create_connect_args(self, _url):
+            return [], {
+                "host": "remote.example",
+                "dbname": "cv3_eval_unit",
+                "user": "tester",
+                "password": "secret",
+                "port": 5432,
+            }
+
+    class DriftingUrl:
+        def get_dialect(self):
+            return DriftingDialect
+
+    monkeypatch.setattr(runner, "make_url", lambda _value: DriftingUrl())
+
+    with pytest.raises(
+        runner.LocalProductionBenchmarkError,
+        match="connection target",
+    ):
+        runner._isolated_database(
+            "postgresql://tester:secret@localhost:5432/cv3_eval_unit"
+        )
+
+
 @pytest.mark.parametrize(
     ("key", "value", "match"),
     [

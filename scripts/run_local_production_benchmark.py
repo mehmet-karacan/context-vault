@@ -25,6 +25,8 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 from urllib.parse import unquote, urlsplit
 
+from sqlalchemy.engine import make_url
+
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -221,15 +223,50 @@ def _query_types(raw: str | None) -> tuple[str, ...]:
 def _isolated_database(url: str | None) -> str:
     if not isinstance(url, str) or not url:
         raise LocalProductionBenchmarkError("isolated database URL is required")
-    parsed = urlsplit(url)
+    if any(ord(character) < 0x20 or ord(character) == 0x7F for character in url):
+        raise LocalProductionBenchmarkError("isolated database URL is invalid")
+    try:
+        parsed = urlsplit(url)
+        parsed_host = parsed.hostname
+        parsed_port = parsed.port
+    except ValueError as exc:
+        raise LocalProductionBenchmarkError("isolated database URL is invalid") from exc
     if parsed.scheme not in {"postgresql", "postgresql+psycopg", "postgresql+psycopg2"}:
         raise LocalProductionBenchmarkError("isolated PostgreSQL database is required")
-    if parsed.hostname not in {"127.0.0.1", "::1", "localhost"}:
+    if "?" in url or "#" in url or ";" in parsed.path or parsed.netloc.count("@") > 1:
+        raise LocalProductionBenchmarkError(
+            "isolated database URL contains an ambiguous component"
+        )
+    if parsed_host not in {"127.0.0.1", "::1", "localhost"}:
         raise LocalProductionBenchmarkError("local PostgreSQL endpoint is required")
-    name = unquote(parsed.path.lstrip("/"))
+    if not parsed.path.startswith("/") or parsed.path.startswith("//"):
+        raise LocalProductionBenchmarkError("isolated database URL is invalid")
+    name = unquote(parsed.path[1:])
     if not name.startswith("cv3_eval_") or not re.fullmatch(r"[a-z0-9_]+", name):
         raise LocalProductionBenchmarkError(
             "isolated database name must use cv3_eval_ prefix"
+        )
+    try:
+        sqlalchemy_url = make_url(url)
+        dialect = sqlalchemy_url.get_dialect()()
+        positional, connect_args = dialect.create_connect_args(sqlalchemy_url)
+    except Exception as exc:
+        raise LocalProductionBenchmarkError("isolated database URL is invalid") from exc
+    expected_user = unquote(parsed.username) if parsed.username is not None else None
+    expected_password = (
+        unquote(parsed.password) if parsed.password is not None else None
+    )
+    if (
+        positional
+        or connect_args.get("host") != parsed_host
+        or connect_args.get("host") not in {"127.0.0.1", "::1", "localhost"}
+        or connect_args.get("dbname") != name
+        or connect_args.get("user") != expected_user
+        or connect_args.get("password") != expected_password
+        or connect_args.get("port") != parsed_port
+    ):
+        raise LocalProductionBenchmarkError(
+            "SQLAlchemy database connection target does not match the admitted URL"
         )
     return name
 
