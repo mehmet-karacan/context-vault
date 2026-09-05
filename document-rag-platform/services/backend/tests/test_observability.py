@@ -9,7 +9,10 @@ real database, Redis, MinIO or gateway is touched.
 import io
 import json
 import logging
+import re
+from types import SimpleNamespace
 
+import pytest
 from fastapi import Depends, FastAPI, Request
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
@@ -18,15 +21,29 @@ from starlette.testclient import TestClient
 
 from src.config import Settings
 from src.infrastructure.observability import (
+    ALLOWED_COUNTERS,
+    ALLOWED_DURATIONS,
     ReadinessChecker,
     RequestContextMiddleware,
     StructuredJsonFormatter,
+    begin_shutdown,
+    build_default_readiness_checks,
     get_request_id,
     metrics,
+    record_provider_usage,
+    reset_shutdown,
     set_request_id,
+    trace_operation,
 )
 from src.infrastructure.rate_limiter import RateLimiter, SlidingWindowStore
 from src.main import create_app
+
+
+@pytest.fixture(autouse=True)
+def _clean_shutdown_state():
+    reset_shutdown()
+    yield
+    reset_shutdown()
 
 
 # --- Structured logging / request_id --------------------------------------
@@ -53,11 +70,44 @@ def test_structured_formatter_emits_json_with_request_id_and_structured_fields()
 
     data = json.loads(stream.getvalue().strip())
     assert data["request_id"] == "rid-abc-123"
-    assert data["job_id"] == "job-9"
+    assert data["job_hash"] != "job-9"
+    assert re.fullmatch(r"[0-9a-f]{16}", data["job_hash"])
     assert data["parser"] == "docling"
     assert data["latency_ms"] == 42
     assert data["level"] == "INFO"
     assert data["message"] == "job stage done"
+    assert data["service"] == "backend"
+    assert data["environment"]
+
+
+def test_structured_formatter_drops_sensitive_and_unknown_fields():
+    record = logging.LogRecord(
+        "app.structured",
+        logging.INFO,
+        __file__,
+        1,
+        "safe event",
+        (),
+        None,
+    )
+    record.extra_fields = {
+        "operation": "answer.validate",
+        "prompt": "private prompt",
+        "context": "private context",
+        "token": "secret-token",
+        "email": "person@example.invalid",
+    }
+    payload = StructuredJsonFormatter().format(record)
+    assert "private prompt" not in payload
+    assert "private context" not in payload
+    assert "secret-token" not in payload
+    assert "person@example.invalid" not in payload
+    assert json.loads(payload)["operation"] == "answer.validate"
+
+    record.msg = "raw prompt content must never survive"
+    assert json.loads(StructuredJsonFormatter().format(record))["message"] == (
+        "redacted log event"
+    )
 
 
 def test_request_id_contextvar_threads_through_middleware():
@@ -68,8 +118,13 @@ def test_request_id_contextvar_threads_through_middleware():
     app.add_middleware(RequestContextMiddleware)
 
     with TestClient(app) as client:
-        body = client.get("/rid").json()
+        response = client.get("/rid")
+        body = response.json()
         assert body["rid"]
+        assert response.headers["x-request-id"] == body["rid"]
+        assert re.fullmatch(
+            r"00-[0-9a-f]{32}-[0-9a-f]{16}-01", response.headers["traceparent"]
+        )
         # A second request gets a different id.
         body2 = client.get("/rid").json()
         assert body2["rid"]
@@ -92,6 +147,36 @@ def test_metrics_collector_records_embedding_counters():
     assert snapshot["embedding.cache_hits"] >= 5
 
 
+def test_metrics_reject_high_cardinality_names():
+    assert "queue.depth" in ALLOWED_COUNTERS
+    assert "provider.call" in ALLOWED_DURATIONS
+    with pytest.raises(ValueError, match="not allow-listed"):
+        metrics.incr("job.550e8400-e29b-41d4-a716-446655440000.failure")
+    with pytest.raises(ValueError, match="not allow-listed"):
+        metrics.record_duration("retrieval.user-supplied-stage", 0.1)
+
+
+def test_trace_and_provider_usage_are_content_free_aggregates():
+    before = metrics.snapshot()["counters"]
+    with trace_operation("provider.chat"):
+        record_provider_usage(SimpleNamespace(usage=SimpleNamespace(total_tokens=7)))
+    after = metrics.snapshot()["counters"]
+    assert after["provider.calls"] == before.get("provider.calls", 0) + 1
+    assert after["provider.tokens"] == before.get("provider.tokens", 0) + 7
+    assert after["trace.spans"] == before.get("trace.spans", 0) + 1
+
+
+def test_default_readiness_registers_every_required_dependency():
+    assert set(build_default_readiness_checks()) == {
+        "migration",
+        "db",
+        "redis",
+        "minio",
+        "queue",
+        "provider",
+    }
+
+
 # --- Readiness (health vs readiness split) ---------------------------------
 
 
@@ -101,7 +186,9 @@ def test_readiness_ok_when_all_dependencies_up():
             "db": lambda: True,
             "redis": lambda: True,
             "minio": lambda: True,
-            "gateway": lambda: True,
+            "provider": lambda: True,
+            "migration": lambda: True,
+            "queue": lambda: True,
         }
     )
     result = checker.run()
@@ -110,7 +197,9 @@ def test_readiness_ok_when_all_dependencies_up():
         "db": "ok",
         "redis": "ok",
         "minio": "ok",
-        "gateway": "ok",
+        "provider": "ok",
+        "migration": "ok",
+        "queue": "ok",
     }
 
 
@@ -120,11 +209,12 @@ def test_readiness_degraded_not_crash_when_dependency_down():
             "db": lambda: True,
             "redis": lambda: False,
             "minio": lambda: True,
-            "gateway": lambda: True,
+            "provider": lambda: True,
         }
     )
     result = checker.run()  # must not raise
-    assert result["status"] == "degraded"
+    assert result["status"] == "not_ready"
+    assert result["ready"] is False
     assert result["dependencies"]["redis"] == "down"
     assert result["dependencies"]["db"] == "ok"
 
@@ -135,9 +225,31 @@ def test_readiness_treats_raising_checker_as_down():
 
     checker = ReadinessChecker({"minio": boom, "db": lambda: True})
     result = checker.run()
-    assert result["status"] == "degraded"
+    assert result["status"] == "not_ready"
     assert result["dependencies"]["minio"] == "down"
     assert result["dependencies"]["db"] == "ok"
+
+
+def test_optional_provider_is_capability_degraded_but_ready():
+    checker = ReadinessChecker(
+        {"db": lambda: True, "provider": lambda: False},
+        optional={"provider"},
+    )
+    result = checker.run()
+    assert result["status"] == "degraded"
+    assert result["ready"] is True
+    assert result["capabilities"] == {"provider": "unavailable"}
+
+
+def test_shutdown_closes_readiness_admission_without_releasing_leases():
+    reset_shutdown()
+    begin_shutdown("worker")
+    try:
+        result = ReadinessChecker({"db": lambda: True}).run()
+        assert result["status"] == "not_ready"
+        assert result["ready"] is False
+    finally:
+        reset_shutdown()
 
 
 # --- CORS / debug / stack-trace hardening ----------------------------------

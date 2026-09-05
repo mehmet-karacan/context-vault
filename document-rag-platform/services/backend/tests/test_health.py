@@ -111,7 +111,9 @@ def test_readiness_reports_ok_when_all_dependencies_up(monkeypatch):
             "db": lambda: True,
             "redis": lambda: True,
             "minio": lambda: True,
-            "gateway": lambda: True,
+            "provider": lambda: True,
+            "migration": lambda: True,
+            "queue": lambda: True,
         }
     )
 
@@ -137,7 +139,7 @@ def test_readiness_is_degraded_not_crash_when_dependency_down(monkeypatch):
             "db": lambda: True,
             "redis": lambda: False,
             "minio": lambda: True,
-            "gateway": lambda: True,
+            "provider": lambda: True,
         }
     )
     app.dependency_overrides[get_readiness_checker] = lambda: checker
@@ -149,3 +151,25 @@ def test_readiness_is_degraded_not_crash_when_dependency_down(monkeypatch):
                 assert response.json() == {"status": "not_ready"}
     finally:
         app.dependency_overrides.pop(get_readiness_checker, None)
+
+
+def test_optional_provider_returns_capability_degraded_without_details(monkeypatch):
+    monkeypatch.setattr("src.main.init_db", lambda: None)
+    checker = ReadinessChecker(
+        {"db": lambda: True, "provider": lambda: False},
+        optional={"provider"},
+    )
+    app.dependency_overrides[get_readiness_checker] = lambda: checker
+    try:
+        with TestClient(app) as client:
+            response = client.get("/health/readiness")
+    finally:
+        app.dependency_overrides.pop(get_readiness_checker, None)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "degraded",
+        "capabilities": {"provider": "unavailable"},
+    }
+    assert "host" not in response.text
+    assert "credential" not in response.text

@@ -86,6 +86,7 @@ from src.infrastructure.retrieval.no_answer import (
     AnswerPolicy,
 )
 from src.infrastructure.storage.minio_storage import decode_encryption_key
+from src.infrastructure.observability import metrics, traced
 from src.domain.clock import utc_now
 
 __all__ = [
@@ -661,7 +662,16 @@ def _parse_envelope(
 
 def _validation_code(exc: Exception) -> AnswerValidationCode:
     if isinstance(exc, AnswerValidationError):
-        return exc.code
+        code = exc.code
+        if code == AnswerValidationCode.CLAIM_TEXT_NOT_IN_EVIDENCE:
+            metrics.incr("citation.unsupported_claim")
+        elif code in {
+            AnswerValidationCode.CLAIM_SOURCE_LABELS_INVALID,
+            AnswerValidationCode.UNANSWERABLE_CITATIONS_PRESENT,
+            AnswerValidationCode.USED_SOURCE_LABELS_MISMATCH,
+        }:
+            metrics.incr("citation.invalid")
+        return code
     if isinstance(exc, ValidationError) and exc.error_count() == 1:
         error_type = exc.errors(
             include_url=False,
@@ -1028,6 +1038,7 @@ def load_conversation_history(
     return tuple(selected)
 
 
+@traced("answer.validation")
 def generate_answer(
     *,
     query: str,
@@ -1215,6 +1226,8 @@ def generate_answer(
             prompt_hash=prompt_hash,
         )
 
+    if not envelope.answerable:
+        metrics.incr("retrieval.no_answer")
     return {
         "answer": envelope.answer_text,
         "answerable": envelope.answerable,

@@ -22,6 +22,7 @@ from ..domain.ingestion_state import JobStatus, transition_job
 from ..domain.normalized_content import ContentUnit, NormalizedSource, UnitType
 from ..domain.version_activation import activate_document_version
 from ..infrastructure.embeddings.cache import profile_config_hash
+from ..infrastructure.observability import metrics, traced
 from ..infrastructure.security import redact_secrets
 from ..infrastructure.retrieval.indexing import (
     build_search_vector_stmt,
@@ -376,6 +377,7 @@ def _register_referenced_object(
     )
 
 
+@traced("ingestion.process")
 def run_ingestion_job(
     db: Session,
     job_id,
@@ -1114,7 +1116,9 @@ def reconcile_ingestion_leases() -> dict:
 
     db = SessionLocal()
     try:
-        return {"reconciled": reconcile_stale_leases(db)}
+        reconciled = reconcile_stale_leases(db)
+        metrics.set_gauge("lease.stale", reconciled)
+        return {"reconciled": reconciled}
     finally:
         db.close()
 
@@ -1131,6 +1135,7 @@ def sweep_ingestion_staging() -> dict:
             grace_seconds=settings.STAGING_ORPHAN_GRACE_SECONDS,
             dry_run=False,
         )
+        metrics.set_gauge("orphan.objects", len(keys))
         return {"deleted": len(keys)}
     finally:
         db.close()

@@ -13,7 +13,7 @@ from typing import List
 
 from openai import OpenAI
 
-from ..observability import metrics
+from ..observability import metrics, record_provider_usage, traced
 
 
 class OpenAICompatibleEmbeddingProvider:
@@ -28,6 +28,7 @@ class OpenAICompatibleEmbeddingProvider:
         self._client = OpenAI(base_url=base_url, api_key=api_key)
         self._model = model
 
+    @traced("provider.embedding")
     def embed_one(self, text: str, instruction: str = "") -> List[float]:
         # This gateway's /v1/embeddings only accepts a single string per
         # call, not a batch array — so callers must loop for multiple
@@ -37,6 +38,7 @@ class OpenAICompatibleEmbeddingProvider:
         response = self._client.embeddings.create(
             model=self._model, input=f"{instruction}{text}"
         )
+        record_provider_usage(response)
         metrics.record_duration("embedding.call", time.perf_counter() - start)
         return response.data[0].embedding
 

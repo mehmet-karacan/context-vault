@@ -19,9 +19,15 @@ Celery's loader actually needs it (worker bootstrap / first task lookup),
 by which point this module has finished initializing.
 """
 
-from celery import Celery
+from celery import Celery, signals
 
 from ..config import settings
+from ..infrastructure.observability import (
+    begin_shutdown,
+    metrics,
+    reset_shutdown,
+    set_observability_context,
+)
 
 celery_app = Celery(
     "context_vault",
@@ -90,3 +96,23 @@ celery_app.conf.update(
 # module path (``-A src.workers.celery_app`` with no ``:attr`` suffix).
 # Harmless to keep alongside ``celery_app`` — same object either name.
 app = celery_app
+
+
+@signals.worker_ready.connect
+def _open_worker_admission(**_: object) -> None:
+    """Reset process-local shutdown state after a fresh worker boot."""
+    set_observability_context(service="worker", environment=settings.APP_ENV)
+    reset_shutdown()
+
+
+@signals.worker_shutting_down.connect
+def _close_worker_admission(**_: object) -> None:
+    """Preserve active leases for terminal receipt/expiry during warm stop."""
+    begin_shutdown("worker")
+
+
+@signals.task_retry.connect
+def _record_ingestion_retry(sender: object = None, **_: object) -> None:
+    """Count retries without task ids, arguments or exception messages."""
+    if getattr(sender, "name", "") == "ingestion.process_ingestion_job":
+        metrics.incr("job.retries")

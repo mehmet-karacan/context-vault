@@ -19,6 +19,7 @@ from ..domain.ingestion import (
     source_fingerprint,
 )
 from ..infrastructure.storage import object_keys
+from ..infrastructure.observability import metrics, traced
 from ..models import (
     AuditEvent,
     ContentPolicyDecisionRecord,
@@ -82,6 +83,7 @@ class OutboxDispatcher:
         self.publish = publish
         self.clock = clock
 
+    @traced("outbox.dispatch")
     def dispatch_one(self, event_id: uuid.UUID) -> bool:
         event = (
             self.db.query(OutboxEvent)
@@ -112,6 +114,7 @@ class OutboxDispatcher:
         try:
             self.publish(str(event.aggregate_id), event.idempotency_key)
         except Exception as exc:
+            metrics.incr("outbox.failures")
             event = self.db.get(OutboxEvent, event_id)
             event.status = "failed"
             event.error_code = type(exc).__name__
@@ -127,6 +130,7 @@ class OutboxDispatcher:
         event.error_message = None
         event.published_at = self.clock.now()
         self.db.commit()
+        metrics.incr("outbox.published")
         return True
 
     def dispatch_pending(self, limit: int = 100) -> int:
@@ -161,6 +165,7 @@ class OutboxDispatcher:
             .limit(limit)
             .all()
         )
+        metrics.set_gauge("outbox.backlog", len(events))
         return sum(1 for event in events if self.dispatch_one(event.id))
 
 

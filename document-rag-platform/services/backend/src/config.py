@@ -76,6 +76,10 @@ class Settings(BaseSettings):
     ANSWER_PROMPT_TEMPLATE_VERSION: str = "answer-envelope-v1"
     ANSWER_EVIDENCE_RETENTION_DAYS: int = 30
     PROVIDER_REQUEST_RETENTION: Literal["none", "metadata_only"] = "none"
+    # Required by default: an unreachable generation/embedding gateway closes
+    # readiness. Deployments with a genuinely optional provider capability may
+    # opt into a truthful HTTP 200 `degraded` readiness response instead.
+    PROVIDER_REQUIRED_FOR_READINESS: bool = True
 
     # --- Object storage (MinIO / S3-compatible) ------------------------
     # Required. docker-compose.yml already injects ENDPOINT/ACCESS_KEY/

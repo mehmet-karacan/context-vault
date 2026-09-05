@@ -25,7 +25,10 @@ from .config import Settings, settings
 from .db import init_db
 from .infrastructure.observability import (
     RequestContextMiddleware,
+    begin_shutdown,
     configure_logging,
+    reset_shutdown,
+    set_observability_context,
 )
 from .infrastructure.storage.minio_storage import decode_encryption_key
 
@@ -82,11 +85,19 @@ def create_app(cfg: Optional[Settings] = None) -> FastAPI:
     """
     app_cfg = cfg or settings
     validate_runtime_security(app_cfg)
+    set_observability_context(service="backend", environment=app_cfg.APP_ENV)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
+        reset_shutdown()
         init_db()
-        yield
+        try:
+            yield
+        finally:
+            # Close readiness first. Active requests finish under the ASGI
+            # server grace period; worker leases remain owned until their
+            # terminal receipt or normal lease-expiry reconciliation.
+            begin_shutdown("backend")
 
     application = FastAPI(title="Document RAG API", lifespan=lifespan)
     application.state.settings = app_cfg

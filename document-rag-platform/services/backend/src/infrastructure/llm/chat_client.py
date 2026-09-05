@@ -16,6 +16,8 @@ from typing import Any, List, Optional
 
 from openai import OpenAI
 
+from ..observability import record_provider_usage, traced
+
 RAG_SYSTEM_PROMPT = """Sen Mehmet adında bir belge asistanısın.
 Sana BELGE başlığı altında verilen metin, kullanıcının sorusuyla en yakın bulunan belge parçalarıdır.
 Bu parçalara dayanarak soruyu olabildiğince açıkla ve yorumla. Parçalar sorunun tamamını karşılamasa bile, içlerindeki ilgili bilgiyi özetle.
@@ -51,6 +53,7 @@ class ChatCompletionClient:
     def resolve_model(self, requested: Optional[str] = None) -> str:
         return requested if requested in self._available_models else self._default_model
 
+    @traced("provider.chat")
     def generate_answer(
         self, query: str, context_chunks: List[str], model: Optional[str] = None
     ) -> str:
@@ -76,8 +79,10 @@ class ChatCompletionClient:
             max_tokens=8000,
             temperature=0.2,
         )
+        record_provider_usage(response)
         return response.choices[0].message.content
 
+    @traced("provider.chat")
     def complete(
         self,
         system_prompt: str,
@@ -102,8 +107,10 @@ class ChatCompletionClient:
             max_tokens=8000,
             temperature=0.2,
         )
+        record_provider_usage(response)
         return response.choices[0].message.content
 
+    @traced("provider.chat")
     def complete_structured(
         self,
         system_prompt: str,
@@ -132,6 +139,7 @@ class ChatCompletionClient:
             max_tokens=2048,
             temperature=0,
         )
+        record_provider_usage(response)
         raw = response.choices[0].message.content
         if not isinstance(raw, str):
             raise ValueError("generation provider returned no structured content")

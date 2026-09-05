@@ -70,7 +70,7 @@ from src.infrastructure.retrieval.no_answer import AnswerPolicy, Answerability
 from src.infrastructure.retrieval.rrf import dedupe as _dedupe
 from src.infrastructure.retrieval.rrf import fuse as _fuse
 from src.infrastructure.rerankers import build_reranker
-from src.infrastructure.observability import log_structured, metrics
+from src.infrastructure.observability import log_structured, metrics, traced
 from src.models import RetrievalRun
 from src.domain.clock import utc_now
 
@@ -378,6 +378,7 @@ class RetrievalService:
 
     # --- public API -------------------------------------------------------
 
+    @traced("retrieval.pipeline")
     def retrieve(
         self,
         query: str,
@@ -766,6 +767,7 @@ class RetrievalService:
     ) -> None:
         # Fixed metric names only: document/chunk/project ids are never labels.
         metrics.record_duration(f"retrieval.{stage}", latency_ms / 1000)
+        metrics.incr("retrieval.candidates", candidate_count)
         slow = latency_ms >= self.settings.RETRIEVAL_SLOW_QUERY_MS
         log_structured(
             logging.WARNING if slow else logging.INFO,
