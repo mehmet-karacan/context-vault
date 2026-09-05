@@ -1,7 +1,7 @@
 # Approved real-provider benchmark tier
 
 This tier collects candidate evidence for the real-provider quality gate. It must
-run only with an owner-reviewed private-pack manifest, explicit
+run only with an owner-reviewed v2 private-pack manifest, explicit
 `--approval-manifest`, separately approved embedding and generation
 provider/model identities, credentials, budget and compatible
 data classification. The manifest is a reference to an existing human
@@ -39,16 +39,20 @@ receipt to exact evidence bytes, as documented below, but cannot authenticate th
 reviewer or make the final admission. Numeric comparison or receipt binding alone
 neither seals a baseline nor grants release.
 
-The runtime accepts only the versioned
-`benchmark-approval-manifest-v2.schema.json`. It binds the private-manifest file
-hash and dataset/classification to both provider/model identities, runner bundle hash,
+The runtime accepts only `private-pack-manifest-v2.schema.json`, whose
+`review_status` is exactly `approved`, and
+`benchmark-approval-manifest-v3.schema.json`, whose `decision` is exactly
+`approved`. The approval binds the private-manifest file hash and
+dataset/classification to both provider/model identities, runner bundle hash,
 environment hash, expiry and maximum duration/calls/input tokens/output tokens/USD.
 The wrapper passes those caps to the approved runner, enforces its timeout and
 rejects reported usage above them. This is defense in depth: a malicious runner
 could spend before reporting, so the exact runner bundle still requires human
 review and provider-side budget limits. Provider/model/environment values can only
 be compared after output exists; other approval bindings fail before dispatch.
-Only explicitly named credential variables reach the child; ambient HOME, Codex,
+Older private-manifest v1 and approval v1/v2 schemas remain for historical
+evidence validation only and are not accepted by the runtime. Only explicitly
+named credential variables reach the child; ambient HOME, Codex,
 session and unrelated credentials are not inherited. The environment hash is
 computed before dispatch from allowlisted Python/OS/machine/lockfile properties and
 then compared with approval and report. The command must be one direct, existing,
@@ -67,18 +71,21 @@ out-of-range or oversized fields fail closed.
 validated by `benchmark-baseline-seal-v2.schema.json`; its report hash and both
 provider/model identities plus dataset/profile/prompt/config/environment provenance
 must match. The baseline report itself must be v2. Current and baseline provenance
-must also match before numeric
-regression comparison. `--strict` changes a warning-bearing candidate to FAIL; it
+must also match before numeric regression comparison. The wrapper reads and
+validates the exact baseline and seal bytes before provider dispatch, then compares
+the current report against that in-memory binding. `--strict` changes a
+warning-bearing candidate to FAIL; it
 does not affect clean contract/offline tiers. Neither an approval manifest nor a
-baseline seal may be created by the model/CLI itself. Frozen v1 schemas remain in
-the tree for historical evidence validation only; the runtime does not upgrade or
-accept a legacy single-provider approval, report or seal.
+baseline seal may be created by the model/CLI itself. Frozen legacy schemas remain
+in the tree for historical evidence validation only; the runtime does not upgrade
+or accept a legacy private manifest, approval, report or seal.
 
 ## Approval preparation (no provider effect)
 
 Prerequisites: use the same locked backend Python, machine/runtime and exact direct
-runner path intended for the benchmark. The private-pack manifest must already have
-completed owner review. Keep the manifest and both outputs outside the repository;
+runner path intended for the benchmark. The v2 private-pack manifest must already
+have completed owner review and exact `review_status=approved`. Keep the manifest
+and both outputs outside the repository;
 the commands do not read credential values or execute the runner. Each JSON output
 must resolve outside the repository and be a new path; preparation uses exclusive,
 no-symlink creation with mode `0600` and refuses to overwrite any existing file.

@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-TOOL_VERSION = "1.8.0"
+TOOL_VERSION = "1.9.0"
 DETERMINISTIC_SEED = 20260902
 REPO = Path(__file__).resolve().parents[1]
 BACKEND = REPO / "document-rag-platform/services/backend"
@@ -45,9 +45,9 @@ OFFLINE_EXTRA_TEST_TARGETS = (
     BACKEND / "tests/test_structured_answer.py",
     BACKEND / "tests/test_no_answer.py",
 )
-PRIVATE_MANIFEST_SCHEMA = PUBLIC_DATASET.parent / "private-pack-manifest.schema.json"
+PRIVATE_MANIFEST_SCHEMA = PUBLIC_DATASET.parent / "private-pack-manifest-v2.schema.json"
 APPROVAL_MANIFEST_SCHEMA = (
-    PUBLIC_DATASET.parent / "benchmark-approval-manifest-v2.schema.json"
+    PUBLIC_DATASET.parent / "benchmark-approval-manifest-v3.schema.json"
 )
 BASELINE_SEAL_SCHEMA = PUBLIC_DATASET.parent / "benchmark-baseline-seal-v2.schema.json"
 GOLDEN_NON_TRANSFER_RECEIPT_SCHEMA = (
@@ -434,10 +434,6 @@ def _schema_document(path: Path, schema_path: Path, label: str) -> dict[str, Any
 
 def _private_manifest(path: Path) -> dict[str, Any]:
     manifest = _schema_document(path, PRIVATE_MANIFEST_SCHEMA, "private pack manifest")
-    if any(not manifest[name].strip() for name in ("opaque_pack_id", "reviewed_by")):
-        raise EnvironmentUnavailable("private pack manifest requires nonblank review")
-    if manifest["reviewed_by"].upper().startswith("PENDING"):
-        raise EnvironmentUnavailable("private pack manifest requires completed review")
     if _utc(manifest["approved_at_utc"]) > datetime.now(timezone.utc):
         raise EnvironmentUnavailable("private pack review timestamp is in the future")
     return manifest
@@ -471,8 +467,6 @@ def _public_review_receipt(
         raise EnvironmentUnavailable("public review receipt binding mismatch")
     if sorted(receipt["splits"]) != sorted(manifest["splits"]):
         raise EnvironmentUnavailable("public review receipt split binding mismatch")
-    if receipt["reviewed_by"].strip().upper().startswith("PENDING"):
-        raise EnvironmentUnavailable("public review receipt requires human reviewer")
     reviewed_at = receipt["reviewed_at_utc"]
     if not reviewed_at.endswith(("Z", "+00:00")):
         raise EnvironmentUnavailable("public review receipt timestamp must be UTC")
@@ -518,10 +512,6 @@ def _public_dataset_status(
         raise EnvironmentUnavailable("public dataset/manifest split mismatch")
     approved = manifest["review_status"] == "approved"
     if approved:
-        if manifest["reviewer"].strip().upper().startswith("PENDING"):
-            raise EnvironmentUnavailable(
-                "approved public dataset requires human reviewer"
-            )
         reviewed_at = manifest["reviewed_at_utc"]
         if not isinstance(reviewed_at, str) or not reviewed_at.endswith(
             ("Z", "+00:00")
@@ -774,10 +764,6 @@ def _approval_manifest(
     )
     if approved_at > now or expires_at <= now or expires_at <= approved_at:
         raise EnvironmentUnavailable("benchmark approval is not currently valid")
-    if approval["approved_by"].strip().upper().startswith("PENDING"):
-        raise EnvironmentUnavailable(
-            "benchmark approval requires completed owner review"
-        )
     if any(
         name.startswith(RESERVED_RUNNER_ENV_PREFIX)
         for name in approval["credential_env_names"]
@@ -824,7 +810,7 @@ def _approval_preflight(private_path: Path, command: list[str]) -> dict[str, Any
     environment_hash = _environment_sha256()
     repository_revision = _revision()
     return {
-        "schema_version": "2.0",
+        "schema_version": "3.0",
         "request_type": "real-benchmark-approval-preflight",
         "status": "HUMAN_APPROVAL_REQUIRED",
         "repository_revision": repository_revision,
@@ -837,6 +823,7 @@ def _approval_preflight(private_path: Path, command: list[str]) -> dict[str, Any
         "provider_invoked": False,
         "credential_values_read": False,
         "human_decisions_required": [
+            "decision",
             "approval_id",
             "approved_by",
             "approved_at_utc",
@@ -858,7 +845,7 @@ def _check_approval(
     """Validate a human approval against current bytes without provider dispatch."""
     manifest, approval = _bound_approval(approval_path, private_path, command)
     return {
-        "schema_version": "2.0",
+        "schema_version": "3.0",
         "request_type": "real-benchmark-approval-check",
         "status": "APPROVAL_VALID_FOR_CURRENT_INPUTS",
         "repository_revision": _revision(),
@@ -897,10 +884,6 @@ def _check_golden_non_transfer_receipt(
     manifest = _schema_payload(
         private_payload, PRIVATE_MANIFEST_SCHEMA, "private pack manifest"
     )
-    if any(not manifest[name].strip() for name in ("opaque_pack_id", "reviewed_by")):
-        raise EnvironmentUnavailable("private pack manifest requires nonblank review")
-    if manifest["reviewed_by"].upper().startswith("PENDING"):
-        raise EnvironmentUnavailable("private pack manifest requires completed review")
     if _utc(manifest["approved_at_utc"]) > datetime.now(timezone.utc):
         raise EnvironmentUnavailable("private pack review timestamp is in the future")
     receipt = _schema_payload(
@@ -908,11 +891,6 @@ def _check_golden_non_transfer_receipt(
         GOLDEN_NON_TRANSFER_RECEIPT_SCHEMA,
         "golden non-transfer receipt",
     )
-    reviewer = receipt["verified_by"].strip()
-    if reviewer.upper().startswith("PENDING"):
-        raise EnvironmentUnavailable(
-            "golden non-transfer receipt requires completed independent review"
-        )
     verified_at = receipt["verified_at_utc"]
     if not verified_at.endswith(("Z", "+00:00")):
         raise EnvironmentUnavailable(
@@ -1500,12 +1478,9 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
     }
 
 
-def _compare(report: dict[str, Any], baseline_path: Path | None) -> list[str]:
-    if baseline_path is None:
-        return []
-    baseline = json.loads(baseline_path.read_text())
+def _compare_reports(report: dict[str, Any], baseline: dict[str, Any]) -> list[str]:
     current = report.get("metrics", {})
-    previous = baseline.get("metrics", {}) if isinstance(baseline, dict) else None
+    previous = baseline.get("metrics", {})
     if not isinstance(current, dict) or not isinstance(previous, dict):
         return ["baseline/current metrics must be objects"]
     findings = []
@@ -1544,21 +1519,28 @@ def _compare(report: dict[str, Any], baseline_path: Path | None) -> list[str]:
     return findings
 
 
-def _compare_with_seal(
-    report: dict[str, Any], baseline_path: Path | None, seal_path: Path | None
-) -> list[str]:
+def _compare(report: dict[str, Any], baseline_path: Path | None) -> list[str]:
     if baseline_path is None:
-        return ["baseline seal provided without baseline"] if seal_path else []
-    if seal_path is None:
-        return ["real benchmark baseline requires an approved seal"]
-    seal = _schema_document(seal_path, BASELINE_SEAL_SCHEMA, "baseline seal")
-    if seal["sealed_by"].strip().upper().startswith("PENDING"):
-        raise EnvironmentUnavailable("baseline seal requires completed human review")
+        return []
+    baseline = json.loads(baseline_path.read_text())
+    if not isinstance(baseline, dict):
+        return ["baseline/current metrics must be objects"]
+    return _compare_reports(report, baseline)
+
+
+def _load_sealed_baseline(baseline_path: Path, seal_path: Path) -> dict[str, Any]:
+    seal_payload, seal_sha = _read_stable_external(
+        seal_path, label="baseline seal", maximum=1_000_000
+    )
+    baseline_payload, baseline_sha = _read_stable_external(
+        baseline_path, label="real benchmark baseline", maximum=16_000_000
+    )
+    seal = _schema_payload(seal_payload, BASELINE_SEAL_SCHEMA, "baseline seal")
     if _utc(seal["sealed_at_utc"]) > datetime.now(timezone.utc):
         raise EnvironmentUnavailable("baseline seal timestamp is in the future")
-    if seal["report_sha256"] != _sha(baseline_path):
+    if seal["report_sha256"] != baseline_sha:
         raise EnvironmentUnavailable("baseline seal/report hash mismatch")
-    baseline = json.loads(baseline_path.read_text())
+    baseline = json.loads(baseline_payload)
     if (
         not isinstance(baseline, dict)
         or baseline.get("schema_version") != "2.0"
@@ -1567,7 +1549,6 @@ def _compare_with_seal(
     ):
         raise EnvironmentUnavailable("baseline is not a successful real benchmark")
     _benchmark_report(baseline)
-    _benchmark_report(report)
     provenance = (
         *PROVIDER_MODEL_FIELDS,
         "dataset_sha256",
@@ -1578,11 +1559,59 @@ def _compare_with_seal(
     )
     if any(baseline.get(name) != seal[name] for name in provenance):
         raise EnvironmentUnavailable("baseline seal provenance mismatch")
+    return {
+        "baseline": baseline,
+        "seal": seal,
+        "baseline_report_sha256": baseline_sha,
+        "baseline_seal_sha256": seal_sha,
+    }
+
+
+def _prevalidate_baseline_inputs(
+    baseline_path: Path | None, seal_path: Path | None
+) -> dict[str, Any] | None:
+    if baseline_path is None and seal_path is None:
+        return None
+    if baseline_path is None:
+        raise EnvironmentUnavailable("baseline seal provided without baseline")
+    if seal_path is None:
+        raise EnvironmentUnavailable(
+            "real benchmark baseline requires an approved seal"
+        )
+    return _load_sealed_baseline(baseline_path, seal_path)
+
+
+def _compare_bound_baseline(
+    report: dict[str, Any],
+    binding: dict[str, Any],
+) -> list[str]:
+    baseline = binding["baseline"]
+    _benchmark_report(report)
+    provenance = (
+        *PROVIDER_MODEL_FIELDS,
+        "dataset_sha256",
+        "embedding_profile_hash",
+        "prompt_hash",
+        "config_hash",
+        "environment_hash",
+    )
     findings = []
     for name in provenance:
         if report.get(name) != baseline.get(name):
             findings.append(f"{name} differs from approved baseline")
-    return findings + _compare(report, baseline_path)
+    return findings + _compare_reports(report, baseline)
+
+
+def _compare_with_seal(
+    report: dict[str, Any], baseline_path: Path | None, seal_path: Path | None
+) -> list[str]:
+    if baseline_path is None:
+        return ["baseline seal provided without baseline"] if seal_path else []
+    if seal_path is None:
+        return ["real benchmark baseline requires an approved seal"]
+    return _compare_bound_baseline(
+        report, _load_sealed_baseline(baseline_path, seal_path)
+    )
 
 
 def _apply_strict(report: dict[str, Any], strict: bool) -> None:
@@ -1805,6 +1834,15 @@ def main() -> int:
             return 0
         if args.markdown_output is None:
             raise EnvironmentUnavailable("eval tier requires markdown output")
+        sealed_baseline = None
+        if args.tier == "real-benchmark":
+            sealed_baseline = _prevalidate_baseline_inputs(
+                args.baseline, args.baseline_seal
+            )
+        elif args.baseline is not None or args.baseline_seal is not None:
+            raise EnvironmentUnavailable(
+                "baseline inputs are supported only for the real benchmark tier"
+            )
         with tempfile.TemporaryDirectory(prefix="cv-eval-") as directory:
             work = Path(directory)
             if args.tier == "contract-smoke":
@@ -1823,14 +1861,17 @@ def main() -> int:
             "dataset_sha256": details.get("dataset_sha256"),
             "dataset_provenance": details.get("dataset_provenance"),
         }
-        report["regression_findings"] = _compare_with_seal(
-            report, args.baseline, args.baseline_seal
+        report["regression_findings"] = (
+            _compare_bound_baseline(report, sealed_baseline)
+            if sealed_baseline is not None
+            else []
         )
+        if sealed_baseline is not None:
+            report["baseline_report_sha256"] = sealed_baseline["baseline_report_sha256"]
+            report["baseline_seal_sha256"] = sealed_baseline["baseline_seal_sha256"]
         _finalize_real_gate(
             report,
-            args.baseline is not None
-            and args.baseline_seal is not None
-            and not report["regression_findings"],
+            sealed_baseline is not None and not report["regression_findings"],
         )
         _apply_strict(report, args.strict)
         args.json_output.parent.mkdir(parents=True, exist_ok=True)

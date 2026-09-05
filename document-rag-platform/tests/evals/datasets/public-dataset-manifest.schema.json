@@ -38,7 +38,7 @@
       "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$"}
     },
     "fixture_independence": {"type": "string", "minLength": 1, "maxLength": 500},
-    "private_equivalent": {"const": "private-pack-manifest.schema.json"}
+    "private_equivalent": {"const": "private-pack-manifest-v2.schema.json"}
   },
   "allOf": [
     {

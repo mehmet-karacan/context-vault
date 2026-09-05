@@ -2259,6 +2259,63 @@ PASS; retrieval kalitesi PARTIAL; insan/owner kapıları nedeniyle A9 AÇIK**.
   report için insan review ve baseline seal. Sentetik local rehearsal bu
   otoriteleri veya A9'u kapatmaz; §16.3, §16.6 ve §16.8 açık, A11 başlatılmadı.
 
+### 16.24 A9 insan-kararı admission hardening ve owner-review dossier kaydı — 2026-09-05
+
+Başlangıç SHA: `b017846099f2647e957e7dd0f19e21e435b4fe2f`.
+Durum: **P1 admission bypass yeniden üretildi ve fail-closed düzeltildi; A9 insan
+otoritesi kapıları AÇIK**.
+
+- Private-pack `reviewed_by`, benchmark `approved_by`, baseline `sealed_by` ve
+  non-transfer `verified_by` alanlarında yalnız `PENDING` öneki reddediliyordu.
+  `UNAPPROVED_OWNER_REVIEW` şema-valid bir private manifestte gerçek runtime ile
+  kabul edilerek açık yeniden üretildi. Private manifestte baştaki boşluk da
+  `PENDING` kontrolünü atlatabiliyordu; exact approval bindingleri sağlandığında
+  aynı sınıf hata provider/yerel model dispatch sınırına ulaşabilirdi.
+- Aktör adını karar durumu gibi yorumlayan geçici prefix yaklaşımı bağımsız
+  incelemede hem yeni bypass (`NOT_APPROVED`, `DRAFT`, `AWAITING`) hem yanlış red
+  (`Pendington`) riski gösterdiği için kaldırıldı. Runtime artık yalnız explicit
+  final-state şemalarını kabul eder: private pack v2 zorunlu
+  `review_status=approved`, benchmark approval v3 zorunlu `decision=approved`.
+  Baseline seal v2 `status=approved`, non-transfer receipt v1 ise
+  `decision=verified-no-golden-transfer` sözleşmesini korur. Eski private v1 ve
+  approval v1/v2 şemaları yalnız tarihsel kanıttır.
+- Baseline+seal exact byte'ları bounded/stable read ile runner dispatch'inden önce
+  şema, final-state, zaman, report hash ve tam baseline report sözleşmesine göre
+  doğrulanır. Sonraki current-vs-baseline provenance/metrik karşılaştırması aynı
+  in-memory binding'i kullanır; final rapor exact `baseline_report_sha256` ve
+  `baseline_seal_sha256` değerlerini path/ham seal içeriği olmadan projekte eder.
+  CLI-level regression vakaları invalid veya eşsiz baseline/seal için
+  `_real_benchmark` çağrısının `0` olduğunu doğrular.
+- Ruff format/check PASS. `tests/evals/test_tier_contracts.py` **232 PASS**. İlk
+  geniş `tests/evals` koşusunda yalnız varsayılan `localhost:5432` bağımlılığı
+  bulunmadığı için iki integration testi environment failure verdi; kalan **452
+  PASS**. Bu iki vaka mevcut hedeflere dokunmadan yeni
+  `cv3_eval_gatefix_20260905_01` DB'si ve
+  `cv3-eval-gatefix-20260905-01` bucket'ında tekrarlandı: Alembic
+  `cv3_00000006`, offline E2E **2 PASS**. Geçici prefix sürümünde tüm eval
+  **454 PASS**, tam backend **1077 PASS, 2 SKIP** idi. Final explicit-state
+  sürümünde exact baseline/seal hash projection testiyle tekrar koşulan tüm eval
+  paketi **444 PASS** ve tam backend **1067 PASS, 2 SKIP, 1 bilinen Starlette
+  uyarısı**. Yeni DB/bucket
+  silinmedi veya başka hedef için tekrar kullanılmadı.
+- Git dışında
+  `/Users/mkaracan/Downloads/context-vault-a9-approval-dossier-20260905/`
+  altında raw prompt/model çıktısı taşımayan teknik binding envanteri ve insan
+  doldurmalı taslaklar oluşturuldu; tüm dossier dosyaları mode `0600` yapıldı.
+  `private-pack-manifest.PENDING.json` bilinçli olarak
+  `review_status=pending`, approval taslağı `decision=pending` kullanır. Gerçek
+  `--approval-preflight` probe'u exit `3`, `provider_invoked=false` verdi ve çıktı
+  dosyası oluşturmadı. Approval bütçe/zaman/kimlik alanları `null` bırakıldı ve
+  yetki vermez. Bu dossier owner review, approval manifesti, bağımsız receipt veya
+  baseline seal değildir.
+- Doğru desteklenen akış değişmedi: tüm altı execution/golden çifti insan
+  tarafından incelenip gerçek reviewer/zamanla final private manifest
+  yayımlandıktan sonra no-effect `--approval-preflight`; ayrıca insan tarafından
+  verilen v3 approval sonrasında no-effect `--check-approval`; approved candidate
+  koşusundan sonra bağımsız request-boundary kanıtı ve receipt check; en son insan
+  baseline seal. Bu dış otoriteler henüz yoktur, dolayısıyla §16.3, §16.6 ve §16.8
+  tamamlanmadı, A9 kapatılmadı ve A11'e geçilmedi.
+
 ---
 
 ## 17. AŞAMA 10 — Frontend ve ürün sözleşmesi

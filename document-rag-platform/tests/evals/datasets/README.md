@@ -10,8 +10,9 @@ input it actually executed:
   `dataset_sha256` is therefore `null`; the report instead records a deterministic
   `inline-test-fixtures` source-bundle hash over the discovered tests, fixed targets,
   `tests/conftest.py` and `pyproject.toml`.
-- `real-benchmark` takes its dataset hash only from an owner-reviewed private-pack
-  manifest and reports provenance kind `private-manifest-declared`.
+- `real-benchmark` takes its dataset hash only from an owner-reviewed v2
+  private-pack manifest with exact `review_status: approved` and reports
+  provenance kind `private-manifest-declared`. The v1 schema is historical-only.
 
 The committed `public-synthetic-v2.jsonl` corpus is reviewable test material, not a
 fallback identity for another tier. Its manifest is bound to a versioned schema,

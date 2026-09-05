@@ -1,0 +1,11 @@
+PASS pre-fix runtime reproduction: schema-valid reviewed_by=UNAPPROVED_OWNER_REVIEW was accepted
+PASS final-state runtime probe: pending private-pack manifest exits 3 with provider_invoked=false and creates no output
+PASS Ruff format/check for scripts/run_eval.py and tests/evals/test_tier_contracts.py
+PASS focused admission contracts: 232 passed in 2.68s
+EXPECTED ENVIRONMENT FAILURE initial broad eval attempt: 452 passed; 2 integration failures only because default localhost:5432 was absent
+PASS fresh database migration: cv3_eval_gatefix_20260905_01 reached cv3_00000006
+PASS fresh-target offline E2E: 2 passed in 1.25s
+PASS final all eval tests with fresh PostgreSQL/Redis/new MinIO bucket: 444 passed in 5.59s
+PASS final full backend with the same fresh targets: 1067 passed, 2 skipped, 1 known Starlette warning in 19.71s
+RETAINED database cv3_eval_gatefix_20260905_01 and bucket cv3-eval-gatefix-20260905-01; no existing data target deleted or reset
+OPEN owner-reviewed private pack, exact human approval, independent request-boundary/non-transfer receipt and first approved human baseline seal

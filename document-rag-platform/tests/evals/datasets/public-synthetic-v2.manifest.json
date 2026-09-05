@@ -10,5 +10,5 @@
   "review_receipt_sha256": null,
   "splits": ["train", "holdout"],
   "fixture_independence": "Runtime fixture builders do not read expected_facts, expected_source_constraints or forbidden_sources.",
-  "private_equivalent": "private-pack-manifest.schema.json"
+  "private_equivalent": "private-pack-manifest-v2.schema.json"
 }

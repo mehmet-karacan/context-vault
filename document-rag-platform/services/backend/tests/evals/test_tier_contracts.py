@@ -639,10 +639,11 @@ def test_runner_source_cache_rejects_non_bytecode_members(tmp_path, monkeypatch,
 def benchmark_fixture(tmp_path, monkeypatch):
     monkeypatch.setenv("SYNTHETIC_PROVIDER_KEY", "memory-only-test-key")
     manifest = {
-        "schema_version": "1.0",
+        "schema_version": "2.0",
         "opaque_pack_id": "synthetic-test-pack",
         "dataset_sha256": "a" * 64,
         "classification": "internal",
+        "review_status": "approved",
         "reviewed_by": "synthetic-test-reviewer",
         "approved_at_utc": "2026-09-02T00:00:00Z",
         "records": 1,
@@ -698,7 +699,8 @@ def benchmark_fixture(tmp_path, monkeypatch):
     entrypoint.chmod(0o700)
     command = [str(entrypoint)]
     approval = {
-        "schema_version": "2.0",
+        "schema_version": "3.0",
+        "decision": "approved",
         "approval_id": "synthetic-test-approval",
         "approved_by": "synthetic-owner",
         "approved_at_utc": "2026-09-02T00:00:00Z",
@@ -915,7 +917,6 @@ def test_golden_non_transfer_receipt_binds_exact_candidate_without_granting_auth
     [
         {"schema_version": "2.0"},
         {"decision": "unverified"},
-        {"verified_by": "PENDING_INDEPENDENT_REVIEW"},
         {"verified_by": "   "},
         {"verified_at_utc": "2999-01-01T00:00:00Z"},
         {"repository_revision": "0" * 40},
@@ -1140,6 +1141,7 @@ def test_golden_non_transfer_receipt_has_no_effect_cli_mode(tmp_path, monkeypatc
         {"schema_version": "wrong"},
         {"dataset_sha256": "not-a-hash"},
         {"classification": "public"},
+        {"review_status": "pending"},
         {"reviewed_by": ""},
         {"approved_at_utc": "not-a-date"},
         {"unexpected": "private-detail"},
@@ -1219,6 +1221,7 @@ def test_missing_regression_metrics_are_a_failure_not_a_silent_pass(tmp_path):
         "opaque_pack_id",
         "dataset_sha256",
         "classification",
+        "review_status",
         "reviewed_by",
         "approved_at_utc",
         "records",
@@ -1356,22 +1359,41 @@ def test_each_split_report_identity_is_required(tmp_path, monkeypatch, field):
     assert runner.call_count == 1
 
 
-def test_runtime_uses_v2_schemas_and_keeps_v1_only_for_history():
+def test_runtime_uses_explicit_final_state_schemas_and_keeps_history():
     approval_v1 = run_eval.APPROVAL_MANIFEST_SCHEMA.with_name(
         "benchmark-approval-manifest-v1.schema.json"
+    )
+    approval_v2 = run_eval.APPROVAL_MANIFEST_SCHEMA.with_name(
+        "benchmark-approval-manifest-v2.schema.json"
+    )
+    private_v1 = run_eval.PRIVATE_MANIFEST_SCHEMA.with_name(
+        "private-pack-manifest.schema.json"
     )
     seal_v1 = run_eval.BASELINE_SEAL_SCHEMA.with_name(
         "benchmark-baseline-seal-v1.schema.json"
     )
-    assert run_eval.APPROVAL_MANIFEST_SCHEMA.name.endswith("-v2.schema.json")
+    assert run_eval.PRIVATE_MANIFEST_SCHEMA.name.endswith("-v2.schema.json")
+    assert run_eval.APPROVAL_MANIFEST_SCHEMA.name.endswith("-v3.schema.json")
     assert run_eval.BASELINE_SEAL_SCHEMA.name.endswith("-v2.schema.json")
+    private_schema = json.loads(run_eval.PRIVATE_MANIFEST_SCHEMA.read_text())
+    approval_schema = json.loads(run_eval.APPROVAL_MANIFEST_SCHEMA.read_text())
+    assert private_schema["$id"].endswith("-v2.json")
+    assert private_schema["properties"]["review_status"] == {"const": "approved"}
+    assert approval_schema["$id"].endswith("-v3.json")
+    assert approval_schema["properties"]["decision"] == {"const": "approved"}
     assert json.loads(run_eval.APPROVAL_MANIFEST_SCHEMA.read_text())["$id"].endswith(
-        "-v2.json"
+        "-v3.json"
     )
     assert json.loads(run_eval.BASELINE_SEAL_SCHEMA.read_text())["$id"].endswith(
         "-v2.json"
     )
     assert json.loads(approval_v1.read_text())["properties"]["schema_version"] == {
+        "const": "1.0"
+    }
+    assert json.loads(approval_v2.read_text())["properties"]["schema_version"] == {
+        "const": "2.0"
+    }
+    assert json.loads(private_v1.read_text())["properties"]["schema_version"] == {
         "const": "1.0"
     }
     assert json.loads(seal_v1.read_text())["properties"]["schema_version"] == {
@@ -1629,7 +1651,7 @@ def test_provider_report_error_distribution_is_exactly_allowlisted(
         ("allowed_classification", "restricted", True),
         ("runner_bundle_sha256", "0" * 64, True),
         ("environment_hash", "0" * 64, True),
-        ("approved_by", "PENDING_OWNER_REVIEW", True),
+        ("decision", "pending", True),
         ("approved_by", "   ", True),
         ("expires_at_utc", "2025-01-01T00:00:00Z", True),
     ],
@@ -1758,7 +1780,6 @@ def test_baseline_requires_matching_human_seal_and_provenance(tmp_path, monkeypa
     [
         {"status": "rejected"},
         {"report_sha256": "0" * 64},
-        {"sealed_by": "PENDING_OWNER_REVIEW"},
         {"sealed_by": "   "},
         {"embedding_provider": "other"},
         {"embedding_model": "other"},
@@ -1776,6 +1797,117 @@ def test_invalid_or_unbound_baseline_seal_fails_closed(tmp_path, monkeypatch, ch
     seal.write_text(json.dumps(value))
     with pytest.raises(run_eval.EnvironmentUnavailable):
         run_eval._compare_with_seal(report, baseline, seal)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"status": "pending"},
+        {"sealed_by": "   "},
+        {"report_sha256": "0" * 64},
+        {"sealed_at_utc": "2999-01-01T00:00:00Z"},
+    ],
+)
+def test_main_rejects_invalid_baseline_seal_before_runner_dispatch(
+    tmp_path, monkeypatch, change
+):
+    _, _, report, _ = benchmark_fixture(tmp_path, monkeypatch)
+    baseline, seal = sealed_baseline(tmp_path, report)
+    seal_value = json.loads(seal.read_text())
+    seal_value.update(change)
+    seal.write_text(json.dumps(seal_value))
+    runner_effect = Mock()
+    monkeypatch.setattr(run_eval, "_real_benchmark", runner_effect)
+    output = tmp_path / "must-not-exist.json"
+    markdown = tmp_path / "must-not-exist.md"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_eval.py",
+            "--tier",
+            "real-benchmark",
+            "--baseline",
+            str(baseline),
+            "--baseline-seal",
+            str(seal),
+            "--json-output",
+            str(output),
+            "--markdown-output",
+            str(markdown),
+        ],
+    )
+
+    assert run_eval.main() == 3
+    runner_effect.assert_not_called()
+    assert not output.exists()
+    assert not markdown.exists()
+
+
+def test_main_rejects_unpaired_baseline_before_runner_dispatch(tmp_path, monkeypatch):
+    _, _, report, _ = benchmark_fixture(tmp_path, monkeypatch)
+    baseline, _seal = sealed_baseline(tmp_path, report)
+    runner_effect = Mock()
+    monkeypatch.setattr(run_eval, "_real_benchmark", runner_effect)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_eval.py",
+            "--tier",
+            "real-benchmark",
+            "--baseline",
+            str(baseline),
+            "--json-output",
+            str(tmp_path / "must-not-exist.json"),
+            "--markdown-output",
+            str(tmp_path / "must-not-exist.md"),
+        ],
+    )
+
+    assert run_eval.main() == 3
+    runner_effect.assert_not_called()
+
+
+def test_main_projects_exact_prevalidated_baseline_hashes(tmp_path, monkeypatch):
+    _, manifest, report, _ = benchmark_fixture(tmp_path, monkeypatch)
+    baseline, seal = sealed_baseline(tmp_path, report)
+    runner_effect = Mock(
+        return_value={
+            **report,
+            "result": "PASS",
+            "dataset_sha256": manifest["dataset_sha256"],
+        }
+    )
+    monkeypatch.setattr(run_eval, "_real_benchmark", runner_effect)
+    monkeypatch.setattr(run_eval, "_revision", lambda: "f" * 40)
+    output = tmp_path / "current.json"
+    markdown = tmp_path / "current.md"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_eval.py",
+            "--tier",
+            "real-benchmark",
+            "--baseline",
+            str(baseline),
+            "--baseline-seal",
+            str(seal),
+            "--json-output",
+            str(output),
+            "--markdown-output",
+            str(markdown),
+        ],
+    )
+
+    assert run_eval.main() == 0
+    current = json.loads(output.read_text())
+    assert current["baseline_report_sha256"] == run_eval._sha(baseline)
+    assert current["baseline_seal_sha256"] == run_eval._sha(seal)
+    assert str(baseline) not in output.read_text()
+    assert str(seal) not in output.read_text()
+    runner_effect.assert_called_once()
 
 
 def test_legacy_single_provider_baseline_seal_fails_closed(tmp_path, monkeypatch):
@@ -1937,7 +2069,7 @@ def test_approval_preflight_is_bounded_deterministic_and_has_no_effect(
         "human_decisions_required",
     }
     assert first["status"] == "HUMAN_APPROVAL_REQUIRED"
-    assert first["schema_version"] == "2.0"
+    assert first["schema_version"] == "3.0"
     assert all(
         name in first["human_decisions_required"]
         for name in run_eval.PROVIDER_MODEL_FIELDS
@@ -1998,11 +2130,37 @@ def test_check_approval_validates_bindings_without_runner_or_credentials(
     )
 
     assert result["status"] == "APPROVAL_VALID_FOR_CURRENT_INPUTS"
-    assert result["schema_version"] == "2.0"
+    assert result["schema_version"] == "3.0"
     assert all(result[name] for name in run_eval.PROVIDER_MODEL_FIELDS)
     assert result["provider_invoked"] is False
     assert result["credential_values_read"] is False
     assert "SYNTHETIC_PROVIDER_KEY" not in json.dumps(result)
+    runner.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "reviewer",
+    ["Pendington Security", "Unapprovedly Named Reviewer"],
+)
+def test_explicit_final_state_does_not_infer_status_from_actor_name(
+    tmp_path, monkeypatch, reviewer
+):
+    args, manifest, _, runner = benchmark_fixture(tmp_path, monkeypatch)
+    monkeypatch.setattr(run_eval, "_revision", lambda: "f" * 40)
+    manifest["reviewed_by"] = reviewer
+    args.private_pack_manifest.write_text(json.dumps(manifest))
+    approval = json.loads(args.approval_manifest.read_text())
+    approval["approved_by"] = reviewer
+    approval["private_pack_sha256"] = run_eval._sha(args.private_pack_manifest)
+    args.approval_manifest.write_text(json.dumps(approval))
+
+    checked = run_eval._check_approval(
+        args.approval_manifest,
+        args.private_pack_manifest,
+        args.provider_runner,
+    )
+
+    assert checked["status"] == "APPROVAL_VALID_FOR_CURRENT_INPUTS"
     runner.assert_not_called()
 
 
