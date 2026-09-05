@@ -22,7 +22,9 @@
 **Son güncelleme:** 2026-08-20
 **Kanonik plan:** `AKTIF_GOREV.md`
 
-Bu dosya tamamlanmış işlerin gerçek kaydıdır. Mevcut durum: **Aşama 0–9 tamamlandı**, Aşama 10 devam ediyor. (Eski "6 aşama / 13 tablo / 24,666+ dosya" iddiaları gerçek kodla çeliştiği için düzeltildi.)
+Bu dosya tarihsel bir tamamlama projeksiyonudur; current truth veya kabul kanıtı
+değildir. 2026-08-20 snapshot'ında Aşama 0–9 tamamlandı, Aşama 10 devam
+ediyor denmişti. Güncel durum yalnız `AKTIF_GOREV.md` içindedir.
 
 ## Aşama 0 — Gerçek Durumu Sabitle ve Güvenli Başlangıç ✅
 
@@ -112,7 +114,8 @@ Bu dosya tamamlanmış işlerin gerçek kaydıdır. Mevcut durum: **Aşama 0–9
 ## Aşama 10 — Dokümantasyon, Temizlik ve Son Aktivasyon (DEVAM EDİYOR)
 
 - ✅ Durum dokümanları gerçek koda göre düzeltildi (bu dört dosya).
-- ⏳ ADR-005/006, ops runbook'ları, kontrollü eski-chunk temizliği, root README, aktivasyon — `active/current-tasks.md`'de.
+- Tarihsel ADR-005/006 ve ops runbook TODO'ları superseded; dosyalar ve
+  kanonik index'leri daha sonra oluşturuldu.
 
 ---
 

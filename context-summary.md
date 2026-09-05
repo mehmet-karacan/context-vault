@@ -9,7 +9,8 @@
 > `python scripts/generate_verified_status.py` ile üretilir.
 
 **Son güncelleme:** 2026-08-20
-**Durum:** Aşama 0–9 **tamamlandı** · Aşama 10 (dokümantasyon, temizlik ve son aktivasyon) **devam ediyor**
+**Tarihsel snapshot iddiası:** Aşama 0–9 tamamlandı, Aşama 10 devam
+ediyordu. Bu satır güncel durum değildir; yalnız `AKTIF_GOREV.md` geçerlidir.
 **Kanonik plan:** `AKTIF_GOREV.md` (bu dosya yalnız özet; plan ve ilerleme kaydı için `AKTIF_GOREV.md`'ye bakın)
 
 > ⚠️ Önceki sürümlerdeki "MVP TAMAMLANDI / 6 aşama / 13 tablo / 24,666+ dosya" ifadeleri gerçek kodla **çelişiyordu** ve kaldırılmıştır. Aşağıdaki içerik mevcut uygulanmış koda göre doğrulanmıştır.
@@ -100,7 +101,9 @@ Ayrıntı için `active/current-tasks.md` ve `AKTIF_GOREV.md` §18'e bakın:
 2. **OCR engine'leri kurulmalı** — Docling/Tesseract provider'ları uygulandı; motor yoksa factory fallback'e düşer veya OCR kullanılamaz raporlar.
 3. **Uzak reranker** — `remote.py` adaptörü mevcut; gerçek kullanım gateway'in rerank desteğini gerektirir; varsayılan `NoopReranker` (+ `FEATURE_RERANKER=false`).
 4. **Rate limiter bellekte (in-memory)** — HEAD üretim için kabul edilebilir; `RATE_LIMIT_ENABLED` varsayılanı `false` (relaxed); istenirse Redis tabanlına geçilebilir.
-5. **ADR-005 (repo tarama güvenlik modeli) ve ADR-006 (OCR provider stratejisi) + ops runbook'ları** (re-index, embedding değişimi, OCR kurulumu, repo scan limitleri, backup/restore) hâlâ yazılacak — Aşama 10 kapsamında.
+5. **Superseded tarihsel TODO:** ADR-005/006 ve ilgili runbook'lar daha sonra
+   oluşturuldu. Güncel envanter için `docs/adr/README.md` ve
+   `docs/runbooks/README.md` kullanılır.
 
 ## Operasyon
 

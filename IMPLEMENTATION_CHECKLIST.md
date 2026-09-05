@@ -116,8 +116,10 @@ Lejant: `[x]` doğrulanmış tamam · `[~]` kısmi / sınırlı · `[ ]` yok / y
 - [x] `IMPLEMENTATION_CHECKLIST.md` güncel gerçek checklist'e dönüştürüldü (bu dosya).
 - [x] `active/current-tasks.md` yanıltıcı iddialardan temizlendi.
 - [x] `done/completed-tasks.md` gerçek Aşama 0–9 teslimatlarına göre güncellendi.
-- [~] ADR'ler: ADR-001..004 tamam; **ADR-005 (repo tarama güvenlik modeli) ve ADR-006 (OCR provider stratejisi) yazılacak**.
-- [ ] Ops runbook'ları: re-index, embedding model/profile değişimi, OCR model/language pack kurulumu, repo scan limitleri, backup/restore.
+- [x] Tarihsel ADR-005/006 TODO'su superseded; dosyalar mevcut. Güncel ve
+  eksiksizlik-kontrollü envanter `docs/adr/README.md` içindedir.
+- [x] Tarihsel ops runbook TODO'su superseded; güncel ve
+  eksiksizlik-kontrollü envanter `docs/runbooks/README.md` içindedir.
 - [ ] Eski chunk temizliği — yalnız yeni version + eval doğrulandıktan sonra kontrollü.
 - [ ] Root `README.md` güncellemesi (ayrı görev).
 - [ ] Feature flag aktivasyon/doğrulama raporu (aşağıda).

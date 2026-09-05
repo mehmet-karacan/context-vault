@@ -100,6 +100,7 @@ jobs:
           LITELLM_BASE_URL: https://llm-gateway.example.invalid/v1
         run: |
           uv run python ../../../scripts/generate_openapi.py --check
+          uv run python ../../../scripts/generate_verified_status.py --output reports/verified-state.json --require-projection-safety
           uv run python -c 'from src.main import app; import json; print(json.dumps(app.openapi(), sort_keys=True))' > reports/openapi.json
           test -s reports/openapi.json
 

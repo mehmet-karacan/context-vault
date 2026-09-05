@@ -13,7 +13,7 @@ Kanonik uygulama dizini: **`document-rag-platform/`** (repo kökü, `AKTIF_GOREV
 | Vektör deposu | PostgreSQL + pgvector (`Vector(1024)`), dense + lexical (tsvector) + identifier GIN |
 | Retrieval | dense + lexical + identifier → **RRF** → dedupe → opsiyonel reranker → context → LLM |
 | Embedding / chat | OpenAI uyumlu LiteLLM gateway (`LITELLM_BASE_URL` / `LITELLM_API_KEY`) üzerinden, tamamen **config ile** (`EMBEDDING_MODEL`, `CHAT_MODEL`) — kodda sabit model adı yok |
-| Async ingestion | Celery worker + Redis broker; `FEATURE_ASYNC_INGESTION` ile senkron fallback |
+| Ingestion | Tek durable job/outbox yolu; Celery worker + Redis broker |
 | Migration | Alembic — `alembic upgrade head` (bkz. `services/backend/MIGRATION_RUNBOOK.md`) |
 | Dağıtım | Docker Compose — `postgres` · `redis` · `minio` · `backend` (uvicorn :8000) · `worker`/`scheduler` (Celery); `apps/web` (Next.js) ayrı çalışır |
 
@@ -97,14 +97,12 @@ bağlanır. Yalnız anonim liveness/readiness probe'ları kökte kalır:
 
 ## Yükleme → ingestion akışı
 
-Varsayılan (asenkron — `FEATURE_ASYNC_INGESTION=true`):
+Yükleme tek durable job/outbox yolunu kullanır:
 
 1. `POST /documents/upload` anında `Document` + ilk `DocumentVersion` + `IngestionJob` (`status=queued`) kaydeder, orijinal dosyayı MinIO'ya (`object_keys.original_key`) yazar ve Celery task'ını kuyruğa atar; **parse/chunk/embed'ü beklemez** (`documents.py:_upload_document_async`).
 2. `worker` (`src/workers/ingestion_tasks.py:process_ingestion_job`) job'ı `validating → storing → parsing → chunking → embedding → indexing → activating` aşamalarından geçirir.
 3. Her aşama `ingestion_events`'e yazılır; durum `GET /ingestion-jobs/{id}` (+ `/events`) ve `GET /documents/{id}/status` ile izlenir.
 4. Tüm chunk/embedding hazır olduktan sonra version `ready` olur ve `documents.active_version_id` atomik olarak değiştirilir (`activating`); yeni version hazır olana dek eski aktif version okumaya devam eder.
-
-Fallback (senkron): `FEATURE_ASYNC_INGESTION=false` ayarlanırsa upload aynı istek içinde parse → chunk → embed → index yapar (rollback/debug için korunmuştur).
 
 Worker güvenliği (Aşama 2 kabul kriterleri): `task_acks_late=True`, `task_reject_on_worker_lost=True`, `worker_prefetch_multiplier=1`; geçici hatalar `INGESTION_MAX_RETRIES` (varsayılan 3) kez üstel backoff ile yeniden denenir, kalıcı doğrulama hataları asla yeniden denenmez. Aynı job yeniden alınırsa idempotent "wipe + rewrite" sayesinde duplicate chunk oluşmaz.
 
@@ -145,7 +143,10 @@ Retrieval aday/eşikleri (varsayılanlar): `VECTOR_CANDIDATE_K=40`, `LEXICAL_CAN
 | ZIP/TAR arşiv | `POST /archives/upload` | `repositories/archive_source.py` |
 | Klasör | `POST /directories/scan` | `repositories/discovery.py` |
 
-Repository/arşiv/klasör taraması `FEATURE_REPOSITORY_INGESTION` arkasındadır (varsayılan `true`); isterseniz `.env`'de `false` yaparak kapatabilirsiniz. Tarama güvenlik sınırları `CODE_*` değişkenleriyle yönetilir (bkz. `docs/runbooks/repository-scan-limits.md`), kod hiçbir koşulda çalıştırılmaz.
+Repository/arşiv/klasör taraması `FEATURE_REPOSITORY_INGESTION` arkasındadır
+(varsayılan `false`). Yalnız izinli deployment'ta açılır. Tarama güvenlik
+sınırları `CODE_*` değişkenleriyle yönetilir (bkz.
+`docs/runbooks/repository-scan-limits.md`); kaynak kod çalıştırılmaz.
 
 ## Ortam değişkenleri (özet)
 
@@ -159,7 +160,7 @@ Genel değişkenler `.env.example`'da; gerçek tipler ve **tüm** varsayılanlar
 - **Retrieval:** `VECTOR_CANDIDATE_K`, `LEXICAL_CANDIDATE_K`, `IDENTIFIER_CANDIDATE_K`, `FUSION_CANDIDATE_K`, `RRF_K`, `RERANK_TOP_K`, `CONTEXT_MAX_CHUNKS`, `CONTEXT_MAX_TOKENS`, `NO_ANSWER_*`, `LEXICAL_STRONG_SCORE`, `SMALLTALK_MIN_CONTENT_LEN`
 - **Reranker:** `FEATURE_RERANKER`, `RERANKER_ENABLED`, `RERANKER_PROVIDER`, `RERANKER_MODEL`
 - **OCR:** `FEATURE_OCR`, `OCR_ENABLED`, `OCR_PROVIDER`, `OCR_FALLBACK_PROVIDER`, `OCR_LANGUAGES=tur+eng`, `OCR_MIN_TEXT_COVERAGE`, `OCR_MIN_CONFIDENCE`
-- **Ingestion worker:** `FEATURE_ASYNC_INGESTION`, `INGESTION_MAX_RETRIES`, `INGESTION_RETRY_BACKOFF_SECONDS`, `INGESTION_TASK_SOFT_TIME_LIMIT_SECONDS`, `INGESTION_TASK_TIME_LIMIT_SECONDS`
+- **Ingestion worker:** `INGESTION_MAX_RETRIES`, `INGESTION_RETRY_BACKOFF_SECONDS`, `INGESTION_TASK_SOFT_TIME_LIMIT_SECONDS`, `INGESTION_TASK_TIME_LIMIT_SECONDS`
 - **Repository scan:** `FEATURE_REPOSITORY_INGESTION`, `CODE_ALLOWED_ROOTS`, `CODE_MAX_FILES`, `CODE_MAX_TOTAL_BYTES`, `CODE_MAX_FILE_BYTES`, `CODE_SCAN_TIMEOUT_SECONDS`, `CODE_FOLLOW_SYMLINKS`, `CODE_ALLOW_SUBMODULES`, `CODE_ALLOW_GIT_LFS`, `CODE_SECRET_POLICY`, `CODE_ARCHIVE_*`
 - **Güvenlik:** `MAX_DOCUMENT_BYTES` (20 MB), `MAX_TOTAL_INGESTION_BYTES` (1 GB), `MAX_INGESTION_FILES`, `PARSER_TIMEOUT_SECONDS`, `PARSER_MEMORY_LIMIT_MB`, `MIME_VALIDATION_STRICT`, `SECRET_PATTERNS`
 - **Diğer feature'lar:** `FEATURE_NEW_CITATIONS`, `FEATURE_RETRIEVAL_DEBUG`, `RATE_LIMIT_*`
@@ -206,7 +207,8 @@ Başlıca operasyon dokümanları:
   kullanır. Paylaşılan ortamda API-key modu fail-closed kapsam uygular; OIDC modu
   yapılandırma sözleşmesinde vardır ancak harici IdP entegrasyonu ayrı deployment
   işidir.
-- `FEATURE_REPOSITORY_INGESTION` varsayılan `true`'dur; isterseniz `.env`'de `false` yaparak kapatabilirsiniz.
+- `FEATURE_REPOSITORY_INGESTION` varsayılan `false`'dur; açıldığında
+  allowlist ve scan limitleri deployment tarafından verilmelidir.
 - Opsiyonel ağır bağımlılıklar (Docling OCR, Tesseract) API image'ına zorunlu değildir; varsa `available` olarak devreye girer, yoksa fallback/`needs_review` ile degrade olur (bkz. `docs/runbooks/ocr-models.md`).
 
 ## Geliştirici

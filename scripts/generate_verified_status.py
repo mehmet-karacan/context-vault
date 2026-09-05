@@ -7,6 +7,7 @@ import argparse
 import ast
 import hashlib
 import json
+import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -35,6 +36,7 @@ HISTORICAL_PROJECTIONS = (
     "IMPLEMENTATION_CHECKLIST.md",
     "done/completed-tasks.md",
 )
+PROJECTION_SHA = re.compile(r"\*\*last_verified_sha:\*\*\s*`([0-9a-f]{40})`")
 
 
 def git(*args: str) -> str:
@@ -93,10 +95,41 @@ def indexed_files(index_path: Path, pattern: str) -> tuple[list[str], list[str]]
     return files, missing
 
 
+def inspect_historical_projection(content: str, *, head: str) -> dict[str, Any]:
+    required_labels = (
+        "historical/non-canonical",
+        "last_verified_sha",
+        "last_verified_at",
+        "evidence_manifest",
+    )
+    missing_labels = [label for label in required_labels if label not in content]
+    match = PROJECTION_SHA.search(content)
+    recorded_sha = match.group(1) if match else None
+    is_stale = recorded_sha != head
+    stale_warning_present = "STALE UYARISI" in content
+    safe = (
+        not missing_labels
+        and recorded_sha is not None
+        and (not is_stale or stale_warning_present)
+    )
+    return {
+        "recorded_sha": recorded_sha,
+        "is_stale": is_stale,
+        "stale_warning_present": stale_warning_present,
+        "missing_labels": missing_labels,
+        "safe": safe,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--require-verified", action="store_true")
+    parser.add_argument(
+        "--require-projection-safety",
+        action="store_true",
+        help="fail when a historical projection lacks provenance or a stale warning",
+    )
     args = parser.parse_args()
 
     head = git("rev-parse", "HEAD")
@@ -122,16 +155,12 @@ def main() -> int:
         if (REPO / name).exists()
     ]
     projection_errors = []
+    projection_status = {}
     for relative in HISTORICAL_PROJECTIONS:
         content = (REPO / relative).read_text(encoding="utf-8")
-        required_labels = (
-            "historical/non-canonical",
-            "last_verified_sha",
-            "last_verified_at",
-            "evidence_manifest",
-            "STALE UYARISI",
-        )
-        if any(label not in content for label in required_labels):
+        status = inspect_historical_projection(content, head=head)
+        projection_status[relative] = status
+        if not status["safe"]:
             projection_errors.append(relative)
 
     checks = {
@@ -174,6 +203,7 @@ def main() -> int:
             "runbook_files": runbook_files,
             "missing_from_runbook_index": missing_runbooks,
             "projection_errors": projection_errors,
+            "historical_projections": projection_status,
         },
         "root_skeletons": root_skeletons,
     }
@@ -182,7 +212,11 @@ def main() -> int:
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     print(json.dumps(payload, ensure_ascii=False))
-    return 1 if args.require_verified and not verified else 0
+    if args.require_verified and not verified:
+        return 1
+    if args.require_projection_safety and projection_errors:
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
