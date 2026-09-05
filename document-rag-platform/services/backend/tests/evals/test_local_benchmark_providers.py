@@ -152,6 +152,48 @@ def test_bge_is_offline_exact_normalized_and_counts_query_vs_batch(tmp_path):
     assert len({event["payload_sha256"] for event in events}) == 3
 
 
+def test_bge_requires_capture_ack_before_actual_model_call(tmp_path):
+    module = _module()
+    snapshot = _bge_snapshot(tmp_path)
+    model = _EmbeddingModel()
+
+    def reject(_event, raw_payload):
+        assert raw_payload == ["passage: PRIVATE CANARY"]
+        raise RuntimeError("capture unavailable")
+
+    provider = _bge(
+        module,
+        snapshot,
+        model,
+        request_capture=reject,
+    )
+    with pytest.raises(module.LocalBenchmarkProviderError, match="capture"):
+        provider.embed(["PRIVATE CANARY"], instruction="passage: ")
+    assert model.calls == []
+
+
+def test_bge_projects_only_bounded_capture_ack_to_observer(tmp_path):
+    module = _module()
+    events = []
+    raw_seen = []
+
+    def capture(event, raw_payload):
+        raw_seen.append(raw_payload)
+        return "c" * 64
+
+    provider = _bge(
+        module,
+        _bge_snapshot(tmp_path),
+        _EmbeddingModel(),
+        request_capture=capture,
+        request_observer=events.append,
+    )
+    provider.embed(["PRIVATE CANARY"], instruction="passage: ")
+    assert raw_seen == [["passage: PRIVATE CANARY"]]
+    assert events[0]["capture_sha256"] == "c" * 64
+    assert "PRIVATE CANARY" not in json.dumps(events)
+
+
 @pytest.mark.parametrize(
     "vectors",
     [
@@ -322,6 +364,41 @@ def test_qwen_exact_identity_determinism_observer_and_safe_report(tmp_path):
     report = client.report()
     assert report["model"] == exact_identity
     assert "answer" not in json.dumps(report)
+
+
+def test_qwen_requires_capture_ack_before_actual_generate_and_redacts_observer(
+    tmp_path,
+):
+    module = _module()
+    raw_seen = []
+    events = []
+    client, model, _tokenizer = _qwen(
+        module,
+        _qwen_snapshot(tmp_path),
+        ["unused"],
+        request_capture=lambda event, raw: (
+            raw_seen.append(raw),
+            "c" * 64,
+        )[1],
+        request_observer=events.append,
+    )
+    assert client.complete("SYSTEM_CANARY", "USER_CANARY") == "unused"
+    assert raw_seen == [{"system": "SYSTEM_CANARY", "user": "USER_CANARY"}]
+    assert events[0]["capture_sha256"] == "c" * 64
+    assert "CANARY" not in json.dumps(events)
+    assert len(model.kwargs) == 1
+
+    rejecting, rejecting_model, _ = _qwen(
+        module,
+        _qwen_snapshot(tmp_path / "reject"),
+        ["unused"],
+        request_capture=lambda _event, _raw: (_ for _ in ()).throw(
+            RuntimeError("capture unavailable")
+        ),
+    )
+    with pytest.raises(module.LocalBenchmarkProviderError, match="capture"):
+        rejecting.complete("SYSTEM_CANARY", "USER_CANARY")
+    assert rejecting_model.kwargs == []
 
 
 def test_qwen_loaders_are_forced_offline_without_remote_code(tmp_path):

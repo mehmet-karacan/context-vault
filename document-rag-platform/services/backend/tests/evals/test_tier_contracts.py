@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import py_compile
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -739,6 +740,41 @@ def benchmark_fixture(tmp_path, monkeypatch):
     return args, manifest, report, runner
 
 
+def enable_v3_request_capture(tmp_path, args, manifest, report):
+    manifest.update(
+        schema_version="3.0",
+        golden_dataset_sha256="e" * 64,
+        execution_dataset_sha256="f" * 64,
+        execution_projection_sha256="1" * 64,
+    )
+    args.private_pack_manifest.write_text(json.dumps(manifest))
+    approval = json.loads(args.approval_manifest.read_text())
+    approval["private_pack_sha256"] = run_eval._sha(args.private_pack_manifest)
+    args.approval_manifest.write_text(json.dumps(approval))
+    report.update(
+        request_capture_session_sha256="2" * 64,
+        request_capture_ledger_sha256="3" * 64,
+        request_capture_request_count=report["usage"]["provider_calls"],
+    )
+    capture_socket = Path("/tmp") / f"cv-{abs(hash(str(tmp_path))):x}.sock"
+    capture_socket.unlink(missing_ok=True)
+    listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    listener.bind(str(capture_socket))
+    capture_socket.chmod(0o600)
+    nonce_file = tmp_path / "capture.nonce"
+    nonce_file.write_text("4" * 64)
+    nonce_file.chmod(0o600)
+    args.capture_socket = capture_socket
+    args.capture_nonce_file = nonce_file
+    return listener
+
+
+def close_v3_request_capture(listener, args):
+    socket_path = Path(listener.getsockname())
+    listener.close()
+    socket_path.unlink(missing_ok=True)
+
+
 def golden_non_transfer_fixture(tmp_path, monkeypatch):
     args, manifest, provider_report, runner = benchmark_fixture(tmp_path, monkeypatch)
     monkeypatch.setattr(run_eval, "_revision", lambda: "f" * 40)
@@ -796,8 +832,7 @@ def golden_non_transfer_fixture(tmp_path, monkeypatch):
         )
         + "\n"
     )
-    independent_evidence = tmp_path / "independent-request-capture.bin"
-    independent_evidence.write_bytes(b"synthetic-independent-capture")
+    independent_evidence = tmp_path / "independent-request-capture.json"
     pack_spec = importlib.util.spec_from_file_location(
         "cv_non_transfer_test_pack", REPO / "scripts/local_benchmark_pack.py"
     )
@@ -812,7 +847,13 @@ def golden_non_transfer_fixture(tmp_path, monkeypatch):
         expected_query_types=["prose"],
     )
     pack.execution_projection()
-    manifest["dataset_sha256"] = descriptor["sha256"]
+    manifest.update(
+        schema_version="3.0",
+        dataset_sha256=descriptor["sha256"],
+        golden_dataset_sha256=run_eval._sha(golden_dataset),
+        execution_dataset_sha256=run_eval._sha(execution_dataset),
+        execution_projection_sha256=pack.execution_sha256,
+    )
     args.private_pack_manifest.write_text(json.dumps(manifest))
     candidate = {
         **provider_report,
@@ -834,9 +875,46 @@ def golden_non_transfer_fixture(tmp_path, monkeypatch):
         "baseline_review_required": True,
         "quality_claim": "runner-reported-unverified",
         "warnings": [],
+        "request_capture_session_sha256": "1" * 64,
+        "request_capture_ledger_sha256": "2" * 64,
+        "request_capture_request_count": provider_report["usage"]["provider_calls"],
     }
     candidate_path = tmp_path / "candidate-report.json"
     candidate_path.write_text(json.dumps(candidate))
+    independent_evidence.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "evidence_type": "local-provider-request-boundary-capture",
+                "status": "SEALED_BEFORE_GOLDEN_OPEN",
+                "repository_revision": candidate["repository_revision"],
+                "collector_sha256": run_eval._sha(
+                    REPO / "scripts/capture_local_provider_boundary.py"
+                ),
+                "runner_bundle_sha256": run_eval._runner_bundle_sha256(
+                    args.provider_runner
+                ),
+                "private_pack_manifest_sha256": run_eval._sha(
+                    args.private_pack_manifest
+                ),
+                "dataset_sha256": descriptor["sha256"],
+                "golden_dataset_sha256": run_eval._sha(golden_dataset),
+                "execution_dataset_sha256": run_eval._sha(execution_dataset),
+                "execution_projection_sha256": pack.execution_sha256,
+                "environment_hash": candidate["environment_hash"],
+                **{name: candidate[name] for name in run_eval.PROVIDER_MODEL_FIELDS},
+                "request_count": candidate["usage"]["provider_calls"],
+                "request_kind_counts": {"embedding": 8, "generation": 8},
+                "ordered_request_digest": candidate["request_capture_ledger_sha256"],
+                "session_sha256": candidate["request_capture_session_sha256"],
+                "requests_sealed_at_utc": "2026-09-04T23:58:00Z",
+                "golden_first_open_at_utc": "2026-09-04T23:59:00Z",
+                "raw_request_retained": False,
+                "raw_response_retained": False,
+                "golden_payload_retained": False,
+            }
+        )
+    )
     receipt = {
         "schema_version": "1.0",
         "receipt_type": "golden-non-transfer-independent-review",
@@ -908,7 +986,99 @@ def test_golden_non_transfer_receipt_binds_exact_candidate_without_granting_auth
     assert result["source_repository_revision"] == candidate["repository_revision"]
     assert result["report_sha256"] == run_eval._sha(candidate_path)
     assert result["golden_results_sent_to_provider"] is False
+    assert result["capture_sequence_verified"] is True
+    assert result["request_capture_session_sha256"] == "1" * 64
+    assert result["request_capture_ledger_sha256"] == "2" * 64
     assert "synthetic-independent-reviewer" not in json.dumps(result)
+    assert str(independent_evidence) not in json.dumps(result)
+    runner.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("collector_sha256", "9" * 64),
+        ("ordered_request_digest", "9" * 64),
+        ("session_sha256", "9" * 64),
+        ("request_count", 15),
+        ("request_kind_counts", {"embedding": 1}),
+        ("requests_sealed_at_utc", "2026-09-04T23:59:00Z"),
+        ("raw_request_retained", True),
+        ("unexpected_raw_prompt", "must-never-project"),
+    ],
+)
+def test_independent_request_capture_evidence_fails_closed(
+    tmp_path, monkeypatch, field, value
+):
+    (
+        args,
+        _,
+        _,
+        candidate_path,
+        golden_dataset,
+        execution_dataset,
+        independent_evidence,
+        receipt,
+        receipt_path,
+        runner,
+    ) = golden_non_transfer_fixture(tmp_path, monkeypatch)
+    evidence = json.loads(independent_evidence.read_text())
+    evidence[field] = value
+    independent_evidence.write_text(json.dumps(evidence))
+    receipt["verification_evidence_sha256"] = run_eval._sha(independent_evidence)
+    receipt_path.write_text(json.dumps(receipt))
+
+    with pytest.raises(run_eval.EnvironmentUnavailable):
+        run_eval._check_golden_non_transfer_receipt(
+            receipt_path,
+            candidate_path,
+            args.private_pack_manifest,
+            golden_dataset,
+            execution_dataset,
+            independent_evidence,
+            args.provider_runner,
+        )
+    runner.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("request_capture_session_sha256", "9" * 64),
+        ("request_capture_ledger_sha256", "9" * 64),
+        ("request_capture_request_count", 15),
+    ],
+)
+def test_independent_request_capture_binds_candidate_capture_fields(
+    tmp_path, monkeypatch, field, value
+):
+    (
+        args,
+        _,
+        candidate,
+        candidate_path,
+        golden_dataset,
+        execution_dataset,
+        independent_evidence,
+        receipt,
+        receipt_path,
+        runner,
+    ) = golden_non_transfer_fixture(tmp_path, monkeypatch)
+    candidate[field] = value
+    candidate_path.write_text(json.dumps(candidate))
+    receipt["report_sha256"] = run_eval._sha(candidate_path)
+    receipt_path.write_text(json.dumps(receipt))
+
+    with pytest.raises(run_eval.EnvironmentUnavailable):
+        run_eval._check_golden_non_transfer_receipt(
+            receipt_path,
+            candidate_path,
+            args.private_pack_manifest,
+            golden_dataset,
+            execution_dataset,
+            independent_evidence,
+            args.provider_runner,
+        )
     runner.assert_not_called()
 
 
@@ -1155,6 +1325,75 @@ def test_invalid_private_manifest_never_dispatches_provider(
     args.private_pack_manifest.write_text(json.dumps(manifest))
     with pytest.raises(run_eval.EnvironmentUnavailable):
         run_eval._real_benchmark(args, tmp_path)
+    runner.assert_not_called()
+
+
+def test_private_manifest_v2_and_v3_are_version_selected(tmp_path, monkeypatch):
+    args, manifest, report, _ = benchmark_fixture(tmp_path, monkeypatch)
+    assert (
+        run_eval._private_manifest(args.private_pack_manifest)["schema_version"]
+        == "2.0"
+    )
+
+    listener = enable_v3_request_capture(tmp_path, args, manifest, report)
+    try:
+        selected = run_eval._private_manifest(args.private_pack_manifest)
+    finally:
+        close_v3_request_capture(listener, args)
+    assert selected["schema_version"] == "3.0"
+    assert selected["golden_dataset_sha256"] == "e" * 64
+
+
+def test_v3_real_benchmark_forwards_only_bounded_capture_environment(
+    tmp_path, monkeypatch
+):
+    args, manifest, report, runner = benchmark_fixture(tmp_path, monkeypatch)
+    listener = enable_v3_request_capture(tmp_path, args, manifest, report)
+    monkeypatch.setattr(run_eval, "_revision", lambda: "a" * 40)
+    try:
+        result = run_eval._real_benchmark(args, tmp_path)
+    finally:
+        close_v3_request_capture(listener, args)
+
+    child_env = runner.call_args.kwargs["env"]
+    assert child_env["CV_EVAL_CAPTURE_SOCKET"] == str(args.capture_socket)
+    assert child_env["CV_EVAL_CAPTURE_NONCE"] == "4" * 64
+    assert child_env["CV_EVAL_GOLDEN_DATASET_SHA256"] == "e" * 64
+    assert child_env["CV_EVAL_EXECUTION_DATASET_SHA256"] == "f" * 64
+    assert child_env["CV_EVAL_EXECUTION_PROJECTION_SHA256"] == "1" * 64
+    assert child_env["CV_EVAL_REPOSITORY_REVISION"] == "a" * 40
+    assert str(args.capture_socket) not in json.dumps(result)
+    assert str(args.capture_nonce_file) not in json.dumps(result)
+    assert "4" * 64 not in json.dumps(result)
+    assert result["request_capture_request_count"] == result["usage"]["provider_calls"]
+
+
+@pytest.mark.parametrize("missing", ["capture_socket", "capture_nonce_file"])
+def test_v3_real_benchmark_requires_both_capture_inputs_before_dispatch(
+    tmp_path, monkeypatch, missing
+):
+    args, manifest, report, runner = benchmark_fixture(tmp_path, monkeypatch)
+    listener = enable_v3_request_capture(tmp_path, args, manifest, report)
+    setattr(args, missing, None)
+    try:
+        with pytest.raises(run_eval.EnvironmentUnavailable, match="requires capture"):
+            run_eval._real_benchmark(args, tmp_path)
+    finally:
+        close_v3_request_capture(listener, args)
+    runner.assert_not_called()
+
+
+def test_v3_real_benchmark_rejects_non_private_nonce_before_dispatch(
+    tmp_path, monkeypatch
+):
+    args, manifest, report, runner = benchmark_fixture(tmp_path, monkeypatch)
+    listener = enable_v3_request_capture(tmp_path, args, manifest, report)
+    args.capture_nonce_file.chmod(0o644)
+    try:
+        with pytest.raises(run_eval.EnvironmentUnavailable, match="mode 0600"):
+            run_eval._real_benchmark(args, tmp_path)
+    finally:
+        close_v3_request_capture(listener, args)
     runner.assert_not_called()
 
 

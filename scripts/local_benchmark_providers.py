@@ -214,6 +214,7 @@ class LocalBgeProvider:
         model: Any | None = None,
         token_counter: Any | None = None,
         request_observer: Callable[[dict[str, Any]], None] | None = None,
+        request_capture: Callable[[dict[str, Any], Any], str] | None = None,
     ) -> None:
         if device not in {"cpu", "mps"}:
             raise LocalBenchmarkProviderError("device must be cpu or mps")
@@ -228,6 +229,8 @@ class LocalBgeProvider:
             )
         if request_observer is not None and not callable(request_observer):
             raise LocalBenchmarkProviderError("request observer must be callable")
+        if request_capture is not None and not callable(request_capture):
+            raise LocalBenchmarkProviderError("request capture must be callable")
 
         self._guard = _SnapshotGuard(
             verifier=bge_verifier,
@@ -244,6 +247,7 @@ class LocalBgeProvider:
         self.query_instruction = query_instruction
         self._token_counter = token_counter
         self._request_observer = request_observer
+        self._request_capture = request_capture
         self._request_ordinal = 0
         self.batch_calls = 0
         self.batch_tokens = 0
@@ -299,6 +303,18 @@ class LocalBgeProvider:
             "token_count": token_count,
             "payload_sha256": hashlib.sha256(canonical).hexdigest(),
         }
+        if self._request_capture is not None:
+            try:
+                capture_sha256 = self._request_capture(event, texts)
+            except Exception as exc:  # noqa: BLE001 - independent capture boundary
+                raise LocalBenchmarkProviderError("request capture failed") from exc
+            if not isinstance(capture_sha256, str) or not _SHA256_RE.fullmatch(
+                capture_sha256
+            ):
+                raise LocalBenchmarkProviderError(
+                    "request capture acknowledgement failed"
+                )
+            event = {**event, "capture_sha256": capture_sha256}
         if self._request_observer is not None:
             try:
                 self._request_observer(event)
@@ -515,6 +531,7 @@ class LocalQwenClient:
         model_instance: Any | None = None,
         model: Any | None = None,
         request_observer: Callable[[dict[str, Any]], None] | None = None,
+        request_capture: Callable[[dict[str, Any], Any], str] | None = None,
     ) -> None:
         if device not in {"cpu", "mps"}:
             raise LocalBenchmarkProviderError("device must be cpu or mps")
@@ -538,6 +555,8 @@ class LocalQwenClient:
         )
         if request_observer is not None and not callable(request_observer):
             raise LocalBenchmarkProviderError("request observer must be callable")
+        if request_capture is not None and not callable(request_capture):
+            raise LocalBenchmarkProviderError("request capture must be callable")
         injected_model = model_instance if model_instance is not None else model
         if model_instance is not None and model is not None:
             raise LocalBenchmarkProviderError("only one injected Qwen model is allowed")
@@ -568,6 +587,7 @@ class LocalQwenClient:
         self.exact_model_identity = f"{expected_model}@{expected_revision}"
         self.device = device
         self._request_observer = request_observer
+        self._request_capture = request_capture
         self._request_ordinal = 0
         self.generation_calls = 0
         self.repair_calls = 0
@@ -690,6 +710,18 @@ class LocalQwenClient:
             },
             "payload_sha256": hashlib.sha256(canonical).hexdigest(),
         }
+        if self._request_capture is not None:
+            try:
+                capture_sha256 = self._request_capture(event, dict(fields))
+            except Exception as exc:  # noqa: BLE001 - independent capture boundary
+                raise LocalBenchmarkProviderError("request capture failed") from exc
+            if not isinstance(capture_sha256, str) or not _SHA256_RE.fullmatch(
+                capture_sha256
+            ):
+                raise LocalBenchmarkProviderError(
+                    "request capture acknowledgement failed"
+                )
+            event = {**event, "capture_sha256": capture_sha256}
         if self._request_observer is not None:
             try:
                 self._request_observer(event)
@@ -949,6 +981,7 @@ class DeferredLocalQwenClient:
         model_instance: Any | None = None,
         model: Any | None = None,
         request_observer: Callable[[dict[str, Any]], None] | None = None,
+        request_capture: Callable[[dict[str, Any], Any], str] | None = None,
     ) -> None:
         if device not in {"cpu", "mps"}:
             raise LocalBenchmarkProviderError("device must be cpu or mps")
@@ -974,6 +1007,8 @@ class DeferredLocalQwenClient:
         }
         if request_observer is not None and not callable(request_observer):
             raise LocalBenchmarkProviderError("request observer must be callable")
+        if request_capture is not None and not callable(request_capture):
+            raise LocalBenchmarkProviderError("request capture must be callable")
         injected_model = model_instance if model_instance is not None else model
         if model_instance is not None and model is not None:
             raise LocalBenchmarkProviderError("only one injected Qwen model is allowed")
@@ -1019,6 +1054,7 @@ class DeferredLocalQwenClient:
             "model_instance": model_instance,
             "model": model,
             "request_observer": request_observer,
+            "request_capture": request_capture,
         }
 
     def _client(self) -> LocalQwenClient:

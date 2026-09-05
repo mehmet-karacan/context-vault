@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import importlib.util
 import json
 import os
@@ -320,6 +321,97 @@ def test_happy_path_writes_only_bounded_v2_report(tmp_path):
         assert secret not in serialized
 
 
+def test_captured_run_uses_execution_only_admission_and_collector_labels(
+    tmp_path, monkeypatch
+):
+    pack_root, pack_sha = _pack(tmp_path)
+    env = _env(tmp_path, pack_root, pack_sha)
+    execution_payload = (pack_root / "execution/cases.jsonl").read_bytes()
+    golden_payload = (pack_root / "labels/golden.jsonl").read_bytes()
+    admitted = pack_module.LocalBenchmarkPack.open(
+        pack_root, expected_bundle_sha256=pack_sha
+    )
+    admitted.execution_projection()
+    env.update(
+        CV_EVAL_CAPTURE_SOCKET=str(tmp_path / "capture.sock"),
+        CV_EVAL_CAPTURE_NONCE="9" * 64,
+        CV_EVAL_EXECUTION_DATASET_SHA256=hashlib.sha256(execution_payload).hexdigest(),
+        CV_EVAL_GOLDEN_DATASET_SHA256=hashlib.sha256(golden_payload).hexdigest(),
+        CV_EVAL_EXECUTION_PROJECTION_SHA256=admitted.execution_sha256,
+        CV_EVAL_REPOSITORY_REVISION="8" * 40,
+    )
+    events = []
+
+    class Capture:
+        def __init__(self, _socket, _nonce, bindings):
+            assert (
+                bindings["golden_dataset_sha256"]
+                == env["CV_EVAL_GOLDEN_DATASET_SHA256"]
+            )
+            self.selected = None
+            events.append("handshake")
+
+        def select(self, case_id):
+            self.selected = case_id
+
+        def capture(self, _event, _raw):
+            raise AssertionError("injected executor supplies already captured events")
+
+        def seal_and_read_labels(self, count):
+            events.append("seal")
+            assert count == 2
+            return golden_payload, {
+                "session_sha256": "6" * 64,
+                "ordered_request_digest": "7" * 64,
+                "request_count": 2,
+            }
+
+    class CapturedExecutor(FakeExecutor):
+        def __call__(self, case, **kwargs):
+            result = super().__call__(case, **kwargs)
+            # Replace the legacy events added by the parent with captured events.
+            return result
+
+    original_call = FakeExecutor.__call__
+
+    def captured_call(
+        self, case, *, embedding_provider, generation_client, observe_request
+    ):
+        def captured_observer(event):
+            observe_request(
+                {
+                    **event,
+                    "capture_sha256": hashlib.sha256(
+                        json.dumps(event, sort_keys=True).encode()
+                    ).hexdigest(),
+                }
+            )
+
+        return original_call(
+            self,
+            case,
+            embedding_provider=embedding_provider,
+            generation_client=generation_client,
+            observe_request=captured_observer,
+        )
+
+    monkeypatch.setattr(CapturedExecutor, "__call__", captured_call)
+    monkeypatch.setattr(runner, "CaptureClient", Capture)
+
+    def providers(_config, _observer, request_capture):
+        assert callable(request_capture)
+        return FakeEmbedding(), FakeGeneration()
+
+    report = runner.execute(
+        env, case_executor=CapturedExecutor(), provider_factory=providers
+    )
+    assert events == ["handshake", "seal"]
+    assert report["request_capture_session_sha256"] == "6" * 64
+    assert report["request_capture_ledger_sha256"] == "7" * 64
+    assert report["request_capture_request_count"] == 2
+    assert "PRIVATE" not in json.dumps(report)
+
+
 def test_observation_accepts_only_bounded_answer_validation_codes():
     value = FakeExecutor()(
         {"id": "case-1"},
@@ -351,7 +443,7 @@ def test_config_hash_binds_phased_generation_token_limit(tmp_path, monkeypatch):
         second_env, case_executor=FakeExecutor(), provider_factory=_providers
     )
 
-    assert runner.TOOL_VERSION == "1.1.0"
+    assert runner.TOOL_VERSION == "1.2.0"
     assert first["config_hash"] != second["config_hash"]
 
 

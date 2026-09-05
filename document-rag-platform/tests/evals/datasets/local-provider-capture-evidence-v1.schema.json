@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://context-vault.local/schemas/local-provider-capture-evidence-v1.json",
+  "title": "Sealed local provider request-boundary capture evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "evidence_type", "status", "repository_revision",
+    "collector_sha256", "runner_bundle_sha256", "private_pack_manifest_sha256",
+    "dataset_sha256", "golden_dataset_sha256", "execution_dataset_sha256",
+    "execution_projection_sha256", "environment_hash", "embedding_provider",
+    "embedding_model", "generation_provider", "generation_model", "request_count",
+    "request_kind_counts",
+    "ordered_request_digest", "session_sha256", "requests_sealed_at_utc",
+    "golden_first_open_at_utc", "raw_request_retained", "raw_response_retained",
+    "golden_payload_retained"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "evidence_type": {"const": "local-provider-request-boundary-capture"},
+    "status": {"const": "SEALED_BEFORE_GOLDEN_OPEN"},
+    "repository_revision": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "collector_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "runner_bundle_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "private_pack_manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "dataset_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "golden_dataset_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "execution_dataset_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "execution_projection_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "environment_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "embedding_provider": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S"},
+    "embedding_model": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S"},
+    "generation_provider": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S"},
+    "generation_model": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S"},
+    "request_count": {"type": "integer", "minimum": 1, "maximum": 1000000},
+    "request_kind_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "embedding": {"type": "integer", "minimum": 1, "maximum": 1000000},
+        "query": {"type": "integer", "minimum": 1, "maximum": 1000000},
+        "generation": {"type": "integer", "minimum": 1, "maximum": 1000000},
+        "repair": {"type": "integer", "minimum": 1, "maximum": 1000000}
+      }
+    },
+    "ordered_request_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "session_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "requests_sealed_at_utc": {"type": "string", "format": "date-time"},
+    "golden_first_open_at_utc": {"type": "string", "format": "date-time"},
+    "raw_request_retained": {"const": false},
+    "raw_response_retained": {"const": false},
+    "golden_payload_retained": {"const": false}
+  }
+}

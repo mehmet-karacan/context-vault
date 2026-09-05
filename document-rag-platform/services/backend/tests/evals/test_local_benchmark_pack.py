@@ -158,6 +158,35 @@ def test_bundle_admission_and_execution_do_not_parse_golden_labels(tmp_path):
         pack.load_labels()
 
 
+def test_execution_only_admission_never_opens_golden_until_sealed_payload(
+    tmp_path, monkeypatch
+):
+    module = _module()
+    root = _pack(tmp_path)
+    execution_payload = (root / "execution/cases.jsonl").read_bytes()
+    golden_payload = (root / "labels/golden.jsonl").read_bytes()
+    opened: list[str] = []
+    original = module._read_regular
+
+    def observed(path, *, maximum):
+        opened.append(Path(path).relative_to(root).as_posix())
+        return original(path, maximum=maximum)
+
+    monkeypatch.setattr(module, "_read_regular", observed)
+    pack = module.LocalBenchmarkPack.open_execution(
+        root,
+        expected_execution_sha256=hashlib.sha256(execution_payload).hexdigest(),
+        expected_golden_sha256=hashlib.sha256(golden_payload).hexdigest(),
+        expected_records=1,
+        expected_query_types=["document-fact"],
+    )
+    assert pack.execution_projection()[0]["id"] == "case-001"
+    assert "labels/golden.jsonl" not in opened
+    pack.freeze_request_ledger(_ledger(module, pack))
+    assert pack.load_labels_payload(golden_payload) == [_label()]
+    assert "labels/golden.jsonl" not in opened
+
+
 def test_pack_root_must_be_outside_repository(tmp_path):
     module = _module()
     root = REPO / ".local-pack-must-not-exist"

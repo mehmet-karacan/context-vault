@@ -271,6 +271,53 @@ def bundle_descriptor(root: Path) -> dict[str, Any]:
     }
 
 
+def execution_descriptor(root: Path) -> dict[str, Any]:
+    """Hash only the label-free execution member.
+
+    The layout is inspected, but the golden member is deliberately never opened.
+    This is the only admission primitive allowed before independent request capture
+    has been sealed.
+    """
+
+    resolved = _layout(Path(root))
+    payload = _read_regular(resolved / EXECUTION_PATH, maximum=MAX_FILE_BYTES)
+    return {
+        "path": EXECUTION_PATH,
+        "bytes": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
+def _bundle_from_members(
+    *,
+    execution_sha256: str,
+    execution_bytes: int,
+    golden_sha256: str,
+    golden_bytes: int,
+) -> dict[str, Any]:
+    digest = hashlib.sha256(BUNDLE_DOMAIN)
+    for relative, size, file_hash in (
+        (EXECUTION_PATH, execution_bytes, execution_sha256),
+        (LABEL_PATH, golden_bytes, golden_sha256),
+    ):
+        _framed(digest, relative.encode("utf-8"))
+        _framed(digest, size.to_bytes(8, "big"))
+        _framed(digest, bytes.fromhex(file_hash))
+    return {
+        "sha256": digest.hexdigest(),
+        "files": len(PACK_PATHS),
+        "bytes": execution_bytes + golden_bytes,
+        "file_bytes": {
+            EXECUTION_PATH: execution_bytes,
+            LABEL_PATH: golden_bytes,
+        },
+        "file_sha256": {
+            EXECUTION_PATH: execution_sha256,
+            LABEL_PATH: golden_sha256,
+        },
+    }
+
+
 def _no_duplicate_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -647,10 +694,14 @@ class LocalBenchmarkPack:
         *,
         expected_records: int | None,
         expected_query_types: frozenset[str] | None,
+        execution_only: bool = False,
+        expected_golden_sha256: str | None = None,
+        execution_member: dict[str, Any] | None = None,
+        expected_bundle_sha256: str | None = None,
     ) -> None:
         self.root = root
         self._descriptor = copy.deepcopy(descriptor)
-        self.bundle_sha256 = descriptor["sha256"]
+        self.bundle_sha256 = expected_bundle_sha256 or descriptor.get("sha256")
         self.execution_sha256: str | None = None
         self.request_ledger_sha256: str | None = None
         self._executions: list[dict[str, Any]] | None = None
@@ -658,6 +709,9 @@ class LocalBenchmarkPack:
         self._ledger_frozen = False
         self._expected_records = expected_records
         self._expected_query_types = expected_query_types
+        self._execution_only = execution_only
+        self._expected_golden_sha256 = expected_golden_sha256
+        self._execution_member = copy.deepcopy(execution_member)
 
     @classmethod
     def open(
@@ -717,7 +771,82 @@ class LocalBenchmarkPack:
             expected_query_types=normalized_query_types,
         )
 
+    @classmethod
+    def open_execution(
+        cls,
+        root: Path,
+        *,
+        expected_execution_sha256: str,
+        expected_golden_sha256: str,
+        expected_bundle_sha256: str | None = None,
+        expected_records: int | None = None,
+        expected_query_types: Iterable[str] | None = None,
+    ) -> LocalBenchmarkPack:
+        """Admit execution bytes without opening golden bytes."""
+
+        for name, value in (
+            ("execution", expected_execution_sha256),
+            ("golden", expected_golden_sha256),
+        ):
+            if not isinstance(value, str) or not _SHA256.fullmatch(value):
+                raise LocalBenchmarkPackError(f"expected {name} hash is invalid")
+        if expected_bundle_sha256 is not None and (
+            not isinstance(expected_bundle_sha256, str)
+            or not _SHA256.fullmatch(expected_bundle_sha256)
+        ):
+            raise LocalBenchmarkPackError("expected bundle hash is invalid")
+        if expected_records is not None and (
+            not isinstance(expected_records, int)
+            or isinstance(expected_records, bool)
+            or not 1 <= expected_records <= MAX_RECORDS
+        ):
+            raise LocalBenchmarkPackError("expected records must be a bounded integer")
+        normalized_query_types: frozenset[str] | None = None
+        if expected_query_types is not None:
+            if isinstance(expected_query_types, (str, bytes)):
+                raise LocalBenchmarkPackError(
+                    "expected query types must be a bounded sequence"
+                )
+            try:
+                values = list(expected_query_types)
+            except TypeError as exc:
+                raise LocalBenchmarkPackError(
+                    "expected query types must be iterable"
+                ) from exc
+            if not values or len(values) > MAX_QUERY_TYPES:
+                raise LocalBenchmarkPackError(
+                    "expected query types must be nonempty and bounded"
+                )
+            normalized_query_types = frozenset(_query_type(item) for item in values)
+            if len(normalized_query_types) != len(values):
+                raise LocalBenchmarkPackError(
+                    "expected query types must not contain duplicates"
+                )
+        member = execution_descriptor(root)
+        if member["sha256"] != expected_execution_sha256:
+            raise LocalBenchmarkPackError("benchmark execution hash mismatch")
+        if execution_descriptor(root) != member:
+            raise LocalBenchmarkPackError(
+                "benchmark execution changed during admission"
+            )
+        return cls(
+            _pack_root(Path(root)),
+            {},
+            expected_records=expected_records,
+            expected_query_types=normalized_query_types,
+            execution_only=True,
+            expected_golden_sha256=expected_golden_sha256,
+            execution_member=member,
+            expected_bundle_sha256=expected_bundle_sha256,
+        )
+
     def _verify_unchanged(self) -> None:
+        if self._execution_only:
+            if execution_descriptor(self.root) != self._execution_member:
+                raise LocalBenchmarkPackError(
+                    "benchmark execution changed after admission"
+                )
+            return
         if bundle_descriptor(self.root) != self._descriptor:
             raise LocalBenchmarkPackError("benchmark pack changed after admission")
 
@@ -854,9 +983,48 @@ class LocalBenchmarkPack:
             raise LocalBenchmarkPackError(
                 "request ledger must be frozen before golden labels are loaded"
             )
+        self.execution_projection()
+        self._verify_unchanged()
+        if self._execution_only:
+            raise LocalBenchmarkPackError(
+                "golden labels must be supplied by the sealed capture boundary"
+            )
+        payload = _read_regular(self.root / LABEL_PATH, maximum=MAX_FILE_BYTES)
+        return self.load_labels_payload(payload)
+
+    def load_labels_payload(self, payload: bytes) -> list[dict[str, Any]]:
+        """Parse golden bytes released by an independently sealed collector."""
+
+        if not self._ledger_frozen:
+            raise LocalBenchmarkPackError(
+                "request ledger must be frozen before golden labels are loaded"
+            )
+        if (
+            not isinstance(payload, bytes)
+            or not payload
+            or len(payload) > MAX_FILE_BYTES
+        ):
+            raise LocalBenchmarkPackError(
+                "golden label payload is invalid or oversized"
+            )
         executions = self.execution_projection()
         self._verify_unchanged()
-        payload = _read_regular(self.root / LABEL_PATH, maximum=MAX_FILE_BYTES)
+        golden_sha256 = hashlib.sha256(payload).hexdigest()
+        if (
+            self._expected_golden_sha256 is not None
+            and golden_sha256 != self._expected_golden_sha256
+        ):
+            raise LocalBenchmarkPackError("golden label payload hash mismatch")
+        if self._execution_only:
+            assert self._execution_member is not None
+            descriptor = _bundle_from_members(
+                execution_sha256=self._execution_member["sha256"],
+                execution_bytes=self._execution_member["bytes"],
+                golden_sha256=golden_sha256,
+                golden_bytes=len(payload),
+            )
+            if self.bundle_sha256 and descriptor["sha256"] != self.bundle_sha256:
+                raise LocalBenchmarkPackError("benchmark pack bundle hash mismatch")
         labels = _label_records(payload)
         self._verify_unchanged()
         execution_ids = {case["id"] for case in executions}

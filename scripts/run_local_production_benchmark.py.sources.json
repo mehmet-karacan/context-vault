@@ -4,6 +4,7 @@
     "document-rag-platform/services/backend/src"
   ],
   "files": [
+    "scripts/capture_local_provider_boundary.py",
     "scripts/local_benchmark_pack.py",
     "scripts/local_benchmark_providers.py",
     "scripts/local_production_case_executor.py",

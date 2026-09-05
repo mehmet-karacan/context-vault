@@ -1,7 +1,7 @@
 # Approved real-provider benchmark tier
 
 This tier collects candidate evidence for the real-provider quality gate. It must
-run only with an owner-reviewed v2 private-pack manifest, explicit
+run only with an owner-reviewed v2 or v3 private-pack manifest, explicit
 `--approval-manifest`, separately approved embedding and generation
 provider/model identities, credentials, budget and compatible
 data classification. The manifest is a reference to an existing human
@@ -39,8 +39,9 @@ receipt to exact evidence bytes, as documented below, but cannot authenticate th
 reviewer or make the final admission. Numeric comparison or receipt binding alone
 neither seals a baseline nor grants release.
 
-The runtime accepts only `private-pack-manifest-v2.schema.json`, whose
-`review_status` is exactly `approved`, and
+The runtime version-selects the frozen `private-pack-manifest-v2.schema.json` or
+`private-pack-manifest-v3.schema.json`, both of whose `review_status` is exactly
+`approved`, and
 `benchmark-approval-manifest-v3.schema.json`, whose `decision` is exactly
 `approved`. The approval binds the private-manifest file hash and
 dataset/classification to both provider/model identities, runner bundle hash,
@@ -50,7 +51,13 @@ rejects reported usage above them. This is defense in depth: a malicious runner
 could spend before reporting, so the exact runner bundle still requires human
 review and provider-side budget limits. Provider/model/environment values can only
 be compared after output exists; other approval bindings fail before dispatch.
-Older private-manifest v1 and approval v1/v2 schemas remain for historical
+The v3 manifest additionally binds the golden file, label-free execution file and
+normalized execution projection as three separate SHA-256 values. A v3 run requires
+an already-running external capture socket plus a one-time nonce supplied through a
+bounded, non-symlink, mode-`0600` file. The wrapper forwards the socket and nonce only
+to the approved child environment; neither value nor either path is projected into
+the report. V2 remains accepted for historical and non-capture runs, but capture
+arguments are rejected with v2. Older private-manifest v1 and approval v1/v2 schemas remain for historical
 evidence validation only and are not accepted by the runtime. Only explicitly
 named credential variables reach the child; ambient HOME, Codex,
 session and unrelated credentials are not inherited. The environment hash is
@@ -83,7 +90,7 @@ or accept a legacy private manifest, approval, report or seal.
 ## Approval preparation (no provider effect)
 
 Prerequisites: use the same locked backend Python, machine/runtime and exact direct
-runner path intended for the benchmark. The v2 private-pack manifest must already
+runner path intended for the benchmark. The v2 or v3 private-pack manifest must already
 have completed owner review and exact `review_status=approved`. Keep the manifest
 and both outputs outside the repository;
 the commands do not read credential values or execute the runner. Each JSON output
@@ -136,13 +143,71 @@ files under the applicable private evidence policy; never commit them or their r
 paths. A successful check only validates binding—it does not authorize the CLI/model
 to choose a provider, spend budget, execute the run or seal a baseline.
 
+For v3, create the nonce file under a restrictive umask with exact mode `0600`,
+then start `scripts/capture_local_provider_boundary.py` as a separate verifier
+process before starting the benchmark. Bind its required arguments to the reviewed
+source, runner, manifest, combined/split dataset, projection,
+environment and four provider/model hashes. The collector exclusively creates the
+evidence output, acknowledges every request boundary, seals the ordered ledger and
+only then opens the golden file. The nonce is never sent over the socket: it keys a
+mutual challenge/HMAC handshake and a single persistent, sequence-bound session, so
+pathname replacement cannot impersonate the collector between admission and model
+calls. Never put the nonce value on a command line, and
+never reuse its file, socket or evidence path. Capture socket and nonce-file
+arguments are execution-only; approval preflight/check modes reject them.
+
 Example shape only (paths remain outside public evidence when private):
+
+For a v3 run, create one fresh nonce and start the bound collector in a separate
+terminal before invoking the wrapper. Use a short real directory such as
+`/private/tmp` on macOS (not the `/tmp` symlink), and copy every hash/identity
+exactly from the approved v3 manifest, approval preflight and approval. The
+evidence output must be a new private path. These values are illustrative
+placeholders, not authority:
+
+```sh
+umask 077
+cv_capture_nonce="/private/path/a9-capture.nonce"
+openssl rand -hex 32 >"$cv_capture_nonce"
+chmod 600 "$cv_capture_nonce"
+
+cv_capture_socket="/private/tmp/cv-a9-capture.sock"
+cv_capture_evidence="/private/path/a9-request-capture.json"
+cv_golden_dataset="/private/path/labels/golden.jsonl"
+
+"$cv_python" scripts/capture_local_provider_boundary.py \
+  --socket "$cv_capture_socket" \
+  --nonce-file "$cv_capture_nonce" \
+  --golden-dataset "$cv_golden_dataset" \
+  --evidence-output "$cv_capture_evidence" \
+  --repository-revision "$CV_APPROVED_SOURCE_REVISION" \
+  --runner-bundle-sha256 "$CV_APPROVED_RUNNER_BUNDLE_SHA256" \
+  --private-pack-manifest-sha256 "$CV_APPROVED_PRIVATE_MANIFEST_SHA256" \
+  --dataset-sha256 "$CV_APPROVED_DATASET_SHA256" \
+  --golden-dataset-sha256 "$CV_APPROVED_GOLDEN_SHA256" \
+  --execution-dataset-sha256 "$CV_APPROVED_EXECUTION_SHA256" \
+  --execution-projection-sha256 "$CV_APPROVED_EXECUTION_PROJECTION_SHA256" \
+  --environment-hash "$CV_APPROVED_ENVIRONMENT_HASH" \
+  --embedding-provider "$CV_APPROVED_EMBEDDING_PROVIDER" \
+  --embedding-model "$CV_APPROVED_EMBEDDING_MODEL" \
+  --generation-provider "$CV_APPROVED_GENERATION_PROVIDER" \
+  --generation-model "$CV_APPROVED_GENERATION_MODEL"
+```
+
+The collector must remain running until it writes the mode-`0600` evidence and
+exits after the seal. Do not reuse its socket, nonce or evidence output. The real
+benchmark invocation below must use the same socket and nonce file. An absent,
+replaced, unauthenticated or rejecting collector fails before the corresponding
+local model call; later pathname replacement cannot move the already authenticated
+persistent session.
 
 ```sh
 python scripts/run_eval.py --tier real-benchmark --strict \
   --approval-manifest "$APPROVAL_MANIFEST" \
   --private-pack-manifest "$PRIVATE_PACK_MANIFEST" \
   --provider-runner "$APPROVED_RUNNER" \
+  --capture-socket "$CAPTURE_SOCKET" \
+  --capture-nonce-file "$CAPTURE_NONCE_FILE" \
   --baseline "$APPROVED_BASELINE" --baseline-seal "$BASELINE_SEAL" \
   --json-output "$PRIVATE_REPORT_JSON" --markdown-output "$PRIVATE_REPORT_MD"
 ```
@@ -162,8 +227,13 @@ the actual provider-request boundary. The verifier—not this CLI, runner, model
 automation—issues a receipt conforming to
 `benchmark-golden-non-transfer-receipt-v1.schema.json`. Accepted methods are an
 independent request capture, independent egress observation or provider audit log.
-The evidence artifact may be private; the CLI only hashes it and never projects its
-contents or path.
+The evidence artifact may be private. For `independent-egress-observation` and
+`provider-audit-log`, the CLI treats it as opaque bytes and only hashes it. For
+`independent-request-capture`, it must conform to
+`local-provider-capture-evidence-v1.schema.json`; that schema contains only hashes,
+bounded counts, provider/model identities, UTC timestamps and explicit false
+retention flags. Raw prompts, responses, golden payloads and paths are forbidden by
+the closed schema and are never projected by the checker.
 
 The receipt binds the exact source commit, runner source bundle, private-pack
 manifest and bundle, golden-label file, label-free execution file and normalized
@@ -173,6 +243,10 @@ verification time must follow the candidate time, its request count must cover e
 manifest record and the candidate must contain the runner's explicit
 `golden_results_sent_to_provider=false` assertion. The independent evidence still
 has to prove that assertion; the runner cannot prove its own non-transfer behavior.
+For request capture, the checker also requires the candidate's capture session,
+ordered-ledger and request-count fields to exactly match the evidence; request sealing
+must precede the first golden-file open, which must precede the candidate and receipt
+timestamps.
 
 Keep every input and output outside Git and under the applicable private evidence
 policy. Use a new output path; the checker refuses symlinks and overwrites and creates
@@ -183,7 +257,7 @@ cv_receipt="/private/path/golden-non-transfer-receipt.json"
 cv_candidate_report="/private/path/real-benchmark-report.json"
 cv_golden_dataset="/private/path/labels/golden.jsonl"
 cv_execution_dataset="/private/path/execution/cases.jsonl"
-cv_independent_evidence="/private/path/independent-request-capture.bin"
+cv_independent_evidence="/private/path/independent-request-capture.json"
 cv_receipt_check="/private/path/golden-non-transfer-check.json"
 
 "$cv_python" scripts/run_eval.py --check-golden-non-transfer-receipt \

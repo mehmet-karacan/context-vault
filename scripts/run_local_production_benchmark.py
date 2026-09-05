@@ -48,16 +48,21 @@ _executor_module = _load_local(
     "cv_local_production_case_executor_runtime",
     "local_production_case_executor.py",
 )
+_capture_module = _load_local(
+    "cv_local_provider_capture_runtime", "capture_local_provider_boundary.py"
+)
 LocalBenchmarkPack = _pack_module.LocalBenchmarkPack
 aggregate_request_hashes = _pack_module.aggregate_request_hashes
 bundle_descriptor = _pack_module.bundle_descriptor
+execution_descriptor = _pack_module.execution_descriptor
+CaptureClient = _capture_module.CaptureClient
 LocalBgeProvider = _provider_module.LocalBgeProvider
 LocalQwenClient = _provider_module.LocalQwenClient
 DeferredLocalQwenClient = _provider_module.DeferredLocalQwenClient
 production_case_executor = _executor_module.production_case_executor
 ANSWER_VALIDATION_ERROR_CODES = _executor_module.ANSWER_VALIDATION_ERROR_CODES
 
-TOOL_VERSION = "1.1.0"
+TOOL_VERSION = "1.2.0"
 EMBEDDING_PROVIDER = "local-sentence-transformers"
 GENERATION_PROVIDER = "local-transformers"
 BGE_MODEL = "BAAI/bge-m3"
@@ -91,6 +96,8 @@ _EMBEDDING_EVENT_FIELDS = {
     "token_count",
     "payload_sha256",
 }
+_CAPTURED_GENERATION_EVENT_FIELDS = _GENERATION_EVENT_FIELDS | {"capture_sha256"}
+_CAPTURED_EMBEDDING_EVENT_FIELDS = _EMBEDDING_EVENT_FIELDS | {"capture_sha256"}
 _OBSERVATION_FIELDS = {
     "id",
     "predicted_answerable",
@@ -155,6 +162,14 @@ _BASE_ENV = {
 _OPTIONAL_PLATFORM_ENV = {
     # macOS injects this name into otherwise empty child environments.
     "__CF_USER_TEXT_ENCODING",
+}
+_CAPTURE_ENV = {
+    "CV_EVAL_REPOSITORY_REVISION",
+    "CV_EVAL_CAPTURE_SOCKET",
+    "CV_EVAL_CAPTURE_NONCE",
+    "CV_EVAL_EXECUTION_DATASET_SHA256",
+    "CV_EVAL_GOLDEN_DATASET_SHA256",
+    "CV_EVAL_EXECUTION_PROJECTION_SHA256",
 }
 
 
@@ -298,7 +313,7 @@ def _local_minio_endpoint(url: str | None) -> str:
 
 
 def _load_config(env: Mapping[str, str]) -> dict[str, Any]:
-    extras = sorted(set(env) - _BASE_ENV - _OPTIONAL_PLATFORM_ENV)
+    extras = sorted(set(env) - _BASE_ENV - _OPTIONAL_PLATFORM_ENV - _CAPTURE_ENV)
     if extras:
         raise LocalProductionBenchmarkError(
             "child environment contains a non-allowlisted name"
@@ -308,6 +323,12 @@ def _load_config(env: Mapping[str, str]) -> dict[str, Any]:
     if missing:
         raise LocalProductionBenchmarkError(
             "child environment lacks required allowlisted values"
+        )
+    capture_values = {name: env.get(name) for name in _CAPTURE_ENV}
+    capture_enabled = any(capture_values.values())
+    if capture_enabled and not all(capture_values.values()):
+        raise LocalProductionBenchmarkError(
+            "independent capture environment is incomplete"
         )
     exact = {
         "CV_EVAL_EMBEDDING_PROVIDER": EMBEDDING_PROVIDER,
@@ -347,7 +368,7 @@ def _load_config(env: Mapping[str, str]) -> dict[str, Any]:
         raise LocalProductionBenchmarkError("output must be a new non-symlink path")
     if not output.parent.is_dir() or output.parent.is_symlink():
         raise LocalProductionBenchmarkError("output parent is unavailable or unsafe")
-    return {
+    result = {
         "env": dict(env),
         "output": output,
         "dataset_sha256": dataset_sha,
@@ -370,10 +391,43 @@ def _load_config(env: Mapping[str, str]) -> dict[str, Any]:
             env, "CV_EVAL_MAX_DURATION_SECONDS", 86_400
         ),
     }
+    if capture_enabled:
+        socket_path = Path(env["CV_EVAL_CAPTURE_SOCKET"]).absolute()
+        if not socket_path.parent.is_dir() or socket_path.parent.is_symlink():
+            raise LocalProductionBenchmarkError("capture socket location is unsafe")
+        nonce = env["CV_EVAL_CAPTURE_NONCE"]
+        if not re.fullmatch(r"[a-f0-9]{64}", nonce):
+            raise LocalProductionBenchmarkError("capture nonce is invalid")
+        revision = env["CV_EVAL_REPOSITORY_REVISION"]
+        if not re.fullmatch(r"[a-f0-9]{40}", revision):
+            raise LocalProductionBenchmarkError("capture source revision is invalid")
+        result.update(
+            capture_enabled=True,
+            capture_socket=socket_path,
+            capture_nonce=nonce,
+            repository_revision=revision,
+            execution_dataset_sha256=_sha(
+                env["CV_EVAL_EXECUTION_DATASET_SHA256"],
+                name="execution dataset SHA-256",
+            ),
+            golden_dataset_sha256=_sha(
+                env["CV_EVAL_GOLDEN_DATASET_SHA256"],
+                name="golden dataset SHA-256",
+            ),
+            execution_projection_sha256=_sha(
+                env["CV_EVAL_EXECUTION_PROJECTION_SHA256"],
+                name="execution projection SHA-256",
+            ),
+        )
+    else:
+        result["capture_enabled"] = False
+    return result
 
 
 def _provider_factory(
-    config: Mapping[str, Any], observer: Callable[[dict[str, Any]], None]
+    config: Mapping[str, Any],
+    observer: Callable[[dict[str, Any]], None],
+    request_capture: Callable[[dict[str, Any], Any], str] | None = None,
 ):
     env = config["env"]
     generation = DeferredLocalQwenClient(
@@ -384,6 +438,7 @@ def _provider_factory(
         device="mps",
         max_output_tokens=LOCAL_GENERATION_MAX_OUTPUT_TOKENS,
         request_observer=observer,
+        request_capture=request_capture,
     )
     embedding = LocalBgeProvider(
         snapshot=Path(env["CV_LOCAL_BGE_SNAPSHOT"]),
@@ -392,6 +447,7 @@ def _provider_factory(
         expected_bundle_sha256=BGE_BUNDLE_SHA256,
         device="mps",
         request_observer=observer,
+        request_capture=request_capture,
     )
     return embedding, generation
 
@@ -529,14 +585,27 @@ class _ObservedLedger:
         if not isinstance(event, dict):
             raise LocalProductionBenchmarkError("provider request event is malformed")
         fields = set(event)
-        if fields not in (_EMBEDDING_EVENT_FIELDS, _GENERATION_EVENT_FIELDS):
+        allowed_fields = (
+            (_CAPTURED_EMBEDDING_EVENT_FIELDS, _CAPTURED_GENERATION_EVENT_FIELDS)
+            if self.config.get("capture_enabled")
+            else (_EMBEDDING_EVENT_FIELDS, _GENERATION_EVENT_FIELDS)
+        )
+        if fields not in allowed_fields:
             raise LocalProductionBenchmarkError("provider request event is malformed")
         common_invalid = (
             not isinstance(event["ordinal"], int)
             or isinstance(event["ordinal"], bool)
             or event["ordinal"] < 1
         )
-        embedding_invalid = fields == _EMBEDDING_EVENT_FIELDS and (
+        is_embedding = fields in (
+            _EMBEDDING_EVENT_FIELDS,
+            _CAPTURED_EMBEDDING_EVENT_FIELDS,
+        )
+        is_generation = fields in (
+            _GENERATION_EVENT_FIELDS,
+            _CAPTURED_GENERATION_EVENT_FIELDS,
+        )
+        embedding_invalid = is_embedding and (
             event["kind"] not in {"embedding", "query"}
             or event["model"] != BGE_IDENTITY
             or any(
@@ -546,7 +615,7 @@ class _ObservedLedger:
                 for name in ("item_count", "byte_count", "token_count")
             )
         )
-        generation_invalid = fields == _GENERATION_EVENT_FIELDS and (
+        generation_invalid = is_generation and (
             event["kind"] not in {"generation", "repair"}
             or event["model"] != QWEN_IDENTITY
             or not isinstance(event["field_names"], list)
@@ -571,11 +640,15 @@ class _ObservedLedger:
         if common_invalid or embedding_invalid or generation_invalid:
             raise LocalProductionBenchmarkError("provider request event is malformed")
         _sha(event["payload_sha256"], name="provider request payload hash")
+        if self.config.get("capture_enabled"):
+            _sha(event.get("capture_sha256"), name="capture acknowledgement")
         self.calls += 1
         if self.calls > self.config["max_provider_calls"]:
             raise LocalProductionBenchmarkError("provider call budget exceeded")
         self.events[self.active_case].append(
-            _hash(event, domain="context-vault/local-provider-request/v1")
+            event["capture_sha256"]
+            if self.config.get("capture_enabled")
+            else _hash(event, domain="context-vault/local-provider-request/v1")
         )
 
     def seal_requests(self) -> None:
@@ -1070,14 +1143,28 @@ def execute(
     executor_provenance = _executor_provenance(case_executor)
     started = clock()
     deadline = started + config["max_duration_seconds"]
+    capture: Any | None = None
+    capture_summary: dict[str, Any] | None = None
     try:
-        pack = LocalBenchmarkPack.open(
-            Path(env["CV_LOCAL_EVAL_PACK_ROOT"]),
-            expected_bundle_sha256=config["dataset_sha256"],
-            expected_records=config["records"],
-            expected_query_types=config["query_types"],
-        )
-        initial_pack = bundle_descriptor(Path(env["CV_LOCAL_EVAL_PACK_ROOT"]))
+        pack_root = Path(env["CV_LOCAL_EVAL_PACK_ROOT"])
+        if config["capture_enabled"]:
+            pack = LocalBenchmarkPack.open_execution(
+                pack_root,
+                expected_execution_sha256=config["execution_dataset_sha256"],
+                expected_golden_sha256=config["golden_dataset_sha256"],
+                expected_bundle_sha256=config["dataset_sha256"],
+                expected_records=config["records"],
+                expected_query_types=config["query_types"],
+            )
+            initial_pack = execution_descriptor(pack_root)
+        else:
+            pack = LocalBenchmarkPack.open(
+                pack_root,
+                expected_bundle_sha256=config["dataset_sha256"],
+                expected_records=config["records"],
+                expected_query_types=config["query_types"],
+            )
+            initial_pack = bundle_descriptor(pack_root)
         executions = pack.execution_projection()
         if pack.execution_sha256 is None:
             raise LocalProductionBenchmarkError(
@@ -1086,6 +1173,36 @@ def execute(
         config["execution_sha256"] = _sha(
             pack.execution_sha256, name="execution projection"
         )
+        if (
+            config["capture_enabled"]
+            and config["execution_sha256"] != config["execution_projection_sha256"]
+        ):
+            raise LocalProductionBenchmarkError(
+                "execution projection does not match capture binding"
+            )
+        if config["capture_enabled"]:
+            capture = CaptureClient(
+                config["capture_socket"],
+                config["capture_nonce"],
+                {
+                    "repository_revision": config["repository_revision"],
+                    "runner_bundle_sha256": env["CV_EVAL_RUNNER_BUNDLE_SHA256"],
+                    "private_pack_manifest_sha256": env[
+                        "CV_EVAL_PRIVATE_PACK_MANIFEST_SHA256"
+                    ],
+                    "dataset_sha256": config["dataset_sha256"],
+                    "golden_dataset_sha256": config["golden_dataset_sha256"],
+                    "execution_dataset_sha256": config["execution_dataset_sha256"],
+                    "execution_projection_sha256": config[
+                        "execution_projection_sha256"
+                    ],
+                    "environment_hash": env["CV_EVAL_ENVIRONMENT_HASH"],
+                    "embedding_provider": EMBEDDING_PROVIDER,
+                    "embedding_model": BGE_IDENTITY,
+                    "generation_provider": GENERATION_PROVIDER,
+                    "generation_model": QWEN_IDENTITY,
+                },
+            )
     except Exception as exc:  # noqa: BLE001 - private-pack boundary
         raise LocalProductionBenchmarkError(
             "private benchmark pack admission failed"
@@ -1102,7 +1219,12 @@ def execute(
         )
     ledger = _ObservedLedger(config)
     try:
-        embedding, generation = provider_factory(config, ledger.observe)
+        if capture is None:
+            embedding, generation = provider_factory(config, ledger.observe)
+        else:
+            embedding, generation = provider_factory(
+                config, ledger.observe, capture.capture
+            )
     except Exception as exc:  # noqa: BLE001 - provider construction boundary
         raise LocalProductionBenchmarkError("exact local model loading failed") from exc
     initial_models = _provider_attestation(embedding, generation)
@@ -1151,6 +1273,8 @@ def execute(
                 case_id = _execution_view(case)["id"]
                 duration_gate()
                 ledger.select(case_id)
+                if capture is not None:
+                    capture.select(case_id)
                 try:
                     handle = phase_one(
                         case,
@@ -1172,6 +1296,8 @@ def execute(
                 case_id = _execution_view(case)["id"]
                 duration_gate()
                 ledger.select(case_id)
+                if capture is not None:
+                    capture.select(case_id)
                 try:
                     raw = phase_two(
                         case,
@@ -1192,6 +1318,8 @@ def execute(
                 case_id = _execution_view(case)["id"]
                 duration_gate()
                 ledger.select(case_id)
+                if capture is not None:
+                    capture.select(case_id)
                 try:
                     raw = case_executor(
                         case,
@@ -1211,7 +1339,12 @@ def execute(
             raise LocalProductionBenchmarkError(
                 "production executor attestation changed during execution"
             )
-        if bundle_descriptor(Path(env["CV_LOCAL_EVAL_PACK_ROOT"])) != initial_pack:
+        current_pack = (
+            execution_descriptor(Path(env["CV_LOCAL_EVAL_PACK_ROOT"]))
+            if capture is not None
+            else bundle_descriptor(Path(env["CV_LOCAL_EVAL_PACK_ROOT"]))
+        )
+        if current_pack != initial_pack:
             raise LocalProductionBenchmarkError(
                 "private benchmark pack changed during execution"
             )
@@ -1277,9 +1410,15 @@ def execute(
     ledger_records = ledger.records(_execution_view(case)["id"] for case in executions)
     try:
         pack.freeze_request_ledger(ledger_records)
-        # This is the first point at which labels are parsed or exposed to scoring.
-        labels = pack.load_labels()
-        final_pack = bundle_descriptor(Path(env["CV_LOCAL_EVAL_PACK_ROOT"]))
+        if capture is not None:
+            golden_payload, capture_summary = capture.seal_and_read_labels(ledger.calls)
+            labels = pack.load_labels_payload(golden_payload)
+            del golden_payload
+            final_pack = execution_descriptor(Path(env["CV_LOCAL_EVAL_PACK_ROOT"]))
+        else:
+            # Historical local-run contract: labels are parsed only after ledger freeze.
+            labels = pack.load_labels()
+            final_pack = bundle_descriptor(Path(env["CV_LOCAL_EVAL_PACK_ROOT"]))
     except Exception as exc:  # noqa: BLE001 - private-pack boundary
         raise LocalProductionBenchmarkError(
             "private benchmark pack changed or failed its frozen-ledger gate"
@@ -1332,6 +1471,12 @@ def execute(
         # Candidate assertion only; independent non-transfer evidence is a later gate.
         "golden_results_sent_to_provider": False,
     }
+    if capture_summary is not None:
+        report.update(
+            request_capture_session_sha256=capture_summary["session_sha256"],
+            request_capture_ledger_sha256=capture_summary["ordered_request_digest"],
+            request_capture_request_count=capture_summary["request_count"],
+        )
     _write_exclusive(config["output"], report)
     return report
 

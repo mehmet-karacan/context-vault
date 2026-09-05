@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-TOOL_VERSION = "1.9.0"
+TOOL_VERSION = "1.10.0"
 DETERMINISTIC_SEED = 20260902
 REPO = Path(__file__).resolve().parents[1]
 BACKEND = REPO / "document-rag-platform/services/backend"
@@ -45,13 +45,23 @@ OFFLINE_EXTRA_TEST_TARGETS = (
     BACKEND / "tests/test_structured_answer.py",
     BACKEND / "tests/test_no_answer.py",
 )
-PRIVATE_MANIFEST_SCHEMA = PUBLIC_DATASET.parent / "private-pack-manifest-v2.schema.json"
+PRIVATE_MANIFEST_SCHEMA_V2 = (
+    PUBLIC_DATASET.parent / "private-pack-manifest-v2.schema.json"
+)
+PRIVATE_MANIFEST_SCHEMA_V3 = (
+    PUBLIC_DATASET.parent / "private-pack-manifest-v3.schema.json"
+)
+# Historical callers import this name; keep it pinned to the frozen v2 schema.
+PRIVATE_MANIFEST_SCHEMA = PRIVATE_MANIFEST_SCHEMA_V2
 APPROVAL_MANIFEST_SCHEMA = (
     PUBLIC_DATASET.parent / "benchmark-approval-manifest-v3.schema.json"
 )
 BASELINE_SEAL_SCHEMA = PUBLIC_DATASET.parent / "benchmark-baseline-seal-v2.schema.json"
 GOLDEN_NON_TRANSFER_RECEIPT_SCHEMA = (
     PUBLIC_DATASET.parent / "benchmark-golden-non-transfer-receipt-v1.schema.json"
+)
+LOCAL_PROVIDER_CAPTURE_EVIDENCE_SCHEMA = (
+    PUBLIC_DATASET.parent / "local-provider-capture-evidence-v1.schema.json"
 )
 QUALITY_METRICS = ("recall@5", "mrr@10", "citation_precision", "citation_coverage")
 ABSOLUTE_METRICS = (
@@ -105,6 +115,11 @@ PROVIDER_MODEL_FIELDS = (
     "embedding_model",
     "generation_provider",
     "generation_model",
+)
+REQUEST_CAPTURE_REPORT_FIELDS = (
+    "request_capture_session_sha256",
+    "request_capture_ledger_sha256",
+    "request_capture_request_count",
 )
 ANSWER_VALIDATION_ERROR_CODES = frozenset(
     {
@@ -318,7 +333,7 @@ def _contract_smoke(work: Path) -> dict[str, Any]:
     if completed.returncode != 0:
         raise EnvironmentUnavailable("contract-smoke runner failed")
     raw = json.loads(raw_json.read_text())
-    return {
+    result = {
         "result": "PASS" if raw["contract_check"]["pass"] else "FAIL",
         "release_gate_eligible": False,
         "quality_claim": False,
@@ -331,6 +346,7 @@ def _contract_smoke(work: Path) -> dict[str, Any]:
         "contract": raw["contract_check"],
         "note": "expected labels may be used only in this contract-smoke tier",
     }
+    return result
 
 
 def _offline_e2e(work: Path) -> dict[str, Any]:
@@ -432,13 +448,29 @@ def _schema_document(path: Path, schema_path: Path, label: str) -> dict[str, Any
     return _schema_payload(path.read_bytes(), schema_path, label)
 
 
+def _private_manifest_payload(payload: bytes) -> dict[str, Any]:
+    """Validate a private manifest against its immutable versioned schema."""
+
+    try:
+        candidate = json.loads(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise EnvironmentUnavailable("private pack manifest is malformed") from exc
+    if not isinstance(candidate, dict):
+        raise EnvironmentUnavailable("private pack manifest must be an object")
+    schema = {
+        "2.0": PRIVATE_MANIFEST_SCHEMA_V2,
+        "3.0": PRIVATE_MANIFEST_SCHEMA_V3,
+    }.get(candidate.get("schema_version"))
+    if schema is None:
+        raise EnvironmentUnavailable("private pack manifest version is unsupported")
+    return _schema_payload(payload, schema, "private pack manifest")
+
+
 def _private_manifest_binding(path: Path) -> tuple[dict[str, Any], str]:
     payload, manifest_sha = _read_stable_external(
         path, label="private pack manifest", maximum=1_000_000
     )
-    manifest = _schema_payload(
-        payload, PRIVATE_MANIFEST_SCHEMA, "private pack manifest"
-    )
+    manifest = _private_manifest_payload(payload)
     if _utc(manifest["approved_at_utc"]) > datetime.now(timezone.utc):
         raise EnvironmentUnavailable("private pack review timestamp is in the future")
     return manifest, manifest_sha
@@ -705,6 +737,74 @@ def _runner_path() -> str:
     return os.pathsep.join(dict.fromkeys(path_entries))
 
 
+def _capture_socket_value(path: Path) -> str:
+    """Return one bounded, direct Unix-socket path without projecting it."""
+
+    if (
+        not path.is_absolute()
+        or "\x00" in str(path)
+        or any(character in str(path) for character in ("\n", "\r"))
+    ):
+        raise EnvironmentUnavailable("capture socket path is invalid")
+    # sockaddr_un.sun_path is small on macOS. Leave room for its terminating NUL.
+    if len(os.fsencode(path)) > 100:
+        raise EnvironmentUnavailable("capture socket path is too long")
+    try:
+        metadata = path.lstat()
+    except OSError as exc:
+        raise EnvironmentUnavailable("capture socket is unavailable or unsafe") from exc
+    if (
+        path.is_symlink()
+        or not stat.S_ISSOCK(metadata.st_mode)
+        or stat.S_IMODE(metadata.st_mode) != 0o600
+    ):
+        raise EnvironmentUnavailable("capture socket is unavailable or unsafe")
+    return str(path)
+
+
+def _capture_nonce_value(path: Path) -> str:
+    """Read a one-time lowercase-hex nonce from an exact mode-0600 file."""
+
+    try:
+        before = path.lstat()
+    except OSError as exc:
+        raise EnvironmentUnavailable(
+            "capture nonce file is unavailable or unsafe"
+        ) from exc
+    if path.is_symlink() or stat.S_IMODE(before.st_mode) != 0o600:
+        raise EnvironmentUnavailable("capture nonce file must have mode 0600")
+    payload, _ = _read_stable_external(path, label="capture nonce file", maximum=256)
+    try:
+        after = path.lstat()
+    except OSError as exc:
+        raise EnvironmentUnavailable(
+            "capture nonce file changed during admission"
+        ) from exc
+    if (
+        before.st_dev,
+        before.st_ino,
+        before.st_size,
+        before.st_mtime_ns,
+        before.st_mode,
+    ) != (
+        after.st_dev,
+        after.st_ino,
+        after.st_size,
+        after.st_mtime_ns,
+        after.st_mode,
+    ):
+        raise EnvironmentUnavailable("capture nonce file changed during admission")
+    try:
+        nonce = payload.decode("ascii")
+    except UnicodeDecodeError as exc:
+        raise EnvironmentUnavailable("capture nonce is malformed") from exc
+    if nonce.endswith("\n"):
+        nonce = nonce[:-1]
+    if re.fullmatch(r"[a-f0-9]{64}", nonce) is None:
+        raise EnvironmentUnavailable("capture nonce is malformed")
+    return nonce
+
+
 def _runner_python_identities() -> dict[str, dict[str, str]]:
     identities: dict[str, dict[str, str]] = {}
     current_interpreter = Path(sys.executable).absolute()
@@ -938,9 +1038,7 @@ def _check_golden_non_transfer_receipt(
     private_payload, private_sha = _read_stable_external(
         private_path, label="private pack manifest", maximum=1_000_000
     )
-    manifest = _schema_payload(
-        private_payload, PRIVATE_MANIFEST_SCHEMA, "private pack manifest"
-    )
+    manifest = _private_manifest_payload(private_payload)
     if _utc(manifest["approved_at_utc"]) > datetime.now(timezone.utc):
         raise EnvironmentUnavailable("private pack review timestamp is in the future")
     receipt = _schema_payload(
@@ -997,11 +1095,33 @@ def _check_golden_non_transfer_receipt(
     execution_projection_sha = pack.execution_sha256
     if not isinstance(execution_projection_sha, str):
         raise EnvironmentUnavailable("private pack execution projection is unavailable")
-    independent_evidence_sha = _stable_external_sha(
-        independent_evidence_path,
-        label="independent non-transfer evidence",
-        maximum=256_000_000,
-    )
+    if manifest["schema_version"] == "3.0" and any(
+        manifest[name] != value
+        for name, value in {
+            "golden_dataset_sha256": golden_dataset_sha,
+            "execution_dataset_sha256": execution_dataset_sha,
+            "execution_projection_sha256": execution_projection_sha,
+        }.items()
+    ):
+        raise EnvironmentUnavailable("private pack split hash binding mismatch")
+    capture_evidence = None
+    if receipt["verification_method"] == "independent-request-capture":
+        evidence_payload, independent_evidence_sha = _read_stable_external(
+            independent_evidence_path,
+            label="independent non-transfer evidence",
+            maximum=1_000_000,
+        )
+        capture_evidence = _schema_payload(
+            evidence_payload,
+            LOCAL_PROVIDER_CAPTURE_EVIDENCE_SCHEMA,
+            "independent non-transfer evidence",
+        )
+    else:
+        independent_evidence_sha = _stable_external_sha(
+            independent_evidence_path,
+            label="independent non-transfer evidence",
+            maximum=256_000_000,
+        )
     try:
         candidate_payload, candidate_sha = _read_stable_external(
             report_path, label="real benchmark candidate report", maximum=16_000_000
@@ -1074,6 +1194,65 @@ def _check_golden_non_transfer_receipt(
         raise EnvironmentUnavailable(
             "golden non-transfer receipt request count does not match candidate usage"
         )
+    if capture_evidence is not None:
+        if (
+            sum(capture_evidence["request_kind_counts"].values())
+            != capture_evidence["request_count"]
+        ):
+            raise EnvironmentUnavailable(
+                "independent request capture kind counts do not match total"
+            )
+        capture_bindings = {
+            "collector_sha256": _sha(
+                REPO / "scripts/capture_local_provider_boundary.py"
+            ),
+            "repository_revision": exact_bindings["repository_revision"],
+            "runner_bundle_sha256": exact_bindings["runner_bundle_sha256"],
+            "private_pack_manifest_sha256": exact_bindings[
+                "private_pack_manifest_sha256"
+            ],
+            "dataset_sha256": exact_bindings["dataset_sha256"],
+            "golden_dataset_sha256": exact_bindings["golden_dataset_sha256"],
+            "execution_dataset_sha256": exact_bindings["execution_dataset_sha256"],
+            "execution_projection_sha256": exact_bindings[
+                "execution_projection_sha256"
+            ],
+            "environment_hash": exact_bindings["environment_hash"],
+            **{name: exact_bindings[name] for name in PROVIDER_MODEL_FIELDS},
+            "request_count": receipt["verified_request_count"],
+            "ordered_request_digest": candidate.get("request_capture_ledger_sha256"),
+            "session_sha256": candidate.get("request_capture_session_sha256"),
+        }
+        if any(
+            capture_evidence[name] != value for name, value in capture_bindings.items()
+        ):
+            raise EnvironmentUnavailable(
+                "independent request capture exact binding mismatch"
+            )
+        if (
+            candidate.get("request_capture_request_count")
+            != receipt["verified_request_count"]
+        ):
+            raise EnvironmentUnavailable(
+                "candidate request capture count does not match receipt"
+            )
+        for field in ("requests_sealed_at_utc", "golden_first_open_at_utc"):
+            if not capture_evidence[field].endswith(("Z", "+00:00")):
+                raise EnvironmentUnavailable(
+                    "independent request capture timestamps must be UTC"
+                )
+        requests_sealed_at = _utc(capture_evidence["requests_sealed_at_utc"])
+        golden_first_open_at = _utc(capture_evidence["golden_first_open_at_utc"])
+        observed_at_utc = _utc(observed_at)
+        if not (
+            requests_sealed_at
+            < golden_first_open_at
+            <= observed_at_utc
+            <= verified_at_utc
+        ):
+            raise EnvironmentUnavailable(
+                "independent request capture ordering is invalid"
+            )
     unchanged_bindings = {
         "runner_bundle_sha256": _runner_bundle_sha256(command),
         "private_pack_manifest_sha256": _stable_external_sha(
@@ -1107,12 +1286,17 @@ def _check_golden_non_transfer_receipt(
             label="independent non-transfer evidence",
             maximum=256_000_000,
         )
+        or (
+            capture_evidence is not None
+            and capture_evidence["collector_sha256"]
+            != _sha(REPO / "scripts/capture_local_provider_boundary.py")
+        )
     ):
         raise EnvironmentUnavailable(
             "golden non-transfer receipt admission input changed during verification"
         )
 
-    return {
+    result = {
         "schema_version": "1.0",
         "request_type": "golden-non-transfer-receipt-check",
         "status": "RECEIPT_BOUND_TO_EXACT_CANDIDATE",
@@ -1142,6 +1326,18 @@ def _check_golden_non_transfer_receipt(
         "human_release_decision_required": True,
         "provider_invoked": False,
     }
+    if capture_evidence is not None:
+        result.update(
+            {
+                "request_capture_session_sha256": capture_evidence["session_sha256"],
+                "request_capture_ledger_sha256": capture_evidence[
+                    "ordered_request_digest"
+                ],
+                "request_capture_request_count": capture_evidence["request_count"],
+                "capture_sequence_verified": True,
+            }
+        )
+    return result
 
 
 def _validate_approval_output_path(path: Path) -> None:
@@ -1214,6 +1410,29 @@ def _benchmark_report(report: Any) -> dict[str, Any]:
         value = report.get(name)
         if not isinstance(value, str) or not re.fullmatch(r"[a-f0-9]{64}", value):
             raise EnvironmentUnavailable("provider report lacks immutable provenance")
+    capture_fields_present = {
+        name for name in REQUEST_CAPTURE_REPORT_FIELDS if name in report
+    }
+    if capture_fields_present and capture_fields_present != set(
+        REQUEST_CAPTURE_REPORT_FIELDS
+    ):
+        raise EnvironmentUnavailable("provider report has incomplete request capture")
+    if capture_fields_present:
+        for name in REQUEST_CAPTURE_REPORT_FIELDS[:2]:
+            if (
+                not isinstance(report[name], str)
+                or re.fullmatch(r"[a-f0-9]{64}", report[name]) is None
+            ):
+                raise EnvironmentUnavailable(
+                    "provider report has invalid request capture"
+                )
+        if (
+            not isinstance(report["request_capture_request_count"], int)
+            or isinstance(report["request_capture_request_count"], bool)
+            or report["request_capture_request_count"] < 1
+            or report["request_capture_request_count"] > 1_000_000
+        ):
+            raise EnvironmentUnavailable("provider report has invalid request capture")
     metrics = report.get("metrics")
     if not isinstance(metrics, dict):
         raise EnvironmentUnavailable("provider report lacks metrics")
@@ -1352,7 +1571,7 @@ def _benchmark_report(report: Any) -> dict[str, Any]:
         )
     # Only the bounded contract reaches our report envelope. Arbitrary runner
     # fields must not override exact SHA/tier or copy raw prompts into evidence.
-    return {
+    safe_report = {
         **{
             name: report[name]
             for name in (
@@ -1382,6 +1601,11 @@ def _benchmark_report(report: Any) -> dict[str, Any]:
         "environment_hash": report.get("environment_hash"),
         "golden_results_sent_to_provider": golden_transfer,
     }
+    if capture_fields_present:
+        safe_report.update(
+            {name: report[name] for name in REQUEST_CAPTURE_REPORT_FIELDS}
+        )
+    return safe_report
 
 
 def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
@@ -1396,6 +1620,23 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
     manifest, approval, private_sha, approval_sha = _bound_approval(
         args.approval_manifest, args.private_pack_manifest, args.provider_runner
     )
+    capture_socket = getattr(args, "capture_socket", None)
+    capture_nonce_file = getattr(args, "capture_nonce_file", None)
+    if manifest["schema_version"] == "3.0":
+        if capture_socket is None or capture_nonce_file is None:
+            raise EnvironmentUnavailable(
+                "v3 real-benchmark requires capture socket and nonce file"
+            )
+        capture_socket_value = _capture_socket_value(capture_socket)
+        capture_nonce_value = _capture_nonce_value(capture_nonce_file)
+        repository_revision = _revision()
+    else:
+        if capture_socket is not None or capture_nonce_file is not None:
+            raise EnvironmentUnavailable(
+                "request capture inputs require a v3 private manifest"
+            )
+        capture_socket_value = None
+        capture_nonce_value = None
     environment_hash = _environment_sha256()
     if environment_hash != approval["environment_hash"]:
         raise EnvironmentUnavailable(
@@ -1440,6 +1681,21 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
             "CV_EVAL_RUNNER_BUNDLE_SHA256": _runner_bundle_sha256(args.provider_runner),
         }
     )
+    if manifest["schema_version"] == "3.0":
+        env.update(
+            {
+                "CV_EVAL_GOLDEN_DATASET_SHA256": manifest["golden_dataset_sha256"],
+                "CV_EVAL_EXECUTION_DATASET_SHA256": manifest[
+                    "execution_dataset_sha256"
+                ],
+                "CV_EVAL_EXECUTION_PROJECTION_SHA256": manifest[
+                    "execution_projection_sha256"
+                ],
+                "CV_EVAL_CAPTURE_SOCKET": capture_socket_value,
+                "CV_EVAL_CAPTURE_NONCE": capture_nonce_value,
+                "CV_EVAL_REPOSITORY_REVISION": repository_revision,
+            }
+        )
     if (
         env["CV_EVAL_RUNNER_BUNDLE_SHA256"] != approval["runner_bundle_sha256"]
         or _environment_sha256() != environment_hash
@@ -1487,6 +1743,9 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
             == approval["runner_bundle_sha256"]
         )
         environment_unchanged = _environment_sha256() == environment_hash
+        revision_unchanged = (
+            manifest["schema_version"] != "3.0" or _revision() == repository_revision
+        )
     except (OSError, EnvironmentUnavailable) as exc:
         raise EnvironmentUnavailable(
             "benchmark admission input changed during runner execution"
@@ -1496,6 +1755,7 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
         or not approval_unchanged
         or not runner_unchanged
         or not environment_unchanged
+        or not revision_unchanged
     ):
         raise EnvironmentUnavailable(
             "benchmark admission input changed during runner execution"
@@ -1503,6 +1763,15 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
     if completed.returncode != 0 or not output.exists():
         raise EnvironmentUnavailable("approved provider runner failed")
     report = _benchmark_report(json.loads(output.read_text()))
+    if manifest["schema_version"] == "3.0":
+        if any(name not in report for name in REQUEST_CAPTURE_REPORT_FIELDS):
+            raise EnvironmentUnavailable(
+                "v3 provider report lacks sealed request capture"
+            )
+        if report["request_capture_request_count"] != report["usage"]["provider_calls"]:
+            raise EnvironmentUnavailable(
+                "provider report request capture count does not match usage"
+            )
     if (
         set(report["query_type_breakdown"]) != set(manifest["query_types"])
         or sum(item["records"] for item in report["query_type_breakdown"].values())
@@ -1773,6 +2042,8 @@ def main() -> int:
     parser.add_argument("--golden-dataset", type=Path)
     parser.add_argument("--execution-dataset", type=Path)
     parser.add_argument("--non-transfer-evidence", type=Path)
+    parser.add_argument("--capture-socket", type=Path)
+    parser.add_argument("--capture-nonce-file", type=Path)
     parser.add_argument("--provider-runner", nargs="+")
     args = parser.parse_args()
     try:
@@ -1791,6 +2062,8 @@ def main() -> int:
                     args.golden_dataset,
                     args.execution_dataset,
                     args.non_transfer_evidence,
+                    args.capture_socket,
+                    args.capture_nonce_file,
                 )
             ):
                 raise EnvironmentUnavailable(
@@ -1844,6 +2117,8 @@ def main() -> int:
                     args.baseline_seal,
                     args.strict,
                     args.approval_manifest,
+                    args.capture_socket,
+                    args.capture_nonce_file,
                 )
             ):
                 raise EnvironmentUnavailable(
@@ -1882,9 +2157,15 @@ def main() -> int:
                 raise EnvironmentUnavailable(
                     "approval preparation requires private manifest and provider runner"
                 )
-            if args.baseline or args.baseline_seal or args.strict:
+            if (
+                args.baseline
+                or args.baseline_seal
+                or args.strict
+                or args.capture_socket
+                or args.capture_nonce_file
+            ):
                 raise EnvironmentUnavailable(
-                    "approval preparation does not accept eval or baseline gates"
+                    "approval preparation does not accept eval, baseline or capture inputs"
                 )
             if args.markdown_output:
                 raise EnvironmentUnavailable(
@@ -1922,6 +2203,12 @@ def main() -> int:
             return 0
         if args.markdown_output is None:
             raise EnvironmentUnavailable("eval tier requires markdown output")
+        if args.tier != "real-benchmark" and (
+            args.capture_socket or args.capture_nonce_file
+        ):
+            raise EnvironmentUnavailable(
+                "request capture inputs are supported only for real-benchmark"
+            )
         sealed_baseline = None
         if args.tier == "real-benchmark":
             sealed_baseline = _prevalidate_baseline_inputs(
