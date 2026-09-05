@@ -1541,7 +1541,7 @@ def test_approval_rejects_execution_control_environment_names(
     runner.assert_not_called()
 
 
-@pytest.mark.parametrize("mutated", ["runner", "private_manifest"])
+@pytest.mark.parametrize("mutated", ["runner", "private_manifest", "approval_manifest"])
 def test_real_benchmark_rejects_admission_input_drift_during_runner(
     tmp_path, monkeypatch, mutated
 ):
@@ -1549,11 +1549,11 @@ def test_real_benchmark_rejects_admission_input_drift_during_runner(
 
     def mutating_runner(*_args, **_kwargs):
         (tmp_path / "provider-report.json").write_text(json.dumps(report))
-        target = (
-            Path(args.provider_runner[0])
-            if mutated == "runner"
-            else args.private_pack_manifest
-        )
+        target = {
+            "runner": Path(args.provider_runner[0]),
+            "private_manifest": args.private_pack_manifest,
+            "approval_manifest": args.approval_manifest,
+        }[mutated]
         target.write_text(target.read_text() + "\n")
         return SimpleNamespace(returncode=0)
 
@@ -1562,8 +1562,65 @@ def test_real_benchmark_rejects_admission_input_drift_during_runner(
         run_eval._real_benchmark(args, tmp_path)
 
 
+@pytest.mark.parametrize("mutated", ["private_manifest", "approval_manifest"])
+def test_approval_check_rechecks_authority_inputs_before_valid_receipt(
+    tmp_path, monkeypatch, mutated
+):
+    args, _, _, runner = benchmark_fixture(tmp_path, monkeypatch)
+    monkeypatch.setattr(run_eval, "_revision", lambda: "f" * 40)
+    original_runner_hash = run_eval._runner_bundle_sha256
+    calls = 0
+
+    def mutate_on_second_runner_hash(command):
+        nonlocal calls
+        digest = original_runner_hash(command)
+        calls += 1
+        if calls == 2:
+            target = {
+                "private_manifest": args.private_pack_manifest,
+                "approval_manifest": args.approval_manifest,
+            }[mutated]
+            target.write_text(target.read_text() + "\n")
+        return digest
+
+    monkeypatch.setattr(run_eval, "_runner_bundle_sha256", mutate_on_second_runner_hash)
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="changed during"):
+        run_eval._check_approval(
+            args.approval_manifest,
+            args.private_pack_manifest,
+            args.provider_runner,
+        )
+    runner.assert_not_called()
+
+
+@pytest.mark.parametrize("mutated", ["private_manifest", "approval_manifest"])
+def test_real_benchmark_rechecks_authority_inputs_before_dispatch(
+    tmp_path, monkeypatch, mutated
+):
+    args, _, _, runner = benchmark_fixture(tmp_path, monkeypatch)
+    original_runner_hash = run_eval._runner_bundle_sha256
+    calls = 0
+
+    def mutate_on_second_runner_hash(command):
+        nonlocal calls
+        digest = original_runner_hash(command)
+        calls += 1
+        if calls == 2:
+            target = {
+                "private_manifest": args.private_pack_manifest,
+                "approval_manifest": args.approval_manifest,
+            }[mutated]
+            target.write_text(target.read_text() + "\n")
+        return digest
+
+    monkeypatch.setattr(run_eval, "_runner_bundle_sha256", mutate_on_second_runner_hash)
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="changed"):
+        run_eval._real_benchmark(args, tmp_path)
+    runner.assert_not_called()
+
+
 def test_real_benchmark_rejects_environment_drift_during_runner(tmp_path, monkeypatch):
-    args, _, _, _ = benchmark_fixture(tmp_path, monkeypatch)
+    args, _, _, runner = benchmark_fixture(tmp_path, monkeypatch)
     approved_hash = run_eval._environment_sha256()
     calls = 0
 
@@ -1573,8 +1630,9 @@ def test_real_benchmark_rejects_environment_drift_during_runner(tmp_path, monkey
         return approved_hash if calls < 3 else "0" * 64
 
     monkeypatch.setattr(run_eval, "_environment_sha256", changing_environment_hash)
-    with pytest.raises(run_eval.EnvironmentUnavailable, match="changed during"):
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="changed"):
         run_eval._real_benchmark(args, tmp_path)
+    runner.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -2113,6 +2171,63 @@ def test_approval_preflight_fingerprints_manifest_runner_and_environment(
         args.private_pack_manifest, args.provider_runner
     )
     assert environment_changed["environment_hash"] != first["environment_hash"]
+    runner.assert_not_called()
+
+
+def test_approval_preflight_rejects_symlink_and_oversized_private_manifest(
+    tmp_path, monkeypatch
+):
+    args, _, _, runner = benchmark_fixture(tmp_path, monkeypatch)
+    manifest_link = tmp_path / "private-manifest-link.json"
+    manifest_link.symlink_to(args.private_pack_manifest)
+
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="unsafe"):
+        run_eval._approval_preflight(manifest_link, args.provider_runner)
+
+    oversized = tmp_path / "oversized-private-manifest.json"
+    oversized.write_bytes(b"{" + b" " * 1_000_000 + b"}")
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="bounded regular"):
+        run_eval._approval_preflight(oversized, args.provider_runner)
+    runner.assert_not_called()
+
+
+def test_approval_preflight_rechecks_manifest_before_return(tmp_path, monkeypatch):
+    args, _, _, runner = benchmark_fixture(tmp_path, monkeypatch)
+    monkeypatch.setattr(run_eval, "_revision", lambda: "f" * 40)
+    original_runner_hash = run_eval._runner_bundle_sha256
+
+    def mutate_during_preflight(command):
+        digest = original_runner_hash(command)
+        args.private_pack_manifest.write_text(
+            args.private_pack_manifest.read_text() + "\n"
+        )
+        return digest
+
+    monkeypatch.setattr(run_eval, "_runner_bundle_sha256", mutate_during_preflight)
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="changed during"):
+        run_eval._approval_preflight(args.private_pack_manifest, args.provider_runner)
+    runner.assert_not_called()
+
+
+def test_approval_check_rejects_symlinked_authority_inputs(tmp_path, monkeypatch):
+    args, _, _, runner = benchmark_fixture(tmp_path, monkeypatch)
+    manifest_link = tmp_path / "private-manifest-link.json"
+    approval_link = tmp_path / "approval-link.json"
+    manifest_link.symlink_to(args.private_pack_manifest)
+    approval_link.symlink_to(args.approval_manifest)
+
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="unsafe"):
+        run_eval._check_approval(
+            args.approval_manifest,
+            manifest_link,
+            args.provider_runner,
+        )
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="unsafe"):
+        run_eval._check_approval(
+            approval_link,
+            args.private_pack_manifest,
+            args.provider_runner,
+        )
     runner.assert_not_called()
 
 

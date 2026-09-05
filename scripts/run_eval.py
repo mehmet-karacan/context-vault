@@ -432,11 +432,20 @@ def _schema_document(path: Path, schema_path: Path, label: str) -> dict[str, Any
     return _schema_payload(path.read_bytes(), schema_path, label)
 
 
-def _private_manifest(path: Path) -> dict[str, Any]:
-    manifest = _schema_document(path, PRIVATE_MANIFEST_SCHEMA, "private pack manifest")
+def _private_manifest_binding(path: Path) -> tuple[dict[str, Any], str]:
+    payload, manifest_sha = _read_stable_external(
+        path, label="private pack manifest", maximum=1_000_000
+    )
+    manifest = _schema_payload(
+        payload, PRIVATE_MANIFEST_SCHEMA, "private pack manifest"
+    )
     if _utc(manifest["approved_at_utc"]) > datetime.now(timezone.utc):
         raise EnvironmentUnavailable("private pack review timestamp is in the future")
-    return manifest
+    return manifest, manifest_sha
+
+
+def _private_manifest(path: Path) -> dict[str, Any]:
+    return _private_manifest_binding(path)[0]
 
 
 def _utc(value: str) -> datetime:
@@ -751,11 +760,14 @@ def _environment_sha256() -> str:
     ).hexdigest()
 
 
-def _approval_manifest(
-    path: Path, private_path: Path, command: list[str]
-) -> dict[str, Any]:
-    approval = _schema_document(
-        path, APPROVAL_MANIFEST_SCHEMA, "benchmark approval manifest"
+def _approval_manifest_binding(
+    path: Path, private_sha: str, command: list[str]
+) -> tuple[dict[str, Any], str]:
+    payload, approval_sha = _read_stable_external(
+        path, label="benchmark approval manifest", maximum=1_000_000
+    )
+    approval = _schema_payload(
+        payload, APPROVAL_MANIFEST_SCHEMA, "benchmark approval manifest"
     )
     now = datetime.now(timezone.utc)
     approved_at, expires_at = (
@@ -779,7 +791,7 @@ def _approval_manifest(
         raise EnvironmentUnavailable(
             "benchmark approval credential list contains an execution-control environment name"
         )
-    if approval["private_pack_sha256"] != _sha(private_path):
+    if approval["private_pack_sha256"] != private_sha:
         raise EnvironmentUnavailable(
             "benchmark approval/private manifest hash mismatch"
         )
@@ -787,35 +799,61 @@ def _approval_manifest(
         raise EnvironmentUnavailable("benchmark approval/runner bundle hash mismatch")
     if approval["environment_hash"] != _environment_sha256():
         raise EnvironmentUnavailable("benchmark approval/environment hash mismatch")
-    return approval
+    return approval, approval_sha
 
 
 def _bound_approval(
     approval_path: Path, private_path: Path, command: list[str]
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    manifest = _private_manifest(private_path)
-    approval = _approval_manifest(approval_path, private_path, command)
+) -> tuple[dict[str, Any], dict[str, Any], str, str]:
+    manifest, private_sha = _private_manifest_binding(private_path)
+    approval, approval_sha = _approval_manifest_binding(
+        approval_path, private_sha, command
+    )
     if (
         approval["dataset_sha256"] != manifest["dataset_sha256"]
         or approval["allowed_classification"] != manifest["classification"]
     ):
         raise EnvironmentUnavailable("benchmark approval/private pack binding mismatch")
-    return manifest, approval
+    _assert_approval_inputs_unchanged(
+        approval_path=approval_path,
+        approval_sha=approval_sha,
+        private_path=private_path,
+        private_sha=private_sha,
+    )
+    return manifest, approval, private_sha, approval_sha
+
+
+def _assert_approval_inputs_unchanged(
+    *, approval_path: Path, approval_sha: str, private_path: Path, private_sha: str
+) -> None:
+    if (
+        _stable_external_sha(
+            private_path, label="private pack manifest", maximum=1_000_000
+        )
+        != private_sha
+        or _stable_external_sha(
+            approval_path, label="benchmark approval manifest", maximum=1_000_000
+        )
+        != approval_sha
+    ):
+        raise EnvironmentUnavailable(
+            "benchmark approval input changed during admission"
+        )
 
 
 def _approval_preflight(private_path: Path, command: list[str]) -> dict[str, Any]:
     """Produce bounded fingerprints for a later human approval, without effects."""
-    manifest = _private_manifest(private_path)
+    manifest, private_sha = _private_manifest_binding(private_path)
     runner_hash = _runner_bundle_sha256(command)
     environment_hash = _environment_sha256()
     repository_revision = _revision()
-    return {
+    result = {
         "schema_version": "3.0",
         "request_type": "real-benchmark-approval-preflight",
         "status": "HUMAN_APPROVAL_REQUIRED",
         "repository_revision": repository_revision,
         "tool_version": TOOL_VERSION,
-        "private_pack_sha256": _sha(private_path),
+        "private_pack_sha256": private_sha,
         "dataset_sha256": manifest["dataset_sha256"],
         "allowed_classification": manifest["classification"],
         "runner_bundle_sha256": runner_hash,
@@ -837,24 +875,36 @@ def _approval_preflight(private_path: Path, command: list[str]) -> dict[str, Any
             "max_cost_usd",
         ],
     }
+    if (
+        _stable_external_sha(
+            private_path, label="private pack manifest", maximum=1_000_000
+        )
+        != private_sha
+    ):
+        raise EnvironmentUnavailable(
+            "private pack manifest changed during approval preflight"
+        )
+    return result
 
 
 def _check_approval(
     approval_path: Path, private_path: Path, command: list[str]
 ) -> dict[str, Any]:
     """Validate a human approval against current bytes without provider dispatch."""
-    manifest, approval = _bound_approval(approval_path, private_path, command)
-    return {
+    manifest, approval, private_sha, approval_sha = _bound_approval(
+        approval_path, private_path, command
+    )
+    result = {
         "schema_version": "3.0",
         "request_type": "real-benchmark-approval-check",
         "status": "APPROVAL_VALID_FOR_CURRENT_INPUTS",
         "repository_revision": _revision(),
         "tool_version": TOOL_VERSION,
-        "approval_manifest_sha256": _sha(approval_path),
+        "approval_manifest_sha256": approval_sha,
         "approval_id_hash": hashlib.sha256(
             approval["approval_id"].encode()
         ).hexdigest(),
-        "private_pack_sha256": _sha(private_path),
+        "private_pack_sha256": private_sha,
         "dataset_sha256": manifest["dataset_sha256"],
         "allowed_classification": manifest["classification"],
         "runner_bundle_sha256": _runner_bundle_sha256(command),
@@ -863,6 +913,13 @@ def _check_approval(
         "provider_invoked": False,
         "credential_values_read": False,
     }
+    _assert_approval_inputs_unchanged(
+        approval_path=approval_path,
+        approval_sha=approval_sha,
+        private_path=private_path,
+        private_sha=private_sha,
+    )
+    return result
 
 
 def _check_golden_non_transfer_receipt(
@@ -1336,7 +1393,7 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
         raise EnvironmentUnavailable(
             "real-benchmark requires approval manifest, private manifest and provider runner"
         )
-    manifest, approval = _bound_approval(
+    manifest, approval, private_sha, approval_sha = _bound_approval(
         args.approval_manifest, args.private_pack_manifest, args.provider_runner
     )
     environment_hash = _environment_sha256()
@@ -1374,7 +1431,7 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
             "CV_EVAL_ENVIRONMENT_HASH": environment_hash,
             "CV_EVAL_CURRENCY": approval["currency"],
             "CV_EVAL_DATASET_SHA256": manifest["dataset_sha256"],
-            "CV_EVAL_PRIVATE_PACK_MANIFEST_SHA256": _sha(args.private_pack_manifest),
+            "CV_EVAL_PRIVATE_PACK_MANIFEST_SHA256": private_sha,
             "CV_EVAL_PRIVATE_PACK_CLASSIFICATION": manifest["classification"],
             "CV_EVAL_PRIVATE_PACK_RECORDS": str(manifest["records"]),
             "CV_EVAL_PRIVATE_PACK_QUERY_TYPES": json.dumps(
@@ -1382,6 +1439,19 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
             ),
             "CV_EVAL_RUNNER_BUNDLE_SHA256": _runner_bundle_sha256(args.provider_runner),
         }
+    )
+    if (
+        env["CV_EVAL_RUNNER_BUNDLE_SHA256"] != approval["runner_bundle_sha256"]
+        or _environment_sha256() != environment_hash
+    ):
+        raise EnvironmentUnavailable(
+            "benchmark admission input changed before runner execution"
+        )
+    _assert_approval_inputs_unchanged(
+        approval_path=args.approval_manifest,
+        approval_sha=approval_sha,
+        private_path=args.private_pack_manifest,
+        private_sha=private_sha,
     )
     try:
         completed = subprocess.run(
@@ -1397,7 +1467,20 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
         ) from exc
     try:
         manifest_unchanged = (
-            _sha(args.private_pack_manifest) == approval["private_pack_sha256"]
+            _stable_external_sha(
+                args.private_pack_manifest,
+                label="private pack manifest",
+                maximum=1_000_000,
+            )
+            == private_sha
+        )
+        approval_unchanged = (
+            _stable_external_sha(
+                args.approval_manifest,
+                label="benchmark approval manifest",
+                maximum=1_000_000,
+            )
+            == approval_sha
         )
         runner_unchanged = (
             _runner_bundle_sha256(args.provider_runner)
@@ -1408,7 +1491,12 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
         raise EnvironmentUnavailable(
             "benchmark admission input changed during runner execution"
         ) from exc
-    if not manifest_unchanged or not runner_unchanged or not environment_unchanged:
+    if (
+        not manifest_unchanged
+        or not approval_unchanged
+        or not runner_unchanged
+        or not environment_unchanged
+    ):
         raise EnvironmentUnavailable(
             "benchmark admission input changed during runner execution"
         )
@@ -1452,11 +1540,11 @@ def _real_benchmark(args: argparse.Namespace, work: Path) -> dict[str, Any]:
         "approval_id_hash": hashlib.sha256(
             approval["approval_id"].encode()
         ).hexdigest(),
-        "approval_manifest_sha256": _sha(args.approval_manifest),
+        "approval_manifest_sha256": approval_sha,
         "dataset_sha256": manifest["dataset_sha256"],
         "dataset_provenance": {
             "kind": "private-manifest-declared",
-            "private_manifest_sha256": _sha(args.private_pack_manifest),
+            "private_manifest_sha256": private_sha,
             "review_complete": True,
         },
         "private_pack": {
