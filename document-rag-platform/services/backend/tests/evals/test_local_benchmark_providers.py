@@ -436,6 +436,80 @@ def test_qwen_structured_repairs_once_and_returns_only_json_object(tmp_path):
     assert "TOP_SECRET" not in json.dumps(client.report())
 
 
+def test_qwen_and_application_grounding_repairs_compose_once_each(
+    tmp_path, monkeypatch
+):
+    from src.application.answer_service import _structured_generation
+    from src.config import settings
+    from src.domain.answer import AnswerEnvelope
+
+    monkeypatch.setattr(settings, "ANSWER_SCHEMA_REPAIR_ATTEMPTS", 1)
+    module = _module()
+    semantic_invalid = {
+        "answerable": True,
+        "no_answer_reason": None,
+        "answer_text": "Saklama süresi 30 gündür.",
+        "claims": [{"claim_text": "SEMANTIC_SECRET", "source_labels": ["S1"]}],
+        "used_source_labels": ["S1"],
+        "uncertainty": [],
+        "safety_flags": [],
+    }
+    valid = {
+        "answerable": True,
+        "no_answer_reason": None,
+        "answer_text": "Saklama süresi 30 gündür.",
+        "claims": [
+            {
+                "claim_text": "Saklama süresi 30 gündür.",
+                "source_labels": ["S1"],
+            }
+        ],
+        "used_source_labels": ["S1"],
+        "uncertainty": [],
+        "safety_flags": [],
+    }
+    client, _model, tokenizer = _qwen(
+        module,
+        _qwen_snapshot(tmp_path),
+        [
+            json.dumps(semantic_invalid),
+            "MALFORMED_SECRET {",
+            json.dumps(valid),
+        ],
+    )
+
+    result = _structured_generation(
+        client,
+        prompt={
+            "system": "SYSTEM_MARKER",
+            "user": "ORIGINAL_EVIDENCE_MARKER",
+        },
+        labels={"S1"},
+        model=None,
+    )
+
+    assert result == AnswerEnvelope.model_validate(valid)
+    assert client.generation_calls == 2
+    assert client.repair_calls == 1
+    assert len(tokenizer.templates) == 3
+    assert "<REPAIR>" not in tokenizer.templates[0][1]["content"]
+    assert all(
+        "<REPAIR>" in tokenizer.templates[index][1]["content"] for index in (1, 2)
+    )
+    internal_repair = module.structured_prompt_contract.INTERNAL_REPAIR_INSTRUCTION
+    assert all(
+        internal_repair not in tokenizer.templates[index][0]["content"]
+        for index in (0, 1)
+    )
+    assert internal_repair in tokenizer.templates[2][0]["content"]
+    repair_prompts = json.dumps(tokenizer.templates[1:], ensure_ascii=False)
+    assert "SEMANTIC_SECRET" not in repair_prompts
+    assert "MALFORMED_SECRET" not in repair_prompts
+    assert "ORIGINAL_EVIDENCE_MARKER" in repair_prompts
+    assert "SEMANTIC_SECRET" not in json.dumps(client.report())
+    assert "MALFORMED_SECRET" not in json.dumps(client.report())
+
+
 def test_qwen_malformed_json_after_repair_fails_without_retaining_raw(tmp_path):
     module = _module()
     client, _model, _tokenizer = _qwen(
@@ -522,9 +596,7 @@ def test_deferred_qwen_admits_snapshot_without_loading_until_generation(tmp_path
     )
 
     assert calls == []
-    assert client.report()["model"] == (
-        "Qwen/Qwen2.5-1.5B-Instruct@revision-a"
-    )
+    assert client.report()["model"] == ("Qwen/Qwen2.5-1.5B-Instruct@revision-a")
     assert client.report()["counters"] == {
         "generation_calls": 0,
         "repair_calls": 0,
