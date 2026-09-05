@@ -155,6 +155,7 @@ def _pack(tmp_path: Path) -> tuple[Path, str]:
         "source_type": "document",
         "content_base64": base64.b64encode(b"The approved fact is 42.").decode(),
         "classification": "internal",
+        "revises_document_id": None,
     }
     case = {
         "id": "case-1",
@@ -164,6 +165,7 @@ def _pack(tmp_path: Path) -> tuple[Path, str]:
         "query_type": "prose",
         "query": "What is the approved fact?",
         "scope": "documents",
+        "document_scope": "case",
         "permission_persona": "member",
         "language": "en",
         "documents": [document],
@@ -435,9 +437,7 @@ def test_phased_runner_completes_all_retrieval_before_release_and_answers(
             embedding_provider.request(case["id"])
             return {"id": case["id"]}
 
-        def phase_two(
-            self, case, *, handle, generation_client, observe_request
-        ):
+        def phase_two(self, case, *, handle, generation_client, observe_request):
             del observe_request
             assert handle["id"] == case["id"]
             generation_client.request(case["id"])
@@ -447,9 +447,7 @@ def test_phased_runner_completes_all_retrieval_before_release_and_answers(
                 generation_client=None,
                 observe_request=lambda _event: None,
             )
-            value["retrieved_source_ids"] = [
-                case["documents"][0]["document_id"]
-            ]
+            value["retrieved_source_ids"] = [case["documents"][0]["document_id"]]
             value["cited_source_ids"] = list(value["retrieved_source_ids"])
             return value
 
@@ -629,9 +627,7 @@ def test_phased_failures_finalize_close_and_never_open_labels(
                 raise RuntimeError("injected phase-one failure")
             return {"id": case["id"]}
 
-        def phase_two(
-            self, case, *, handle, generation_client, observe_request
-        ):
+        def phase_two(self, case, *, handle, generation_client, observe_request):
             del observe_request
             assert handle["id"] == case["id"]
             events.append("phase_two")
@@ -700,9 +696,7 @@ def test_phased_duration_is_checked_after_answer_phase(tmp_path, monkeypatch):
             )
             return {"id": case["id"]}
 
-        def phase_two(
-            self, case, *, handle, generation_client, observe_request
-        ):
+        def phase_two(self, case, *, handle, generation_client, observe_request):
             assert handle["id"] == case["id"]
             observe_request(
                 {

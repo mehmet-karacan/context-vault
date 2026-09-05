@@ -5,12 +5,14 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import math
 import os
 import platform
 import re
 import shutil
+import stat
 import statistics
 import subprocess
 import tempfile
@@ -20,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-TOOL_VERSION = "1.7.0"
+TOOL_VERSION = "1.8.0"
 DETERMINISTIC_SEED = 20260902
 REPO = Path(__file__).resolve().parents[1]
 BACKEND = REPO / "document-rag-platform/services/backend"
@@ -48,6 +50,9 @@ APPROVAL_MANIFEST_SCHEMA = (
     PUBLIC_DATASET.parent / "benchmark-approval-manifest-v2.schema.json"
 )
 BASELINE_SEAL_SCHEMA = PUBLIC_DATASET.parent / "benchmark-baseline-seal-v2.schema.json"
+GOLDEN_NON_TRANSFER_RECEIPT_SCHEMA = (
+    PUBLIC_DATASET.parent / "benchmark-golden-non-transfer-receipt-v1.schema.json"
+)
 QUALITY_METRICS = ("recall@5", "mrr@10", "citation_precision", "citation_coverage")
 ABSOLUTE_METRICS = (
     "permission_version_leakage",
@@ -169,6 +174,51 @@ class EnvironmentUnavailable(RuntimeError):
 
 def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _read_stable_external(path: Path, *, label: str, maximum: int) -> tuple[bytes, str]:
+    """Read/hash one bounded regular input without following a final symlink."""
+
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        fd = os.open(path, flags)
+    except OSError as exc:
+        raise EnvironmentUnavailable(f"{label} is unavailable or unsafe") from exc
+    try:
+        before = os.fstat(fd)
+        if not stat.S_ISREG(before.st_mode) or not 0 < before.st_size <= maximum:
+            raise EnvironmentUnavailable(f"{label} is not a bounded regular file")
+        blocks: list[bytes] = []
+        remaining = before.st_size
+        while remaining:
+            block = os.read(fd, min(1024 * 1024, remaining))
+            if not block:
+                raise EnvironmentUnavailable(f"{label} changed while being read")
+            blocks.append(block)
+            remaining -= len(block)
+        after = os.fstat(fd)
+        if (
+            before.st_dev,
+            before.st_ino,
+            before.st_size,
+            before.st_mtime_ns,
+        ) != (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+        ):
+            raise EnvironmentUnavailable(f"{label} changed while being read")
+        payload = b"".join(blocks)
+        return payload, hashlib.sha256(payload).hexdigest()
+    finally:
+        os.close(fd)
+
+
+def _stable_external_sha(path: Path, *, label: str, maximum: int) -> str:
+    return _read_stable_external(path, label=label, maximum=maximum)[1]
 
 
 def _revision() -> str:
@@ -344,12 +394,15 @@ def _offline_e2e(work: Path) -> dict[str, Any]:
     }
 
 
-def _schema_document(path: Path, schema_path: Path, label: str) -> dict[str, Any]:
+def _schema_payload(payload: bytes, schema_path: Path, label: str) -> dict[str, Any]:
     # Eval tooling uses the backend's locked dev environment. Import lazily so
     # contract/offline tiers retain their existing startup requirements.
     from jsonschema import Draft202012Validator, FormatChecker
 
-    manifest = json.loads(path.read_text())
+    try:
+        manifest = json.loads(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise EnvironmentUnavailable(f"{label} is malformed") from exc
     validator = Draft202012Validator(
         json.loads(schema_path.read_text()), format_checker=FormatChecker()
     )
@@ -359,6 +412,10 @@ def _schema_document(path: Path, schema_path: Path, label: str) -> dict[str, Any
     if not isinstance(manifest, dict):
         raise EnvironmentUnavailable(f"{label} must be an object")
     return manifest
+
+
+def _schema_document(path: Path, schema_path: Path, label: str) -> dict[str, Any]:
+    return _schema_payload(path.read_bytes(), schema_path, label)
 
 
 def _private_manifest(path: Path) -> dict[str, Any]:
@@ -604,9 +661,7 @@ def _bind_runner_source_closure(digest: Any, entrypoint: Path) -> None:
                         "runner source closure cache contains a non-bytecode member"
                     )
                 continue
-            if (
-                path.suffix.lower() in NON_SOURCE_IMPORT_SUFFIXES
-            ):
+            if path.suffix.lower() in NON_SOURCE_IMPORT_SUFFIXES:
                 raise EnvironmentUnavailable(
                     "runner source closure contains a non-source import artifact"
                 )
@@ -806,6 +861,237 @@ def _check_approval(
         **{name: approval[name] for name in PROVIDER_MODEL_FIELDS},
         "provider_invoked": False,
         "credential_values_read": False,
+    }
+
+
+def _check_golden_non_transfer_receipt(
+    receipt_path: Path,
+    report_path: Path,
+    private_path: Path,
+    golden_dataset_path: Path,
+    execution_dataset_path: Path,
+    independent_evidence_path: Path,
+    command: list[str],
+) -> dict[str, Any]:
+    """Bind an externally issued non-transfer receipt without granting authority."""
+    receipt_payload, receipt_sha = _read_stable_external(
+        receipt_path, label="golden non-transfer receipt", maximum=1_000_000
+    )
+    private_payload, private_sha = _read_stable_external(
+        private_path, label="private pack manifest", maximum=1_000_000
+    )
+    manifest = _schema_payload(
+        private_payload, PRIVATE_MANIFEST_SCHEMA, "private pack manifest"
+    )
+    if any(not manifest[name].strip() for name in ("opaque_pack_id", "reviewed_by")):
+        raise EnvironmentUnavailable("private pack manifest requires nonblank review")
+    if manifest["reviewed_by"].upper().startswith("PENDING"):
+        raise EnvironmentUnavailable("private pack manifest requires completed review")
+    if _utc(manifest["approved_at_utc"]) > datetime.now(timezone.utc):
+        raise EnvironmentUnavailable("private pack review timestamp is in the future")
+    receipt = _schema_payload(
+        receipt_payload,
+        GOLDEN_NON_TRANSFER_RECEIPT_SCHEMA,
+        "golden non-transfer receipt",
+    )
+    reviewer = receipt["verified_by"].strip()
+    if reviewer.upper().startswith("PENDING"):
+        raise EnvironmentUnavailable(
+            "golden non-transfer receipt requires completed independent review"
+        )
+    verified_at = receipt["verified_at_utc"]
+    if not verified_at.endswith(("Z", "+00:00")):
+        raise EnvironmentUnavailable(
+            "golden non-transfer receipt timestamp must be UTC"
+        )
+    verified_at_utc = _utc(verified_at)
+    if verified_at_utc > datetime.now(timezone.utc):
+        raise EnvironmentUnavailable(
+            "golden non-transfer receipt timestamp is in the future"
+        )
+
+    if (
+        golden_dataset_path.name != "golden.jsonl"
+        or golden_dataset_path.parent.name != "labels"
+        or execution_dataset_path.name != "cases.jsonl"
+        or execution_dataset_path.parent.name != "execution"
+        or golden_dataset_path.parents[1] != execution_dataset_path.parents[1]
+    ):
+        raise EnvironmentUnavailable(
+            "golden and execution datasets must identify one exact private pack"
+        )
+    pack_source = REPO / "scripts/local_benchmark_pack.py"
+    spec = importlib.util.spec_from_file_location(
+        "cv_non_transfer_pack_contract", pack_source
+    )
+    if spec is None or spec.loader is None:
+        raise EnvironmentUnavailable("private pack verifier is unavailable")
+    pack_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pack_module)
+    try:
+        descriptor = pack_module.bundle_descriptor(golden_dataset_path.parents[1])
+        pack = pack_module.LocalBenchmarkPack.open(
+            golden_dataset_path.parents[1],
+            expected_bundle_sha256=descriptor["sha256"],
+            expected_records=manifest["records"],
+            expected_query_types=manifest["query_types"],
+        )
+        pack.execution_projection()
+    except Exception as exc:  # noqa: BLE001 - private pack validation boundary
+        raise EnvironmentUnavailable(
+            "golden non-transfer private pack is unavailable or invalid"
+        ) from exc
+    if descriptor["sha256"] != manifest["dataset_sha256"]:
+        raise EnvironmentUnavailable("private pack/manifest bundle hash mismatch")
+    golden_dataset_sha = descriptor["file_sha256"]["labels/golden.jsonl"]
+    execution_dataset_sha = descriptor["file_sha256"]["execution/cases.jsonl"]
+    execution_projection_sha = pack.execution_sha256
+    if not isinstance(execution_projection_sha, str):
+        raise EnvironmentUnavailable("private pack execution projection is unavailable")
+    independent_evidence_sha = _stable_external_sha(
+        independent_evidence_path,
+        label="independent non-transfer evidence",
+        maximum=256_000_000,
+    )
+    try:
+        candidate_payload, candidate_sha = _read_stable_external(
+            report_path, label="real benchmark candidate report", maximum=16_000_000
+        )
+        candidate = json.loads(candidate_payload)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise EnvironmentUnavailable(
+            "real benchmark candidate report is unavailable or malformed"
+        ) from exc
+    if not isinstance(candidate, dict):
+        raise EnvironmentUnavailable(
+            "real benchmark candidate report must be an object"
+        )
+    if (
+        candidate.get("schema_version") != "2.0"
+        or candidate.get("tier") != "real-benchmark"
+        or candidate.get("result") != "PASS"
+        or candidate.get("release_gate_eligible") is not False
+    ):
+        raise EnvironmentUnavailable(
+            "golden non-transfer receipt requires a successful unpromoted real benchmark"
+        )
+    _benchmark_report(candidate)
+    if candidate.get("golden_results_sent_to_provider") is not False:
+        raise EnvironmentUnavailable(
+            "golden non-transfer receipt requires runner explicit false assertion"
+        )
+    observed_at = candidate.get("observed_at_utc")
+    if not isinstance(observed_at, str) or _utc(observed_at) > verified_at_utc:
+        raise EnvironmentUnavailable(
+            "golden non-transfer review must occur after the candidate run"
+        )
+    provenance = candidate.get("dataset_provenance")
+    if (
+        candidate.get("dataset_sha256") != manifest["dataset_sha256"]
+        or not isinstance(provenance, dict)
+        or provenance.get("kind") != "private-manifest-declared"
+        or provenance.get("private_manifest_sha256") != private_sha
+        or provenance.get("review_complete") is not True
+    ):
+        raise EnvironmentUnavailable(
+            "real benchmark candidate/private pack binding mismatch"
+        )
+
+    exact_bindings = {
+        "repository_revision": candidate.get("repository_revision"),
+        "runner_bundle_sha256": _runner_bundle_sha256(command),
+        "private_pack_manifest_sha256": private_sha,
+        "dataset_sha256": descriptor["sha256"],
+        "golden_dataset_sha256": golden_dataset_sha,
+        "execution_dataset_sha256": execution_dataset_sha,
+        "execution_projection_sha256": execution_projection_sha,
+        "report_sha256": candidate_sha,
+        "environment_hash": candidate.get("environment_hash"),
+        **{name: candidate.get(name) for name in PROVIDER_MODEL_FIELDS},
+    }
+    if any(receipt[name] != value for name, value in exact_bindings.items()):
+        raise EnvironmentUnavailable(
+            "golden non-transfer receipt exact binding mismatch"
+        )
+    if receipt["verification_evidence_sha256"] != independent_evidence_sha:
+        raise EnvironmentUnavailable(
+            "golden non-transfer receipt/evidence hash mismatch"
+        )
+    if receipt["verified_request_count"] < manifest["records"]:
+        raise EnvironmentUnavailable(
+            "golden non-transfer receipt does not cover every dataset record"
+        )
+    if receipt["verified_request_count"] != candidate["usage"]["provider_calls"]:
+        raise EnvironmentUnavailable(
+            "golden non-transfer receipt request count does not match candidate usage"
+        )
+    unchanged_bindings = {
+        "runner_bundle_sha256": _runner_bundle_sha256(command),
+        "private_pack_manifest_sha256": _stable_external_sha(
+            private_path, label="private pack manifest", maximum=1_000_000
+        ),
+        "dataset_sha256": pack_module.bundle_descriptor(golden_dataset_path.parents[1])[
+            "sha256"
+        ],
+        "golden_dataset_sha256": _stable_external_sha(
+            golden_dataset_path, label="golden dataset", maximum=8_000_000
+        ),
+        "execution_dataset_sha256": _stable_external_sha(
+            execution_dataset_path, label="execution dataset", maximum=8_000_000
+        ),
+        "execution_projection_sha256": pack.execution_sha256,
+        "report_sha256": _stable_external_sha(
+            report_path, label="real benchmark candidate report", maximum=16_000_000
+        ),
+    }
+    if (
+        receipt_sha
+        != _stable_external_sha(
+            receipt_path, label="golden non-transfer receipt", maximum=1_000_000
+        )
+        or any(
+            exact_bindings[name] != value for name, value in unchanged_bindings.items()
+        )
+        or independent_evidence_sha
+        != _stable_external_sha(
+            independent_evidence_path,
+            label="independent non-transfer evidence",
+            maximum=256_000_000,
+        )
+    ):
+        raise EnvironmentUnavailable(
+            "golden non-transfer receipt admission input changed during verification"
+        )
+
+    return {
+        "schema_version": "1.0",
+        "request_type": "golden-non-transfer-receipt-check",
+        "status": "RECEIPT_BOUND_TO_EXACT_CANDIDATE",
+        "checker_repository_revision": _revision(),
+        "source_repository_revision": candidate["repository_revision"],
+        "tool_version": TOOL_VERSION,
+        "receipt_sha256": receipt_sha,
+        "receipt_id_hash": hashlib.sha256(receipt["receipt_id"].encode()).hexdigest(),
+        "private_pack_manifest_sha256": exact_bindings["private_pack_manifest_sha256"],
+        "dataset_sha256": exact_bindings["dataset_sha256"],
+        "golden_dataset_sha256": exact_bindings["golden_dataset_sha256"],
+        "execution_dataset_sha256": exact_bindings["execution_dataset_sha256"],
+        "execution_projection_sha256": exact_bindings["execution_projection_sha256"],
+        "report_sha256": exact_bindings["report_sha256"],
+        "runner_bundle_sha256": exact_bindings["runner_bundle_sha256"],
+        "environment_hash": exact_bindings["environment_hash"],
+        **{name: exact_bindings[name] for name in PROVIDER_MODEL_FIELDS},
+        "verification_method": receipt["verification_method"],
+        "verification_evidence_sha256": receipt["verification_evidence_sha256"],
+        "verified_request_count": receipt["verified_request_count"],
+        "golden_results_sent_to_provider": False,
+        "receipt_binding_verified": True,
+        # The CLI can validate bytes and assertions, but cannot authenticate the
+        # external reviewer or turn a receipt into release authority.
+        "receipt_authority_verified": False,
+        "release_gate_eligible": False,
+        "human_release_decision_required": True,
+        "provider_invoked": False,
     }
 
 
@@ -1336,6 +1622,7 @@ def main() -> int:
     )
     mode.add_argument("--approval-preflight", action="store_true")
     mode.add_argument("--check-approval", action="store_true")
+    mode.add_argument("--check-golden-non-transfer-receipt", action="store_true")
     mode.add_argument("--public-dataset-status", action="store_true")
     parser.add_argument("--json-output", type=Path, required=True)
     parser.add_argument("--markdown-output", type=Path)
@@ -1345,6 +1632,11 @@ def main() -> int:
     parser.add_argument("--baseline-seal", type=Path)
     parser.add_argument("--private-pack-manifest", type=Path)
     parser.add_argument("--public-review-receipt", type=Path)
+    parser.add_argument("--golden-non-transfer-receipt", type=Path)
+    parser.add_argument("--candidate-report", type=Path)
+    parser.add_argument("--golden-dataset", type=Path)
+    parser.add_argument("--execution-dataset", type=Path)
+    parser.add_argument("--non-transfer-evidence", type=Path)
     parser.add_argument("--provider-runner", nargs="+")
     args = parser.parse_args()
     try:
@@ -1358,6 +1650,11 @@ def main() -> int:
                     args.baseline_seal,
                     args.private_pack_manifest,
                     args.provider_runner,
+                    args.golden_non_transfer_receipt,
+                    args.candidate_report,
+                    args.golden_dataset,
+                    args.execution_dataset,
+                    args.non_transfer_evidence,
                 )
             ):
                 raise EnvironmentUnavailable(
@@ -1387,6 +1684,62 @@ def main() -> int:
         if args.public_review_receipt:
             raise EnvironmentUnavailable(
                 "public review receipt requires public dataset status"
+            )
+        receipt_check_inputs = (
+            args.golden_non_transfer_receipt,
+            args.candidate_report,
+            args.golden_dataset,
+            args.execution_dataset,
+            args.non_transfer_evidence,
+        )
+        if args.check_golden_non_transfer_receipt:
+            if (
+                not all(receipt_check_inputs)
+                or not args.private_pack_manifest
+                or not args.provider_runner
+            ):
+                raise EnvironmentUnavailable(
+                    "golden non-transfer receipt check requires receipt, candidate report, private manifest, golden dataset, execution dataset, independent evidence and provider runner"
+                )
+            if any(
+                (
+                    args.markdown_output,
+                    args.baseline,
+                    args.baseline_seal,
+                    args.strict,
+                    args.approval_manifest,
+                )
+            ):
+                raise EnvironmentUnavailable(
+                    "golden non-transfer receipt check accepts only its exact binding inputs and JSON output"
+                )
+            _validate_approval_output_path(args.json_output)
+            report = _check_golden_non_transfer_receipt(
+                args.golden_non_transfer_receipt,
+                args.candidate_report,
+                args.private_pack_manifest,
+                args.golden_dataset,
+                args.execution_dataset,
+                args.non_transfer_evidence,
+                args.provider_runner,
+            )
+            _write_approval_output(args.json_output, report)
+            print(
+                json.dumps(
+                    {
+                        "request_type": report["request_type"],
+                        "status": report["status"],
+                        "receipt_binding_verified": True,
+                        "receipt_authority_verified": False,
+                        "release_gate_eligible": False,
+                        "provider_invoked": False,
+                    }
+                )
+            )
+            return 0
+        if any(receipt_check_inputs):
+            raise EnvironmentUnavailable(
+                "golden non-transfer receipt inputs require receipt-check mode"
             )
         if args.approval_preflight or args.check_approval:
             if not args.private_pack_manifest or not args.provider_runner:
@@ -1475,6 +1828,8 @@ def main() -> int:
             if args.approval_preflight
             else "real-benchmark-approval-check"
             if args.check_approval
+            else "golden-non-transfer-receipt-check"
+            if args.check_golden_non_transfer_receipt
             else None
         )
         failure: dict[str, Any] = {

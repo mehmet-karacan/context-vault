@@ -34,8 +34,10 @@ and a reported `true` fails. Even a reported `false` is not independent verifica
 or an approved baseline. A matching approved baseline can make
 `regression_candidate_eligible=true`; it still cannot make release eligibility true.
 Human review/seal and independent provider/request evidence are required before a
-release decision; this wrapper does not implement that final admission. Numeric
-comparison alone neither seals a baseline nor grants release.
+release decision. The wrapper can bind a separately issued golden non-transfer
+receipt to exact evidence bytes, as documented below, but cannot authenticate the
+reviewer or make the final admission. Numeric comparison or receipt binding alone
+neither seals a baseline nor grants release.
 
 The runtime accepts only the versioned
 `benchmark-approval-manifest-v2.schema.json`. It binds the private-manifest file
@@ -145,6 +147,57 @@ seal. A later regression with that valid seal and an explicit false golden-trans
 assertion may pass strict validation, but remains only an independently reviewable
 candidate. Do not put any of these
 private paths, credentials, runner output or raw provider payloads into Git.
+
+## Independent golden-data non-transfer receipt (no provider effect)
+
+After a real-benchmark candidate exists, an independent human/verifier must inspect
+the actual provider-request boundary. The verifier—not this CLI, runner, model or
+automation—issues a receipt conforming to
+`benchmark-golden-non-transfer-receipt-v1.schema.json`. Accepted methods are an
+independent request capture, independent egress observation or provider audit log.
+The evidence artifact may be private; the CLI only hashes it and never projects its
+contents or path.
+
+The receipt binds the exact source commit, runner source bundle, private-pack
+manifest and bundle, golden-label file, label-free execution file and normalized
+execution projection, final wrapper report,
+execution environment and both embedding/generation provider-model identities. Its
+verification time must follow the candidate time, its request count must cover every
+manifest record and the candidate must contain the runner's explicit
+`golden_results_sent_to_provider=false` assertion. The independent evidence still
+has to prove that assertion; the runner cannot prove its own non-transfer behavior.
+
+Keep every input and output outside Git and under the applicable private evidence
+policy. Use a new output path; the checker refuses symlinks and overwrites and creates
+the bounded result with mode `0600`:
+
+```sh
+cv_receipt="/private/path/golden-non-transfer-receipt.json"
+cv_candidate_report="/private/path/real-benchmark-report.json"
+cv_golden_dataset="/private/path/labels/golden.jsonl"
+cv_execution_dataset="/private/path/execution/cases.jsonl"
+cv_independent_evidence="/private/path/independent-request-capture.bin"
+cv_receipt_check="/private/path/golden-non-transfer-check.json"
+
+"$cv_python" scripts/run_eval.py --check-golden-non-transfer-receipt \
+  --golden-non-transfer-receipt "$cv_receipt" \
+  --candidate-report "$cv_candidate_report" \
+  --private-pack-manifest "$cv_private_manifest" \
+  --golden-dataset "$cv_golden_dataset" \
+  --execution-dataset "$cv_execution_dataset" \
+  --non-transfer-evidence "$cv_independent_evidence" \
+  --provider-runner "$cv_candidate_runner" \
+  --json-output "$cv_receipt_check"
+```
+
+Expected status is `RECEIPT_BOUND_TO_EXACT_CANDIDATE` with
+`receipt_binding_verified=true`, `provider_invoked=false`,
+`receipt_authority_verified=false` and `release_gate_eligible=false`. The last two
+fields are deliberate: schema and hash validation cannot establish who controls the
+reviewer identity, and a non-transfer receipt does not replace baseline sealing,
+quality/security review or the final human release decision. Any byte, hash,
+timestamp, source, model or environment mismatch fails closed. The CLI validates a
+receipt; it never generates one.
 
 ## Local BGE runtime admission
 

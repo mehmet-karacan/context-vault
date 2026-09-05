@@ -109,6 +109,34 @@ def _candidate_value(candidate: Any, name: str) -> Any:
     return getattr(representative, name, None)
 
 
+def _source_version_mappings(
+    document_ids: Mapping[str, Any], version_ids: Mapping[str, Any]
+) -> tuple[dict[tuple[str, str], str], dict[str, tuple[str, str]]]:
+    """Map physical source versions to logical pack IDs and current revisions."""
+
+    if document_ids.keys() != version_ids.keys():
+        raise LocalProductionExecutorError(
+            "document and version mappings do not have identical logical sources"
+        )
+    logical_by_source_version: dict[tuple[str, str], str] = {}
+    active_source_versions: dict[str, tuple[str, str]] = {}
+    for logical_id, document_id in document_ids.items():
+        physical_document_id = str(document_id)
+        physical_version_id = str(version_ids[logical_id])
+        logical_by_source_version[(physical_document_id, physical_version_id)] = (
+            logical_id
+        )
+        active_source_versions[physical_document_id] = (
+            physical_version_id,
+            logical_id,
+        )
+    return logical_by_source_version, active_source_versions
+
+
+def _opaque_source_id(prefix: str, source_version: tuple[str, str]) -> str:
+    return f"{prefix}-" + hashlib.sha256(_canonical(source_version)).hexdigest()
+
+
 def _assert_exact_migration_seed(
     *,
     principals: list[tuple[Any, ...]],
@@ -202,6 +230,7 @@ class _ProductionRuntime:
         self._finalized = False
         self._attestation: dict[str, str] | None = None
         self._pending_handles: dict[str, dict[str, Any]] = {}
+        self._active_source_versions: dict[str, tuple[str, str]] = {}
 
     def _load_backend(self) -> None:
         # These fixed child-only values prevent construction of a usable remote
@@ -242,6 +271,7 @@ class _ProductionRuntime:
             from src.infrastructure.security.auth import require_project_access
             from src.infrastructure.storage.minio_storage import MinioObjectStorage
             from src.models import (
+                Document,
                 EmbeddingProfile,
                 IngestionAttempt,
                 Principal,
@@ -284,6 +314,7 @@ class _ProductionRuntime:
                 "LexicalRetriever": LexicalRetriever,
                 "require_project_access": require_project_access,
                 "MinioObjectStorage": MinioObjectStorage,
+                "Document": Document,
                 "EmbeddingProfile": EmbeddingProfile,
                 "IngestionAttempt": IngestionAttempt,
                 "Principal": Principal,
@@ -555,6 +586,7 @@ class _ProductionRuntime:
         IngestionOrchestrator = self._modules["IngestionOrchestrator"]
         AcceptSourceCommand = self._modules["AcceptSourceCommand"]
         SourceDescriptor = self._modules["SourceDescriptor"]
+        Document = self._modules["Document"]
 
         ingestion_started = time.perf_counter()
         document_ids: dict[str, uuid.UUID] = {}
@@ -578,6 +610,19 @@ class _ProductionRuntime:
                 declared_mime=document["mime_type"],
                 data_classification_hint=document["classification"],
             )
+            revises_document_id = document["revises_document_id"]
+            existing_document = None
+            if revises_document_id is not None:
+                existing_document_id = document_ids.get(revises_document_id)
+                if existing_document_id is None:
+                    raise LocalProductionExecutorError(
+                        "revision does not reference an ingested earlier document"
+                    )
+                existing_document = self.db.get(Document, existing_document_id)
+                if existing_document is None:
+                    raise LocalProductionExecutorError(
+                        "revision target document is unavailable"
+                    )
             accepted = orchestrator.accept_source(
                 AcceptSourceCommand(
                     project=project,
@@ -590,6 +635,7 @@ class _ProductionRuntime:
                     ),
                     actor_principal_id=principal.id,
                     workspace_id=workspace.id,
+                    existing_document=existing_document,
                 )
             )
             if accepted.status == "failed" or accepted.quarantine_reason:
@@ -616,11 +662,18 @@ class _ProductionRuntime:
         classifications = [document["classification"] for document in case["documents"]]
         data_policy = max(classifications, key=CLASSIFICATION_RANK.__getitem__)
         RetrievalScope = self._modules["RetrievalScope"]
+        document_scope = case["document_scope"]
+        if document_scope == "case":
+            allowed_document_ids = tuple(dict.fromkeys(document_ids.values()))
+        elif document_scope == "project":
+            allowed_document_ids = None
+        else:
+            raise LocalProductionExecutorError("document scope is not supported")
         retrieval_scope = RetrievalScope(
             principal_id=principal.id,
             workspace_id=workspace.id,
             project_id=project.id,
-            allowed_document_ids=tuple(document_ids.values()),
+            allowed_document_ids=allowed_document_ids,
             allowed_source_types=source_types,
             embedding_profile_id=self.profile.id,
             data_policy=data_policy,
@@ -641,6 +694,14 @@ class _ProductionRuntime:
         retrieval_started = time.perf_counter()
         retrieval = service.retrieve(case["query"], retrieval_scope, debug=False)
         retrieval_ms = (time.perf_counter() - retrieval_started) * 1000
+        logical_by_source_version, active_source_versions = _source_version_mappings(
+            document_ids, version_ids
+        )
+        runtime_active_versions = getattr(self, "_active_source_versions", None)
+        if runtime_active_versions is None:
+            runtime_active_versions = {}
+            self._active_source_versions = runtime_active_versions
+        runtime_active_versions.update(active_source_versions)
 
         handle = {
             "case": case,
@@ -648,8 +709,8 @@ class _ProductionRuntime:
             "principal": principal,
             "workspace": workspace,
             "project": project,
-            "document_ids": document_ids,
-            "version_ids": version_ids,
+            "logical_by_source_version": logical_by_source_version,
+            "active_source_versions": runtime_active_versions,
             "job_ids": job_ids,
             "ingestion_ms": ingestion_ms,
             "retrieval": retrieval,
@@ -665,9 +726,7 @@ class _ProductionRuntime:
                 "production runtime is not available for case execution"
             )
         if not isinstance(handle, dict):
-            raise LocalProductionExecutorError(
-                "production retrieval handle is invalid"
-            )
+            raise LocalProductionExecutorError("production retrieval handle is invalid")
         case = handle.get("case")
         case_id = case.get("id") if isinstance(case, Mapping) else None
         if (
@@ -682,8 +741,8 @@ class _ProductionRuntime:
         principal = handle["principal"]
         workspace = handle["workspace"]
         project = handle["project"]
-        document_ids = handle["document_ids"]
-        version_ids = handle["version_ids"]
+        logical_by_source_version = handle["logical_by_source_version"]
+        active_source_versions = handle["active_source_versions"]
         job_ids = handle["job_ids"]
         ingestion_ms = handle["ingestion_ms"]
         retrieval = handle["retrieval"]
@@ -713,10 +772,7 @@ class _ProductionRuntime:
         self.db.commit()
         answer_ms = (time.perf_counter() - answer_started) * 1000
 
-        reverse_documents = {
-            str(actual): logical for logical, actual in document_ids.items()
-        }
-        retrieved_actual: list[str] = []
+        retrieved_sources: list[tuple[str, str]] = []
         active_version_leakage = 0
         profile_leakage = 0
         cross_project_leakage = 0
@@ -725,13 +781,13 @@ class _ProductionRuntime:
         for candidate in retrieval.ranked_candidates:
             chunk_ids.append(str(_candidate_value(candidate, "chunk_id") or ""))
             actual_document = str(_candidate_value(candidate, "document_id") or "")
-            if actual_document:
-                retrieved_actual.append(actual_document)
-            logical = reverse_documents.get(actual_document)
             actual_version = str(_candidate_value(candidate, "version_id") or "")
-            expected_version = str(version_ids.get(logical, ""))
+            source_version = (actual_document, actual_version)
+            if actual_document and actual_version:
+                retrieved_sources.append(source_version)
             active_version_leakage += int(
-                logical is None or actual_version != expected_version
+                active_source_versions.get(actual_document, (None, None))[0]
+                != actual_version
             )
             profile_leakage += int(
                 str(_candidate_value(candidate, "embedding_profile_id") or "")
@@ -746,18 +802,30 @@ class _ProductionRuntime:
             )
         retrieved = _dedupe(
             [
-                reverse_documents[actual]
-                for actual in retrieved_actual
-                if actual in reverse_documents
+                logical_by_source_version.get(source_version)
+                or _opaque_source_id("out-of-case-source", source_version)
+                for source_version in retrieved_sources
             ]
         )
-        cited = _dedupe(
-            [
-                reverse_documents[str(citation.get("document_id"))]
-                for citation in response.get("citations", [])
-                if str(citation.get("document_id")) in reverse_documents
-            ]
-        )
+        cited_values: list[str] = []
+        invalid_citation_count = 0
+        for citation in response.get("citations", []):
+            source_version = (
+                str(citation.get("document_id") or ""),
+                str(citation.get("version_id") or ""),
+            )
+            logical = logical_by_source_version.get(source_version)
+            if logical is None or active_source_versions.get(source_version[0]) != (
+                source_version[1],
+                logical,
+            ):
+                invalid_citation_count += 1
+                cited_values.append(
+                    _opaque_source_id("invalid-citation", source_version)
+                )
+            else:
+                cited_values.append(logical)
+        cited = _dedupe(cited_values)
         duplicate_count = len(chunk_ids) - len(set(chunk_ids))
         retry_count = max(
             0,
@@ -771,7 +839,9 @@ class _ProductionRuntime:
         permission_version_leakage = (
             active_version_leakage + cross_project_leakage + cross_workspace_leakage
         )
-        critical_findings = permission_version_leakage + profile_leakage
+        critical_findings = (
+            permission_version_leakage + profile_leakage + invalid_citation_count
+        )
         claims = response.get("claims") or []
         citations = response.get("citations") or []
         end_to_end_ms = (time.perf_counter() - case_started) * 1000
@@ -948,8 +1018,12 @@ class ProductionCoreExecutor:
             raise LocalProductionExecutorError(
                 "executor/provider lifecycle identity is invalid"
             )
-        handle_case = handle.get("case", handle) if isinstance(handle, Mapping) else None
-        if not isinstance(handle_case, Mapping) or handle_case.get("id") != case.get("id"):
+        handle_case = (
+            handle.get("case", handle) if isinstance(handle, Mapping) else None
+        )
+        if not isinstance(handle_case, Mapping) or handle_case.get("id") != case.get(
+            "id"
+        ):
             raise LocalProductionExecutorError(
                 "executor retrieval handle does not match the case"
             )

@@ -32,6 +32,7 @@ def _execution(record_id: str = "case-001") -> dict:
         "workspace_fixture": "private-a9",
         "project_fixture": "policy-fixture",
         "scope": "documents",
+        "document_scope": "case",
         "permission_persona": "project-reader",
         "query_type": "document-fact",
         "language": "en",
@@ -45,6 +46,7 @@ def _execution(record_id: str = "case-001") -> dict:
                     b"The approved retention period is 30 days."
                 ).decode("ascii"),
                 "classification": "restricted",
+                "revises_document_id": None,
             },
             {
                 "document_id": "policy-obsolete",
@@ -55,6 +57,7 @@ def _execution(record_id: str = "case-001") -> dict:
                     b"The obsolete retention period was 90 days."
                 ).decode("ascii"),
                 "classification": "restricted",
+                "revises_document_id": None,
             },
         ],
     }
@@ -376,6 +379,78 @@ def test_execution_scope_and_permission_persona_are_bounded_identifiers(
     execution[field] = value
     pack = _open(module, _pack(tmp_path, executions=[execution]))
     with pytest.raises(module.LocalBenchmarkPackError, match=message):
+        pack.execution_projection()
+
+
+@pytest.mark.parametrize(
+    "persona",
+    ["admin", "project-admin", "member", "project-member", "reader", "project-reader"],
+)
+def test_permission_persona_exact_allowlist_is_admitted(tmp_path, persona):
+    module = _module()
+    execution = _execution()
+    execution["permission_persona"] = persona
+    projection = _open(
+        module, _pack(tmp_path, executions=[execution])
+    ).execution_projection()
+    assert projection[0]["permission_persona"] == persona
+
+
+def test_syntactically_valid_unknown_permission_persona_is_rejected(tmp_path):
+    module = _module()
+    execution = _execution()
+    execution["permission_persona"] = "owner"
+    pack = _open(module, _pack(tmp_path, executions=[execution]))
+    with pytest.raises(module.LocalBenchmarkPackError, match="not admitted"):
+        pack.execution_projection()
+
+
+@pytest.mark.parametrize("document_scope", ["case", "project"])
+def test_document_scope_is_required_and_exact(tmp_path, document_scope):
+    module = _module()
+    execution = _execution()
+    execution["document_scope"] = document_scope
+    projection = _open(
+        module, _pack(tmp_path, executions=[execution])
+    ).execution_projection()
+    assert projection[0]["document_scope"] == document_scope
+
+    execution.pop("document_scope")
+    pack = _open(module, _pack(tmp_path / "missing", executions=[execution]))
+    with pytest.raises(module.LocalBenchmarkPackError, match="fields"):
+        pack.execution_projection()
+
+    execution["document_scope"] = "workspace"
+    pack = _open(module, _pack(tmp_path / "unknown", executions=[execution]))
+    with pytest.raises(module.LocalBenchmarkPackError, match="document_scope"):
+        pack.execution_projection()
+
+
+def test_document_revision_link_is_required_nullable_and_backward_only(tmp_path):
+    module = _module()
+    execution = _execution()
+    execution["documents"][1]["revises_document_id"] = "policy-current"
+    projection = _open(
+        module, _pack(tmp_path / "valid", executions=[execution])
+    ).execution_projection()
+    assert projection[0]["documents"][1]["revises_document_id"] == "policy-current"
+
+    missing = _execution()
+    missing["documents"][0].pop("revises_document_id")
+    pack = _open(module, _pack(tmp_path / "missing", executions=[missing]))
+    with pytest.raises(module.LocalBenchmarkPackError, match="document fields"):
+        pack.execution_projection()
+
+    forward = _execution()
+    forward["documents"][0]["revises_document_id"] = "policy-obsolete"
+    pack = _open(module, _pack(tmp_path / "forward", executions=[forward]))
+    with pytest.raises(module.LocalBenchmarkPackError, match="earlier document"):
+        pack.execution_projection()
+
+    unknown = _execution()
+    unknown["documents"][1]["revises_document_id"] = "outside-case"
+    pack = _open(module, _pack(tmp_path / "unknown", executions=[unknown]))
+    with pytest.raises(module.LocalBenchmarkPackError, match="earlier document"):
         pack.execution_projection()
 
 

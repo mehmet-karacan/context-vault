@@ -611,9 +611,7 @@ def test_runner_source_cache_is_ignored_only_with_isolated_child_pycache(
 
 
 @pytest.mark.parametrize("name", ["payload.py", "payload.so", "payload.txt"])
-def test_runner_source_cache_rejects_non_bytecode_members(
-    tmp_path, monkeypatch, name
-):
+def test_runner_source_cache_rejects_non_bytecode_members(tmp_path, monkeypatch, name):
     monkeypatch.setattr(run_eval, "REPO", tmp_path)
     entrypoint = tmp_path / "runner"
     entrypoint.write_text("#!/bin/sh\nexit 0\n")
@@ -737,6 +735,403 @@ def benchmark_fixture(tmp_path, monkeypatch):
     runner = Mock(side_effect=local_stub)
     monkeypatch.setattr(run_eval.subprocess, "run", runner)
     return args, manifest, report, runner
+
+
+def golden_non_transfer_fixture(tmp_path, monkeypatch):
+    args, manifest, provider_report, runner = benchmark_fixture(tmp_path, monkeypatch)
+    monkeypatch.setattr(run_eval, "_revision", lambda: "f" * 40)
+    pack_root = tmp_path / "pack"
+    golden_dataset = pack_root / "labels/golden.jsonl"
+    execution_dataset = pack_root / "execution/cases.jsonl"
+    golden_dataset.parent.mkdir(parents=True)
+    execution_dataset.parent.mkdir(parents=True)
+    execution_dataset.write_text(
+        json.dumps(
+            {
+                "id": "opaque-case",
+                "query": "redacted query",
+                "intent": "lookup",
+                "workspace_fixture": "workspace-a",
+                "project_fixture": "project-a",
+                "scope": "documents",
+                "document_scope": "case",
+                "permission_persona": "member",
+                "query_type": "prose",
+                "language": "en",
+                "documents": [
+                    {
+                        "document_id": "source-a",
+                        "filename": "source.txt",
+                        "mime_type": "text/plain",
+                        "source_type": "document",
+                        "content_base64": "ZmFjdA==",
+                        "classification": "internal",
+                        "revises_document_id": None,
+                    }
+                ],
+            },
+            separators=(",", ":"),
+        )
+        + "\n"
+    )
+    golden_dataset.write_text(
+        json.dumps(
+            {
+                "id": "opaque-case",
+                "answerable": True,
+                "expected_facts": ["fact"],
+                "expected_source_constraints": [
+                    {"document_id": "source-a", "active_version": True}
+                ],
+                "forbidden_sources": [],
+                "adversarial_tags": [],
+                "notes": "synthetic receipt contract fixture",
+                "reviewer": "synthetic-reviewer",
+                "dataset_version": "1.0.0",
+                "split": "holdout",
+            },
+            separators=(",", ":"),
+        )
+        + "\n"
+    )
+    independent_evidence = tmp_path / "independent-request-capture.bin"
+    independent_evidence.write_bytes(b"synthetic-independent-capture")
+    pack_spec = importlib.util.spec_from_file_location(
+        "cv_non_transfer_test_pack", REPO / "scripts/local_benchmark_pack.py"
+    )
+    assert pack_spec and pack_spec.loader
+    pack_module = importlib.util.module_from_spec(pack_spec)
+    pack_spec.loader.exec_module(pack_module)
+    descriptor = pack_module.bundle_descriptor(pack_root)
+    pack = pack_module.LocalBenchmarkPack.open(
+        pack_root,
+        expected_bundle_sha256=descriptor["sha256"],
+        expected_records=1,
+        expected_query_types=["prose"],
+    )
+    pack.execution_projection()
+    manifest["dataset_sha256"] = descriptor["sha256"]
+    args.private_pack_manifest.write_text(json.dumps(manifest))
+    candidate = {
+        **provider_report,
+        "golden_results_sent_to_provider": False,
+        "schema_version": "2.0",
+        "tool_version": run_eval.TOOL_VERSION,
+        "tier": "real-benchmark",
+        "result": "PASS",
+        "observed_at_utc": "2026-09-05T00:00:00+00:00",
+        "repository_revision": "f" * 40,
+        "dataset_sha256": manifest["dataset_sha256"],
+        "dataset_provenance": {
+            "kind": "private-manifest-declared",
+            "private_manifest_sha256": run_eval._sha(args.private_pack_manifest),
+            "review_complete": True,
+        },
+        "regression_findings": [],
+        "release_gate_eligible": False,
+        "baseline_review_required": True,
+        "quality_claim": "runner-reported-unverified",
+        "warnings": [],
+    }
+    candidate_path = tmp_path / "candidate-report.json"
+    candidate_path.write_text(json.dumps(candidate))
+    receipt = {
+        "schema_version": "1.0",
+        "receipt_type": "golden-non-transfer-independent-review",
+        "receipt_id": "synthetic-independent-capture-001",
+        "decision": "verified-no-golden-transfer",
+        "verified_by": "synthetic-independent-reviewer",
+        "verified_at_utc": "2026-09-05T01:00:00Z",
+        "verification_method": "independent-request-capture",
+        "verification_evidence_sha256": run_eval._sha(independent_evidence),
+        "verified_request_count": candidate["usage"]["provider_calls"],
+        "repository_revision": candidate["repository_revision"],
+        "runner_bundle_sha256": run_eval._runner_bundle_sha256(args.provider_runner),
+        "private_pack_manifest_sha256": run_eval._sha(args.private_pack_manifest),
+        "dataset_sha256": descriptor["sha256"],
+        "golden_dataset_sha256": run_eval._sha(golden_dataset),
+        "execution_dataset_sha256": run_eval._sha(execution_dataset),
+        "execution_projection_sha256": pack.execution_sha256,
+        "report_sha256": run_eval._sha(candidate_path),
+        "environment_hash": candidate["environment_hash"],
+        **{name: candidate[name] for name in run_eval.PROVIDER_MODEL_FIELDS},
+    }
+    receipt_path = tmp_path / "golden-non-transfer-receipt.json"
+    receipt_path.write_text(json.dumps(receipt))
+    return (
+        args,
+        manifest,
+        candidate,
+        candidate_path,
+        golden_dataset,
+        execution_dataset,
+        independent_evidence,
+        receipt,
+        receipt_path,
+        runner,
+    )
+
+
+def test_golden_non_transfer_receipt_binds_exact_candidate_without_granting_authority(
+    tmp_path, monkeypatch
+):
+    (
+        args,
+        _,
+        candidate,
+        candidate_path,
+        golden_dataset,
+        execution_dataset,
+        independent_evidence,
+        _,
+        receipt_path,
+        runner,
+    ) = golden_non_transfer_fixture(tmp_path, monkeypatch)
+
+    result = run_eval._check_golden_non_transfer_receipt(
+        receipt_path,
+        candidate_path,
+        args.private_pack_manifest,
+        golden_dataset,
+        execution_dataset,
+        independent_evidence,
+        args.provider_runner,
+    )
+
+    assert result["status"] == "RECEIPT_BOUND_TO_EXACT_CANDIDATE"
+    assert result["receipt_binding_verified"] is True
+    assert result["receipt_authority_verified"] is False
+    assert result["release_gate_eligible"] is False
+    assert result["provider_invoked"] is False
+    assert result["source_repository_revision"] == candidate["repository_revision"]
+    assert result["report_sha256"] == run_eval._sha(candidate_path)
+    assert result["golden_results_sent_to_provider"] is False
+    assert "synthetic-independent-reviewer" not in json.dumps(result)
+    runner.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"schema_version": "2.0"},
+        {"decision": "unverified"},
+        {"verified_by": "PENDING_INDEPENDENT_REVIEW"},
+        {"verified_by": "   "},
+        {"verified_at_utc": "2999-01-01T00:00:00Z"},
+        {"repository_revision": "0" * 40},
+        {"runner_bundle_sha256": "0" * 64},
+        {"private_pack_manifest_sha256": "0" * 64},
+        {"dataset_sha256": "0" * 64},
+        {"golden_dataset_sha256": "0" * 64},
+        {"execution_dataset_sha256": "0" * 64},
+        {"execution_projection_sha256": "0" * 64},
+        {"report_sha256": "0" * 64},
+        {"environment_hash": "0" * 64},
+        {"verified_request_count": 15},
+        {"embedding_provider": "other"},
+        {"embedding_model": "other"},
+        {"generation_provider": "other"},
+        {"generation_model": "other"},
+        {"unexpected": "self-asserted-authority"},
+    ],
+)
+def test_golden_non_transfer_receipt_drift_fails_closed(tmp_path, monkeypatch, change):
+    (
+        args,
+        _,
+        _,
+        candidate_path,
+        golden_dataset,
+        execution_dataset,
+        independent_evidence,
+        receipt,
+        receipt_path,
+        runner,
+    ) = golden_non_transfer_fixture(tmp_path, monkeypatch)
+    receipt.update(change)
+    receipt_path.write_text(json.dumps(receipt))
+
+    with pytest.raises(run_eval.EnvironmentUnavailable):
+        run_eval._check_golden_non_transfer_receipt(
+            receipt_path,
+            candidate_path,
+            args.private_pack_manifest,
+            golden_dataset,
+            execution_dataset,
+            independent_evidence,
+            args.provider_runner,
+        )
+    runner.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "private_manifest",
+        "golden_dataset",
+        "execution_dataset",
+        "independent_evidence",
+        "report",
+        "runner",
+    ],
+)
+def test_golden_non_transfer_receipt_rejects_bound_file_drift(
+    tmp_path, monkeypatch, target
+):
+    (
+        args,
+        _,
+        _,
+        candidate_path,
+        golden_dataset,
+        execution_dataset,
+        independent_evidence,
+        _,
+        receipt_path,
+        runner,
+    ) = golden_non_transfer_fixture(tmp_path, monkeypatch)
+    paths = {
+        "private_manifest": args.private_pack_manifest,
+        "golden_dataset": golden_dataset,
+        "execution_dataset": execution_dataset,
+        "independent_evidence": independent_evidence,
+        "report": candidate_path,
+        "runner": Path(args.provider_runner[0]),
+    }
+    paths[target].write_bytes(paths[target].read_bytes() + b"\n")
+
+    with pytest.raises(run_eval.EnvironmentUnavailable):
+        run_eval._check_golden_non_transfer_receipt(
+            receipt_path,
+            candidate_path,
+            args.private_pack_manifest,
+            golden_dataset,
+            execution_dataset,
+            independent_evidence,
+            args.provider_runner,
+        )
+    runner.assert_not_called()
+
+
+@pytest.mark.parametrize("target", ["receipt", "report", "independent_evidence"])
+def test_golden_non_transfer_receipt_rejects_symlink_inputs(
+    tmp_path, monkeypatch, target
+):
+    (
+        args,
+        _,
+        _,
+        candidate_path,
+        golden_dataset,
+        execution_dataset,
+        independent_evidence,
+        _,
+        receipt_path,
+        runner,
+    ) = golden_non_transfer_fixture(tmp_path, monkeypatch)
+    paths = {
+        "receipt": receipt_path,
+        "report": candidate_path,
+        "independent_evidence": independent_evidence,
+    }
+    path = paths[target]
+    real = path.with_name(path.name + ".real")
+    path.replace(real)
+    path.symlink_to(real)
+
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="unsafe"):
+        run_eval._check_golden_non_transfer_receipt(
+            receipt_path,
+            candidate_path,
+            args.private_pack_manifest,
+            golden_dataset,
+            execution_dataset,
+            independent_evidence,
+            args.provider_runner,
+        )
+    runner.assert_not_called()
+
+
+def test_golden_non_transfer_receipt_requires_runner_false_assertion(
+    tmp_path, monkeypatch
+):
+    (
+        args,
+        _,
+        candidate,
+        candidate_path,
+        golden_dataset,
+        execution_dataset,
+        independent_evidence,
+        receipt,
+        receipt_path,
+        runner,
+    ) = golden_non_transfer_fixture(tmp_path, monkeypatch)
+    candidate["golden_results_sent_to_provider"] = None
+    candidate_path.write_text(json.dumps(candidate))
+    receipt["report_sha256"] = run_eval._sha(candidate_path)
+    receipt_path.write_text(json.dumps(receipt))
+
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="explicit false"):
+        run_eval._check_golden_non_transfer_receipt(
+            receipt_path,
+            candidate_path,
+            args.private_pack_manifest,
+            golden_dataset,
+            execution_dataset,
+            independent_evidence,
+            args.provider_runner,
+        )
+    runner.assert_not_called()
+
+
+def test_golden_non_transfer_receipt_has_no_effect_cli_mode(tmp_path, monkeypatch):
+    (
+        args,
+        _,
+        _,
+        candidate_path,
+        golden_dataset,
+        execution_dataset,
+        independent_evidence,
+        _,
+        receipt_path,
+        runner,
+    ) = golden_non_transfer_fixture(tmp_path, monkeypatch)
+    output = tmp_path / "receipt-check.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_eval.py",
+            "--check-golden-non-transfer-receipt",
+            "--golden-non-transfer-receipt",
+            str(receipt_path),
+            "--candidate-report",
+            str(candidate_path),
+            "--private-pack-manifest",
+            str(args.private_pack_manifest),
+            "--golden-dataset",
+            str(golden_dataset),
+            "--execution-dataset",
+            str(execution_dataset),
+            "--non-transfer-evidence",
+            str(independent_evidence),
+            "--provider-runner",
+            args.provider_runner[0],
+            "--json-output",
+            str(output),
+        ],
+    )
+
+    assert run_eval.main() == 0
+    checked = json.loads(output.read_text())
+    assert checked["receipt_binding_verified"] is True
+    assert checked["receipt_authority_verified"] is False
+    assert checked["release_gate_eligible"] is False
+    assert checked["provider_invoked"] is False
+    assert output.stat().st_mode & 0o777 == 0o600
+    runner.assert_not_called()
 
 
 @pytest.mark.parametrize(

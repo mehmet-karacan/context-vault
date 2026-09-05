@@ -50,6 +50,7 @@ EXECUTION_FIELDS = {
     "workspace_fixture",
     "project_fixture",
     "scope",
+    "document_scope",
     "permission_persona",
     "query_type",
     "language",
@@ -62,6 +63,7 @@ DOCUMENT_FIELDS = {
     "source_type",
     "content_base64",
     "classification",
+    "revises_document_id",
 }
 LABEL_FIELDS = {
     "id",
@@ -100,6 +102,15 @@ REQUEST_DOMAIN = b"context-vault/local-benchmark-pack/request/v1\x00"
 LEDGER_DOMAIN = b"context-vault/local-benchmark-pack/request-ledger/v1\x00"
 REQUEST_EVENTS_DOMAIN = b"context-vault/local-benchmark-pack/request-events/v1\x00"
 ALLOWED_SCOPES = {"all", "documents", "images", "code"}
+ALLOWED_DOCUMENT_SCOPES = {"case", "project"}
+ALLOWED_PERMISSION_PERSONAS = {
+    "admin",
+    "project-admin",
+    "member",
+    "project-member",
+    "reader",
+    "project-reader",
+}
 ALLOWED_CLASSIFICATIONS = {"internal", "confidential", "restricted"}
 ALLOWED_SOURCE_TYPES = {"document", "image", "repository", "directory", "archive"}
 
@@ -360,7 +371,7 @@ def _string_list(value: Any, *, field: str) -> list[str]:
     return result
 
 
-def _document(value: Any) -> tuple[dict[str, str], int]:
+def _document(value: Any) -> tuple[dict[str, Any], int]:
     if not isinstance(value, dict) or set(value) != DOCUMENT_FIELDS:
         raise LocalBenchmarkPackError(
             "execution document fields must match the strict contract"
@@ -401,6 +412,15 @@ def _document(value: Any) -> tuple[dict[str, str], int]:
         raise LocalBenchmarkPackError("content_base64 is not canonical base64")
     if len(decoded) > MAX_DOCUMENT_BYTES:
         raise LocalBenchmarkPackError("document exceeds decoded byte-size limit")
+    revises_document_id = value["revises_document_id"]
+    if revises_document_id is not None:
+        revises_document_id = _bounded_string(
+            revises_document_id,
+            field="revises_document_id",
+            maximum=MAX_RECORD_ID_BYTES,
+        )
+        if not _RECORD_ID.fullmatch(revises_document_id):
+            raise LocalBenchmarkPackError("revises_document_id has invalid syntax")
     return {
         "document_id": document_id,
         "filename": filename,
@@ -408,6 +428,7 @@ def _document(value: Any) -> tuple[dict[str, str], int]:
         "source_type": source_type,
         "content_base64": content,
         "classification": classification,
+        "revises_document_id": revises_document_id,
     }, len(decoded)
 
 
@@ -437,7 +458,7 @@ def _execution_records(payload: bytes) -> list[dict[str, Any]]:
             or len(documents_value) > MAX_DOCUMENTS_PER_CASE
         ):
             raise LocalBenchmarkPackError("documents must be a nonempty bounded list")
-        documents: list[dict[str, str]] = []
+        documents: list[dict[str, Any]] = []
         document_ids: set[str] = set()
         filenames: set[str] = set()
         for document_value in documents_value:
@@ -446,6 +467,14 @@ def _execution_records(payload: bytes) -> list[dict[str, Any]]:
                 raise LocalBenchmarkPackError("documents contain duplicate document_id")
             if document["filename"] in filenames:
                 raise LocalBenchmarkPackError("documents contain duplicate filename")
+            revises_document_id = document["revises_document_id"]
+            if (
+                revises_document_id is not None
+                and revises_document_id not in document_ids
+            ):
+                raise LocalBenchmarkPackError(
+                    "revises_document_id must reference an earlier document in the same case"
+                )
             document_ids.add(document["document_id"])
             filenames.add(document["filename"])
             total_document_bytes += decoded_size
@@ -457,13 +486,18 @@ def _execution_records(payload: bytes) -> list[dict[str, Any]]:
         scope = _bounded_string(value["scope"], field="scope", maximum=MAX_SCOPE_BYTES)
         if scope not in ALLOWED_SCOPES:
             raise LocalBenchmarkPackError("scope is not admitted")
+        document_scope = _bounded_string(
+            value["document_scope"], field="document_scope", maximum=32
+        )
+        if document_scope not in ALLOWED_DOCUMENT_SCOPES:
+            raise LocalBenchmarkPackError("document_scope is not admitted")
         permission_persona = _bounded_string(
             value["permission_persona"],
             field="permission_persona",
             maximum=MAX_PERSONA_BYTES,
         )
-        if not _STABLE_NAME.fullmatch(permission_persona):
-            raise LocalBenchmarkPackError("permission_persona has invalid syntax")
+        if permission_persona not in ALLOWED_PERMISSION_PERSONAS:
+            raise LocalBenchmarkPackError("permission_persona is not admitted")
         language = _bounded_string(value["language"], field="language", maximum=16)
         if not _LANGUAGE.fullmatch(language):
             raise LocalBenchmarkPackError("language has invalid syntax")
@@ -481,6 +515,7 @@ def _execution_records(payload: bytes) -> list[dict[str, Any]]:
                     value["project_fixture"], field="project_fixture"
                 ),
                 "scope": scope,
+                "document_scope": document_scope,
                 "permission_persona": permission_persona,
                 "query_type": query_type,
                 "language": language,

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 import importlib.util
+import uuid
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -179,11 +181,33 @@ def test_runtime_rejects_foreign_and_replayed_retrieval_handles():
         "principal": SimpleNamespace(id="principal"),
         "workspace": SimpleNamespace(id="workspace"),
         "project": SimpleNamespace(id="project"),
-        "document_ids": {},
-        "version_ids": {},
+        "logical_by_source_version": {("document", "version"): "logical-source"},
+        "active_source_versions": {
+            "document": ("version", "logical-source"),
+            "prior-document": ("prior-version", "prior-source"),
+        },
         "job_ids": [],
         "ingestion_ms": 1.0,
-        "retrieval": SimpleNamespace(ranked_candidates=[]),
+        "retrieval": SimpleNamespace(
+            ranked_candidates=[
+                SimpleNamespace(
+                    chunk_id="chunk",
+                    document_id="document",
+                    version_id="version",
+                    embedding_profile_id="profile",
+                    project_id="project",
+                    workspace_id="workspace",
+                ),
+                SimpleNamespace(
+                    chunk_id="prior-chunk",
+                    document_id="prior-document",
+                    version_id="prior-version",
+                    embedding_profile_id="profile",
+                    project_id="project",
+                    workspace_id="workspace",
+                ),
+            ]
+        ),
         "chunk_resolver": lambda _chunk_id: None,
         "retrieval_ms": 1.0,
     }
@@ -237,13 +261,252 @@ def test_runtime_rejects_foreign_and_replayed_retrieval_handles():
             "answerable": False,
             "answer": "No context",
             "claims": [],
-            "citations": [],
+            "citations": [
+                {
+                    "label": "S1",
+                    "document_id": "document",
+                    "version_id": "version",
+                    "snippet": "",
+                }
+            ],
         },
     }
 
-    assert runtime.answer_case(handle)["id"] == "one"
+    answer = runtime.answer_case(handle)
+    assert answer["id"] == "one"
+    assert answer["retrieved_source_ids"][0] == "logical-source"
+    assert answer["retrieved_source_ids"][1].startswith("out-of-case-source-")
+    assert answer["cited_source_ids"] == ["logical-source"]
+    assert answer["active_version_leakage"] == 0
     with pytest.raises(module.LocalProductionExecutorError, match="already consumed"):
         runtime.answer_case(handle)
+
+
+@pytest.mark.parametrize(
+    ("document_scope", "expected_allowed"),
+    [("case", "single-document"), ("project", None)],
+)
+def test_runtime_ingests_revisions_and_applies_document_scope(
+    document_scope, expected_allowed
+):
+    module = _module()
+    actual_document_id = uuid.uuid4()
+    first_version_id = uuid.uuid4()
+    second_version_id = uuid.uuid4()
+    document_record = SimpleNamespace(id=actual_document_id)
+    commands = []
+    retrieval_scopes = []
+
+    class Record:
+        def __init__(self, **values):
+            vars(self).update(values)
+
+    class Database:
+        @staticmethod
+        def get(_model, identity):
+            assert identity == actual_document_id
+            return document_record
+
+    class Orchestrator:
+        def __init__(self, _db, _storage):
+            pass
+
+        def accept_source(self, command):
+            commands.append(command)
+            version_id = first_version_id if len(commands) == 1 else second_version_id
+            return SimpleNamespace(
+                document_id=actual_document_id,
+                version_id=version_id,
+                job_id=uuid.uuid4(),
+                status="queued",
+                quarantine_reason=None,
+            )
+
+        @staticmethod
+        def process_job(*_args, **_kwargs):
+            return {"status": "completed"}
+
+    class RetrievalScope(Record):
+        def __init__(self, **values):
+            super().__init__(**values)
+            retrieval_scopes.append(self)
+
+    class Retriever:
+        def __init__(self, **_kwargs):
+            pass
+
+    class RetrievalService:
+        def __init__(self, **_kwargs):
+            pass
+
+        @staticmethod
+        def retrieve(*_args, **_kwargs):
+            return SimpleNamespace(ranked_candidates=[])
+
+    runtime = module._ProductionRuntime.__new__(module._ProductionRuntime)
+    runtime._prepared = True
+    runtime._finalized = False
+    runtime._pending_handles = {}
+    runtime.config = {"execution_sha256": "a" * 64}
+    runtime.db = Database()
+    runtime.storage = object()
+    runtime.embedding_provider = SimpleNamespace(
+        embed=lambda _texts: [], embed_one=lambda _text: []
+    )
+    runtime.profile = SimpleNamespace(id=uuid.uuid4())
+    runtime._identity = lambda _case: (
+        SimpleNamespace(id=uuid.uuid4()),
+        SimpleNamespace(id=uuid.uuid4()),
+        SimpleNamespace(id=uuid.uuid4()),
+        object(),
+    )
+    runtime._modules = {
+        "require_project_access": lambda *_args: None,
+        "IngestionOrchestrator": Orchestrator,
+        "AcceptSourceCommand": Record,
+        "SourceDescriptor": Record,
+        "Document": object(),
+        "RetrievalScope": RetrievalScope,
+        "_build_resolvers": lambda *_args: (lambda _id: None, lambda _id: []),
+        "RetrievalService": RetrievalService,
+        "DenseVectorRetriever": Retriever,
+        "LexicalRetriever": Retriever,
+        "IdentifierRetriever": Retriever,
+    }
+    case = {
+        "id": "revision-case",
+        "query": "What is current?",
+        "scope": "documents",
+        "document_scope": document_scope,
+        "documents": [
+            {
+                "document_id": "policy-v1",
+                "filename": "policy-v1.txt",
+                "mime_type": "text/plain",
+                "source_type": "document",
+                "content_base64": base64.b64encode(b"old").decode(),
+                "classification": "internal",
+                "revises_document_id": None,
+            },
+            {
+                "document_id": "policy-v2",
+                "filename": "policy-v2.txt",
+                "mime_type": "text/plain",
+                "source_type": "document",
+                "content_base64": base64.b64encode(b"current").decode(),
+                "classification": "internal",
+                "revises_document_id": "policy-v1",
+            },
+        ],
+    }
+
+    handle = runtime.retrieve_case(case)
+
+    assert commands[0].existing_document is None
+    assert commands[1].existing_document is document_record
+    assert retrieval_scopes[0].allowed_document_ids == (
+        (actual_document_id,) if expected_allowed else None
+    )
+    assert handle["logical_by_source_version"] == {
+        (str(actual_document_id), str(first_version_id)): "policy-v1",
+        (str(actual_document_id), str(second_version_id)): "policy-v2",
+    }
+    assert handle["active_source_versions"] == {
+        str(actual_document_id): (str(second_version_id), "policy-v2")
+    }
+
+
+def test_version_aware_mapping_preserves_logical_revision_identity():
+    module = _module()
+    mappings = module._source_version_mappings(
+        {"policy-v1": "document", "policy-v2": "document"},
+        {"policy-v1": "version-1", "policy-v2": "version-2"},
+    )
+    assert mappings == (
+        {
+            ("document", "version-1"): "policy-v1",
+            ("document", "version-2"): "policy-v2",
+        },
+        {"document": ("version-2", "policy-v2")},
+    )
+
+
+def test_foreign_response_citation_is_not_silently_dropped():
+    module = _module()
+    runtime = module._ProductionRuntime.__new__(module._ProductionRuntime)
+    runtime._prepared = True
+    runtime._finalized = False
+    case = {"id": "foreign-citation", "query": "question"}
+    handle = {
+        "case": case,
+        "case_started": 0.0,
+        "principal": SimpleNamespace(id="principal"),
+        "workspace": SimpleNamespace(id="workspace"),
+        "project": SimpleNamespace(id="project"),
+        "logical_by_source_version": {
+            ("document", "version"): "source",
+            ("document", "old-version"): "old-source",
+        },
+        "active_source_versions": {"document": ("version", "source")},
+        "job_ids": [],
+        "ingestion_ms": 1.0,
+        "retrieval": SimpleNamespace(ranked_candidates=[]),
+        "chunk_resolver": lambda _chunk_id: None,
+        "retrieval_ms": 1.0,
+    }
+    runtime._pending_handles = {case["id"]: handle}
+
+    class Column:
+        @staticmethod
+        def in_(_values):
+            return True
+
+    class IngestionAttempt:
+        job_id = Column()
+
+    class StorageObject:
+        storage_key = object()
+
+    class Query:
+        def filter(self, *_args):
+            return self
+
+        @staticmethod
+        def count():
+            return 0
+
+        @staticmethod
+        def all():
+            return []
+
+    runtime.db = SimpleNamespace(commit=lambda: None, query=lambda *_args: Query())
+    runtime.storage = SimpleNamespace(list_keys=lambda: [])
+    runtime.generation_client = object()
+    runtime.profile = SimpleNamespace(id="profile")
+    runtime._modules = {
+        "IngestionAttempt": IngestionAttempt,
+        "StorageObject": StorageObject,
+        "ensure_conversation": lambda *_args, **_kwargs: "conversation",
+        "generate_answer": lambda **_kwargs: {
+            "answerable": True,
+            "answer": "unsafe",
+            "claims": [],
+            "citations": [
+                {
+                    "label": "S1",
+                    "document_id": "document",
+                    "version_id": "old-version",
+                    "snippet": "unsafe",
+                }
+            ],
+        },
+    }
+
+    result = runtime.answer_case(handle)
+
+    assert len(result["cited_source_ids"]) == 1
+    assert result["cited_source_ids"][0].startswith("invalid-citation-")
+    assert result["critical_high_security_findings"] == 1
 
 
 def test_runtime_finalize_rejects_unanswered_handles_and_closes_resources():
