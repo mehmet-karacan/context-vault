@@ -94,8 +94,10 @@ def main():
                 "safety_flags": [],
             }
 
-    def dispatch(job_id, inbox_idempotency_key=None):
-        with SessionLocal() as db:
+    def dispatch(job_id, inbox_idempotency_key=None, traceparent=None):
+        from src.infrastructure.observability import continue_trace
+
+        with continue_trace(traceparent), SessionLocal() as db:
             return IngestionOrchestrator(db, _build_storage()).process_job(
                 job_id,
                 embed_texts_fn=lambda texts, instruction="": [

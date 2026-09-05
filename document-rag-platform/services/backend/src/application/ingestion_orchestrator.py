@@ -19,7 +19,7 @@ from ..domain.ingestion import (
     source_fingerprint,
 )
 from ..infrastructure.storage import object_keys
-from ..infrastructure.observability import metrics, traced
+from ..infrastructure.observability import current_traceparent, metrics, traced
 from ..models import (
     AuditEvent,
     ContentPolicyDecisionRecord,
@@ -78,7 +78,12 @@ class AcceptedSource:
 class OutboxDispatcher:
     """Publish committed events; a failed publish remains durably retryable."""
 
-    def __init__(self, db: Session, publish: Callable[[str, str], None], clock: Clock):
+    def __init__(
+        self,
+        db: Session,
+        publish: Callable[[str, str, Optional[str]], None],
+        clock: Clock,
+    ):
         self.db = db
         self.publish = publish
         self.clock = clock
@@ -112,7 +117,11 @@ class OutboxDispatcher:
         event.attempts = (event.attempts or 0) + 1
         self.db.commit()
         try:
-            self.publish(str(event.aggregate_id), event.idempotency_key)
+            self.publish(
+                str(event.aggregate_id),
+                event.idempotency_key,
+                (event.payload_json or {}).get("traceparent"),
+            )
         except Exception as exc:
             metrics.incr("outbox.failures")
             event = self.db.get(OutboxEvent, event_id)
@@ -182,7 +191,7 @@ class IngestionOrchestrator:
         storage,
         *,
         clock: Clock = SYSTEM_CLOCK,
-        publisher: Optional[Callable[[str, str], None]] = None,
+        publisher: Optional[Callable[[str, str, Optional[str]], None]] = None,
     ):
         self.db = db
         self.storage = storage
@@ -471,6 +480,7 @@ class IngestionOrchestrator:
             )
         )
         outbox_id = uuid.uuid4()
+        traceparent = current_traceparent()
         self.db.add(
             OutboxEvent(
                 id=outbox_id,
@@ -478,7 +488,10 @@ class IngestionOrchestrator:
                 aggregate_id=job_id,
                 event_type=OUTBOX_EVENT_TYPE,
                 idempotency_key=f"dispatch:{command.idempotency_key}",
-                payload_json={"job_id": str(job_id)},
+                payload_json={
+                    "job_id": str(job_id),
+                    **({"traceparent": traceparent} if traceparent else {}),
+                },
                 status="pending",
                 attempts=0,
                 available_at=now,

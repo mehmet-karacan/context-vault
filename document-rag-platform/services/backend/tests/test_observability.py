@@ -28,8 +28,11 @@ from src.infrastructure.observability import (
     StructuredJsonFormatter,
     begin_shutdown,
     build_default_readiness_checks,
+    continue_trace,
+    current_traceparent,
     get_request_id,
     metrics,
+    parse_traceparent,
     record_provider_usage,
     reset_shutdown,
     set_request_id,
@@ -129,6 +132,52 @@ def test_request_id_contextvar_threads_through_middleware():
         body2 = client.get("/rid").json()
         assert body2["rid"]
         assert body["rid"] != body2["rid"]
+
+
+def test_middleware_continues_valid_w3c_trace_and_rejects_invalid_parent():
+    async def route(_request):
+        return JSONResponse({"ok": True})
+
+    app = Starlette(routes=[Route("/trace", route)])
+    app.add_middleware(RequestContextMiddleware)
+    trace_id = "a" * 32
+    parent = f"00-{trace_id}-{'b' * 16}-01"
+
+    with TestClient(app) as client:
+        continued = client.get("/trace", headers={"traceparent": parent})
+        invalid = client.get("/trace", headers={"traceparent": "not-a-trace"})
+
+    assert continued.headers["traceparent"].split("-")[1] == trace_id
+    assert continued.headers["traceparent"].split("-")[2] != "b" * 16
+    assert invalid.headers["traceparent"].split("-")[1] != trace_id
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        "",
+        "00-" + "0" * 32 + "-" + "1" * 16 + "-01",
+        "00-" + "1" * 32 + "-" + "0" * 16 + "-01",
+        "01-" + "1" * 32 + "-" + "2" * 16 + "-01",
+        "00-" + "g" * 32 + "-" + "2" * 16 + "-01",
+    ],
+)
+def test_traceparent_parser_rejects_invalid_or_unsafe_carriers(value):
+    assert parse_traceparent(value) is None
+
+
+def test_continue_trace_exposes_content_free_carrier_and_restores_context():
+    parent = f"00-{'1' * 32}-{'2' * 16}-01"
+    before = current_traceparent()
+    with continue_trace(parent):
+        assert current_traceparent() == parent
+        with trace_operation("outbox.dispatch"):
+            child = current_traceparent()
+            assert child is not None
+            assert child.split("-")[1] == "1" * 32
+            assert child.split("-")[2] != "2" * 16
+    assert current_traceparent() == before
 
 
 def test_set_request_id_returns_and_defaults_to_uuid():

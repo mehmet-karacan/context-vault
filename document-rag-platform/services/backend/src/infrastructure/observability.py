@@ -33,6 +33,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import threading
 import time
 import uuid
@@ -118,6 +119,49 @@ trace_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
     "trace_id", default=""
 )
 span_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("span_id", default="")
+
+_TRACEPARENT_RE = re.compile(
+    r"^00-(?P<trace_id>[0-9a-f]{32})-(?P<span_id>[0-9a-f]{16})-(?P<flags>[0-9a-f]{2})$"
+)
+
+
+def parse_traceparent(value: str | None) -> tuple[str, str, str] | None:
+    """Parse the bounded W3C ``traceparent`` v00 shape."""
+    if not value or len(value) != 55:
+        return None
+    match = _TRACEPARENT_RE.fullmatch(value.strip().lower())
+    if match is None:
+        return None
+    trace_id = match.group("trace_id")
+    span_id = match.group("span_id")
+    if trace_id == "0" * 32 or span_id == "0" * 16:
+        return None
+    return trace_id, span_id, match.group("flags")
+
+
+def current_traceparent() -> str | None:
+    """Return a content-free W3C carrier for the current span, if any."""
+    trace_id = trace_id_var.get()
+    span_id = span_id_var.get()
+    if not trace_id or not span_id:
+        return None
+    return f"00-{trace_id}-{span_id}-01"
+
+
+@contextmanager
+def continue_trace(traceparent: str | None) -> Iterator[None]:
+    """Bind a validated remote/durable parent while creating local child spans."""
+    parsed = parse_traceparent(traceparent)
+    if parsed is None:
+        yield
+        return
+    trace_token = trace_id_var.set(parsed[0])
+    span_token = span_id_var.set(parsed[1])
+    try:
+        yield
+    finally:
+        span_id_var.reset(span_token)
+        trace_id_var.reset(trace_token)
 
 
 def set_observability_context(*, service: str, environment: str) -> None:
@@ -463,8 +507,16 @@ class RequestContextMiddleware:
             return
 
         request_token = request_id_var.set(uuid.uuid4().hex)
+        inbound_traceparent = None
+        for raw_name, raw_value in scope.get("headers", []):
+            if raw_name.lower() == b"traceparent":
+                try:
+                    inbound_traceparent = raw_value.decode("ascii")
+                except UnicodeDecodeError:
+                    inbound_traceparent = None
+                break
         try:
-            with trace_operation("http.request"):
+            with continue_trace(inbound_traceparent), trace_operation("http.request"):
                 start = time.perf_counter()
                 status: Dict[str, int] = {"code": 500}
                 error_code: Optional[str] = None

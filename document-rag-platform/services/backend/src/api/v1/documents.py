@@ -144,8 +144,8 @@ def _upload_document_async(
     orchestrator = IngestionOrchestrator(
         db,
         _build_object_storage(),
-        publisher=lambda job_id, dispatch_key: process_ingestion_job.delay(
-            job_id, dispatch_key
+        publisher=lambda job_id, dispatch_key, traceparent: process_ingestion_job.delay(
+            job_id, dispatch_key, traceparent
         ),
     )
     accepted = orchestrator.accept_source(

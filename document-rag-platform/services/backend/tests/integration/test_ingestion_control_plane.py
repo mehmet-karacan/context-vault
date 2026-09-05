@@ -24,6 +24,7 @@ from src.domain.clock import FixedClock
 from src.domain.identity import PrincipalContext
 from src.domain.ingestion import SourceDescriptor
 from src.infrastructure.chunkers.base import ChunkCandidate
+from src.infrastructure.observability import continue_trace
 from src.infrastructure.repositories.scan_result import ScanResult, ScannedFile
 from src.models import (
     AuditEvent,
@@ -145,12 +146,16 @@ def test_accept_dispatch_process_and_redelivery_are_idempotent() -> None:
             actor_principal_id=principal_id,
             workspace_id=workspace_id,
         )
-        accepted = IngestionOrchestrator(
-            db,
-            storage,
-            clock=clock,
-            publisher=lambda job_id, key: published.append((job_id, key)),
-        ).accept_source(command)
+        parent_trace = f"00-{'a' * 32}-{'b' * 16}-01"
+        with continue_trace(parent_trace):
+            accepted = IngestionOrchestrator(
+                db,
+                storage,
+                clock=clock,
+                publisher=lambda job_id, key, traceparent: published.append(
+                    (job_id, key, traceparent)
+                ),
+            ).accept_source(command)
         replay = IngestionOrchestrator(db, storage, clock=clock).accept_source(command)
 
         assert accepted.status == "queued"
@@ -159,7 +164,10 @@ def test_accept_dispatch_process_and_redelivery_are_idempotent() -> None:
         assert db.query(IngestionJob).filter_by(id=accepted.job_id).count() == 1
         assert db.query(DocumentVersion).filter_by(id=accepted.version_id).count() == 1
         assert len(published) == 1
-        assert db.get(OutboxEvent, accepted.outbox_event_id).status == "published"
+        event = db.get(OutboxEvent, accepted.outbox_event_id)
+        assert event.status == "published"
+        assert event.payload_json["traceparent"] == parent_trace
+        assert published[0][2] == parent_trace
 
         result = IngestionOrchestrator(db, storage, clock=clock).process_job(
             accepted.job_id,
@@ -304,7 +312,7 @@ def test_policy_outbox_lease_and_orphan_recovery_paths() -> None:
         clock.current += timedelta(seconds=31)
         assert (
             OutboxDispatcher(
-                db, lambda job_id, _key: delivered.append(job_id), clock
+                db, lambda job_id, _key, _trace: delivered.append(job_id), clock
             ).dispatch_pending()
             == 1
         )
@@ -329,7 +337,7 @@ def test_policy_outbox_lease_and_orphan_recovery_paths() -> None:
         stale_delivered: list[str] = []
         assert (
             OutboxDispatcher(
-                db, lambda job_id, _key: stale_delivered.append(job_id), clock
+                db, lambda job_id, _key, _trace: stale_delivered.append(job_id), clock
             ).dispatch_pending()
             == 1
         )

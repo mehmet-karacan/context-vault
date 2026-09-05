@@ -22,7 +22,7 @@ from ..domain.ingestion_state import JobStatus, transition_job
 from ..domain.normalized_content import ContentUnit, NormalizedSource, UnitType
 from ..domain.version_activation import activate_document_version
 from ..infrastructure.embeddings.cache import profile_config_hash
-from ..infrastructure.observability import metrics, traced
+from ..infrastructure.observability import continue_trace, metrics, traced
 from ..infrastructure.security import redact_secrets
 from ..infrastructure.retrieval.indexing import (
     build_search_vector_stmt,
@@ -1071,7 +1071,9 @@ def run_ingestion_job(
     retry_jitter=True,
 )
 def process_ingestion_job(
-    job_id: str, inbox_idempotency_key: Optional[str] = None
+    job_id: str,
+    inbox_idempotency_key: Optional[str] = None,
+    traceparent: Optional[str] = None,
 ) -> dict:
     """Celery task entrypoint: builds the real DB session and MinIO storage
     adapter, then runs the job to completion. Kept as a thin wrapper around
@@ -1084,11 +1086,12 @@ def process_ingestion_job(
 
         storage = _build_storage()
         task_id = getattr(getattr(process_ingestion_job, "request", None), "id", None)
-        return IngestionOrchestrator(db, storage).process_job(
-            job_id,
-            celery_task_id=task_id,
-            inbox_idempotency_key=inbox_idempotency_key,
-        )
+        with continue_trace(traceparent):
+            return IngestionOrchestrator(db, storage).process_job(
+                job_id,
+                celery_task_id=task_id,
+                inbox_idempotency_key=inbox_idempotency_key,
+            )
     finally:
         db.close()
 
@@ -1102,7 +1105,9 @@ def dispatch_ingestion_outbox(limit: int = 100) -> dict:
     try:
         dispatcher = OutboxDispatcher(
             db,
-            lambda job_id, key: process_ingestion_job.delay(job_id, key),
+            lambda job_id, key, traceparent: process_ingestion_job.delay(
+                job_id, key, traceparent
+            ),
             SYSTEM_CLOCK,
         )
         return {"published": dispatcher.dispatch_pending(limit=limit)}
