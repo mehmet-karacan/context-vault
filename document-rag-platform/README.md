@@ -15,7 +15,7 @@ Kanonik uygulama dizini: **`document-rag-platform/`** (repo kökü, `AKTIF_GOREV
 | Embedding / chat | OpenAI uyumlu LiteLLM gateway (`LITELLM_BASE_URL` / `LITELLM_API_KEY`) üzerinden, tamamen **config ile** (`EMBEDDING_MODEL`, `CHAT_MODEL`) — kodda sabit model adı yok |
 | Async ingestion | Celery worker + Redis broker; `FEATURE_ASYNC_INGESTION` ile senkron fallback |
 | Migration | Alembic — `alembic upgrade head` (bkz. `services/backend/MIGRATION_RUNBOOK.md`) |
-| Dağıtım | Docker Compose — `postgres` · `redis` · `minio` · `backend` (uvicorn :8000) · `worker` (celery) + `apps/web` (Next.js) |
+| Dağıtım | Docker Compose — `postgres` · `redis` · `minio` · `backend` (uvicorn :8000) · `worker`/`scheduler` (Celery); `apps/web` (Next.js) ayrı çalışır |
 
 > Eşikler ve top-k değerleri kodda **sabit değildir**; `services/backend/src/config.py` üzerinden ortam değişkeniyle yönetilir ve `GET /debug/retrieval` ile görüntülenebilir. Aşağıdaki tüm sayılar o dosyadaki **varsayılanlardır** ve `.env` ile değiştirilebilir.
 
@@ -25,13 +25,24 @@ Kanonik uygulama dizini: **`document-rag-platform/`** (repo kökü, `AKTIF_GOREV
 
 | Servis | Image / komut | Port | Rol |
 |---|---|---|---|
-| `postgres` | `pgvector/pgvector:pg16` | 5432 | Veri + pgvector + full-text index |
-| `redis` | `redis:7-alpine` | 6379 | Celery broker + result backend |
-| `minio` | `minio/minio` | 9000 / 9001 (konsol) | Orijinal dosya + artifact object storage |
+| `postgres` | `pgvector/pgvector:pg16` + digest | 5432 | Veri + pgvector + full-text index |
+| `redis` | `redis:7-alpine` + digest | 6379 | Celery broker + result backend |
+| `minio` | `minio/minio` + digest | 9000 / 9001 (konsol) | Orijinal dosya + artifact object storage |
 | `backend` | `src` build → uvicorn | 8000 | FastAPI API + (`/docs` Swagger) |
 | `worker` | `src` build → `celery -A src.workers.celery_app worker -l info` | — | Ingestion job'ları (parse → chunk → embed → index) |
+| `scheduler` | `src` build → `celery -A src.workers.celery_app beat -l info` | — | Periyodik outbox/retention işleri |
 
 Frontend (`apps/web`, Next.js) compose'un dışında `npm run dev` ile ayrı çalışır (varsayılan `http://localhost:3000`).
+
+## Runtime ve kilitli kurulum
+
+- Python sürümünün tek kaynağı repo kökündeki `.python-version`
+  (`3.12`); backend `pyproject.toml`, Docker ve CI bu sürümle sınırlıdır.
+- Node sürümünün tek kaynağı `apps/web/.nvmrc` (`24.18.0`);
+  `package.json` Node 24/npm 11 aralığını, CI de aynı `.nvmrc` dosyasını
+  kullanır.
+- Backend kurulumu `uv.lock` ile `uv sync --frozen`, frontend kurulumu
+  `package-lock.json` ile `npm ci` kullanır.
 
 ## Hızlı başlangıç
 
@@ -59,7 +70,7 @@ Frontend (`apps/web`, Next.js) compose'un dışında `npm run dev` ile ayrı ça
 
    ```bash
    cd apps/web
-   npm install
+   npm ci
    npm run dev
    ```
 
@@ -69,19 +80,20 @@ Frontend (`apps/web`, Next.js) compose'un dışında `npm run dev` ile ayrı ça
 
 ## API uçları
 
-Router'lar `src/api/v1/` altındadır ve kök üzerinden (`/api/v1` ön eki YOK) bağlanır:
+Uygulama router'ları `src/api/v1/` altındadır ve `/api/v1` ön ekiyle
+bağlanır. Yalnız anonim liveness/readiness probe'ları kökte kalır:
 
 | Metot | Uç | Modül |
 |---|---|---|
-| GET | `/` , `/health`, `/health/live`, `/health/readiness`, `/ready` | `health.py` |
-| GET/POST | `/projects` · `DELETE /projects/{id}` | `projects.py` |
-| POST | `/documents/upload` (multipart) | `documents.py` |
-| GET | `/documents` · `/documents/{id}` · `/documents/{id}/status` | `documents.py` |
-| POST | `/documents/{id}/delete` | `documents.py` |
-| POST/GET | repo/archive/directory + refresh + files/versions (feature-gated) | `repositories.py` |
-| GET | `/ingestion-jobs/{id}` · `/ingestion-jobs/{id}/events` | `ingestion_jobs.py` |
-| POST/GET | `/chat/query` · `/chat/models` | `chat.py` |
-| POST | `/debug/retrieval` (production'da kapalı) | `debug.py` |
+| GET | `/health/live` · `/health/readiness` · `/ready` | `health.py` probe router |
+| GET | `/api/v1/` · `/api/v1/health` · `/api/v1/session` | `health.py`, `session.py` |
+| GET/POST | `/api/v1/projects` · `DELETE /api/v1/projects/{id}` | `projects.py` |
+| POST | `/api/v1/documents/upload` (multipart) | `documents.py` |
+| GET/DELETE | `/api/v1/documents` · `/api/v1/documents/{id}` · `/api/v1/documents/{id}/status` | `documents.py` |
+| POST/GET | repository ingest, archive upload, directory scan ve document refresh/files/versions uçları (`/api/v1/...`) | `repositories.py` |
+| GET/POST | `/api/v1/ingestion-jobs/{id}` + events/cancel | `ingestion_jobs.py` |
+| POST/GET | `/api/v1/chat/query` · `/api/v1/chat/models` | `chat.py` |
+| POST | `/api/v1/debug/retrieval` (admin + feature gate) | `debug.py` |
 
 ## Yükleme → ingestion akışı
 
@@ -156,11 +168,11 @@ Genel değişkenler `.env.example`'da; gerçek tipler ve **tüm** varsayılanlar
 
 ```
 document-rag-platform/
-├─ docker-compose.yml           postgres · redis · minio · backend · worker
+├─ docker-compose.yml           postgres · redis · minio · backend · worker · scheduler
 ├─ .env.example
 ├─ docs/
-│  ├─ adr/                        mimari karar kayıtları (ADR-001..006)
-│  └─ runbooks/                   operasyon runbook'ları (6 adet)
+│  ├─ adr/                        mimari karar kayıtları (index kanoniktir)
+│  └─ runbooks/                   operasyon runbook'ları (index kanoniktir)
 └─ services/backend/
    ├─ alembic/                    migration zinciri (baseline → şema → backfill)
    ├─ MIGRATION_RUNBOOK.md        migration komutları
@@ -178,7 +190,8 @@ Ayrıntılı iç yapı için `AKTIF_GOREV.md` Bölüm 7 (hedef dizin) ve 8 (veri
 
 ## Operasyon runbook'ları
 
-`docs/runbooks/` altında gerçek kod/komutlarla eşleşen altı operasyon dokümanı:
+`docs/runbooks/` altındaki kanonik envanter `docs/runbooks/README.md` içindedir.
+Başlıca operasyon dokümanları:
 
 - `upload-and-ingestion-jobs.md` — asenkron yükleme, job yaşam döngüsü, worker yeniden başlatma ve retry
 - `reindex.md` — orijinal artifact'tan re-index (`POST /documents/{id}/refresh`, `ReindexService`)
@@ -189,7 +202,10 @@ Ayrıntılı iç yapı için `AKTIF_GOREV.md` Bölüm 7 (hedef dizin) ve 8 (veri
 
 ## Bilinen sınırlamalar
 
-- Tek-kullanıcılı yerel sunum; kimlik doğrulama/user ayrımı yoktur.
+- Yerel varsayılan `AUTH_MODE=disabled` deterministik local principal/workspace
+  kullanır. Paylaşılan ortamda API-key modu fail-closed kapsam uygular; OIDC modu
+  yapılandırma sözleşmesinde vardır ancak harici IdP entegrasyonu ayrı deployment
+  işidir.
 - `FEATURE_REPOSITORY_INGESTION` varsayılan `true`'dur; isterseniz `.env`'de `false` yaparak kapatabilirsiniz.
 - Opsiyonel ağır bağımlılıklar (Docling OCR, Tesseract) API image'ına zorunlu değildir; varsa `available` olarak devreye girer, yoksa fallback/`needs_review` ile degrade olur (bkz. `docs/runbooks/ocr-models.md`).
 

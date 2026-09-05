@@ -82,7 +82,7 @@ jobs:
         run: python scripts/check_licenses.py --python-report reports/python-licenses.json --node-sbom reports/node-sbom.cdx.json --json-output reports/license-policy.json
 
       - name: Build backend image
-        run: docker build --tag context-vault-backend:${{ github.sha }} document-rag-platform/services/backend
+        run: docker build --pull --no-cache --tag context-vault-backend:${{ github.sha }} document-rag-platform/services/backend
 
       - name: Scan backend image
         uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0

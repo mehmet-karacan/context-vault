@@ -17,6 +17,10 @@ Context Vault'a katki yaparken asagidaki kurallar baglayicidir.
 
 ## 2. Yerel kapılar
 
+Desteklenen runtime kaynakları repo kökündeki `.python-version` (Python
+3.12) ve `document-rag-platform/apps/web/.nvmrc` (Node 24.18.0) dosyalarıdır.
+Yerel ortam, Docker ve CI farklı bir sürüm tahmin etmemelidir.
+
 Backend komutları `document-rag-platform/services/backend/` içinde çalışır:
 
 ```bash
