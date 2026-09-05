@@ -487,77 +487,77 @@ Kaliteyi görünmez yapmak yerine her push/PR'da otomatik, tekrarlanabilir ve zo
 
 ### 9.2 Yerel kalite tabanını onarma
 
-- [ ] Python runtime sürümü için tek kaynak seçilecek (`.python-version` ve/veya `pyproject.toml`); Docker, CI ve doküman aynı sürümü kullanacak.
+- [x] Python runtime sürümü için tek kaynak seçilecek (`.python-version` ve/veya `pyproject.toml`); Docker, CI ve doküman aynı sürümü kullanacak.
 - [ ] Node runtime için tek sürüm kaynağı seçilecek; frontend image ve CI aynı sürümü kullanacak.
-- [ ] Backend packaging `pyproject.toml` + transitive lock/hash zincirine geçirilecek. Tercih edilen tek araç `uv`; eşdeğer araç seçilecekse ADR ile değiştirilir.
-- [ ] Runtime, test, lint, type, security ve migration araçları açık gruplara ayrılacak.
-- [ ] `pytest-cov`, `pip-audit`, SBOM üreticisi ve workflow'da çağrılan her araç lock içinde bulunacak.
-- [ ] İlk formatter düzeltmesi yalnız mekanik bir commit olacak:
+- [x] Backend packaging `pyproject.toml` + transitive lock/hash zincirine geçirilecek. Tercih edilen tek araç `uv`; eşdeğer araç seçilecekse ADR ile değiştirilir.
+- [x] Runtime, test, lint, type, security ve migration araçları açık gruplara ayrılacak.
+- [x] `pytest-cov`, `pip-audit`, SBOM üreticisi ve workflow'da çağrılan her araç lock içinde bulunacak.
+- [x] İlk formatter düzeltmesi yalnız mekanik bir commit olacak:
   - davranış değişikliği yok;
   - format öncesi/sonrası test sonucu karşılaştırılacak;
   - aynı commit'e feature veya refactor eklenmeyecek.
-- [ ] Ruff config repo içinde sabitlenecek; local ve CI aynı path/config'i kullanacak.
-- [ ] MyPy bir anda anlamsız global ignore ile “yeşil” yapılmayacak. Önce kritik paketler strict olacak; kapsam bir ratchet dosyasıyla yalnız genişleyecek.
-- [ ] Frontend `lint`, `typecheck`, `unit`, `e2e-smoke`, `build` script'leri package.json'a eklenecek.
+- [x] Ruff config repo içinde sabitlenecek; local ve CI aynı path/config'i kullanacak.
+- [x] MyPy bir anda anlamsız global ignore ile “yeşil” yapılmayacak. Önce kritik paketler strict olacak; kapsam bir ratchet dosyasıyla yalnız genişleyecek.
+- [x] Frontend `lint`, `typecheck`, `unit`, `e2e-smoke`, `build` script'leri package.json'a eklenecek.
 
 ### 9.3 Workflow standardı
 
 Backend, frontend, RAG eval ve security workflow'ları:
 
-- [ ] `pull_request` ve `push` tetiklerini geri alacak; yalnız manuel çalışmaya düşürülmeyecek.
-- [ ] Security için ayrıca schedule çalışması olacak.
-- [ ] `permissions` en düşük yetkiyle açıkça tanımlanacak.
-- [ ] `concurrency` ile aynı branch'in eski çalışması iptal edilecek.
-- [ ] Her job'a timeout konacak.
-- [ ] Third-party action'lar mutable tag yerine commit SHA ile pinlenecek.
-- [ ] Service image'ları sürüm ve mümkünse digest ile pinlenecek.
-- [ ] Cache key lockfile hash'ine bağlı olacak.
-- [ ] Test/JUnit/coverage/SBOM/vulnerability/eval raporları artifact olarak yüklenecek.
+- [x] `pull_request` ve `push` tetiklerini geri alacak; yalnız manuel çalışmaya düşürülmeyecek.
+- [x] Security için ayrıca schedule çalışması olacak.
+- [x] `permissions` en düşük yetkiyle açıkça tanımlanacak.
+- [x] `concurrency` ile aynı branch'in eski çalışması iptal edilecek.
+- [x] Her job'a timeout konacak.
+- [x] Third-party action'lar mutable tag yerine commit SHA ile pinlenecek.
+- [x] Service image'ları sürüm ve mümkünse digest ile pinlenecek.
+- [x] Cache key lockfile hash'ine bağlı olacak.
+- [x] Test/JUnit/coverage/SBOM/vulnerability/eval raporları artifact olarak yüklenecek.
 - [ ] Secret olmayan test config'i workflow içinde açık; secret gereken private benchmark ayrı environment'da olacak.
-- [ ] Healthcheck `pg_isready -U raguser -d rag_platform` gibi doğru DB'yi kontrol edecek.
-- [ ] Workflow “skip”, `continue-on-error`, kör grep veya sahte gate ile yeşil olmayacak.
+- [x] Healthcheck `pg_isready -U raguser -d rag_platform` gibi doğru DB'yi kontrol edecek.
+- [x] Workflow “skip”, `continue-on-error`, kör grep veya sahte gate ile yeşil olmayacak.
 
 ### 9.4 Zorunlu CI işleri
 
 #### Backend
 
-- [ ] Lock doğrulama ve install.
-- [ ] Ruff format check.
-- [ ] Ruff lint.
-- [ ] MyPy kritik paketler + ratchet.
-- [ ] Unit test.
-- [ ] Integration test.
-- [ ] Blank DB migration.
-- [ ] Restored-schema compatibility fixture.
-- [ ] Coverage raporu; kritik domain modülleri için ayrı minimum.
-- [ ] Import smoke ve OpenAPI schema generation.
+- [x] Lock doğrulama ve install.
+- [x] Ruff format check.
+- [x] Ruff lint.
+- [x] MyPy kritik paketler + ratchet.
+- [x] Unit test.
+- [x] Integration test.
+- [x] Blank DB migration.
+- [x] Restored-schema compatibility fixture.
+- [x] Coverage raporu; kritik domain modülleri için ayrı minimum.
+- [x] Import smoke ve OpenAPI schema generation.
 
 #### Frontend
 
-- [ ] Reproducible `npm ci`.
-- [ ] Lint.
-- [ ] Typecheck.
-- [ ] Unit/component test.
-- [ ] Production build.
-- [ ] Browser smoke/e2e.
-- [ ] Generated API client drift check.
+- [x] Reproducible `npm ci`.
+- [x] Lint.
+- [x] Typecheck.
+- [x] Unit/component test.
+- [x] Production build.
+- [x] Browser smoke/e2e.
+- [x] Generated API client drift check.
 
 #### Security
 
-- [ ] Gitleaks tüm history + diff.
-- [ ] Python/Node dependency audit.
-- [ ] SBOM (CycloneDX veya SPDX).
-- [ ] Container image scan.
-- [ ] SAST/CodeQL uygun dillerde.
-- [ ] License policy raporu.
-- [ ] Public-safe artifact/content taraması.
-- [ ] Commit ownership kontrolü.
+- [x] Gitleaks tüm history + diff.
+- [x] Python/Node dependency audit.
+- [x] SBOM (CycloneDX veya SPDX).
+- [x] Container image scan.
+- [x] SAST/CodeQL uygun dillerde.
+- [x] License policy raporu.
+- [x] Public-safe artifact/content taraması.
+- [x] Commit ownership kontrolü.
 
 #### RAG eval
 
-- [ ] Aşama 9 tamamlanana kadar yalnız contract + end-to-end fixture kapısı olarak adlandırılacak.
-- [ ] Fake sonuç hiçbir yerde “quality pass” üretmeyecek.
-- [ ] Real/private benchmark ayrık ve açıkça etiketli olacak.
+- [x] Aşama 9 tamamlanana kadar yalnız contract + end-to-end fixture kapısı olarak adlandırılacak.
+- [x] Fake sonuç hiçbir yerde “quality pass” üretmeyecek.
+- [x] Real/private benchmark ayrık ve açıkça etiketli olacak.
 
 ### 9.5 GitHub yönetişimi
 
@@ -569,20 +569,43 @@ Backend, frontend, RAG eval ve security workflow'ları:
   - conversation resolution;
   - bypass yalnız Mehmet KARACAN ve acil durum gerekçesi/receipt ile.
 - [ ] Doğrudan push kabul edilmemeli.
-- [ ] CODEOWNERS eklenecek; security/governance/migration dosyaları özel review isteyecek.
-- [ ] Dependabot/Renovate benzeri dependency PR otomasyonu kontrollü kurulacak; otomatik merge yok.
-- [ ] Pull request template; risk, migration, test, rollback, data-classification ve evidence alanları içerecek.
+- [x] CODEOWNERS eklenecek; security/governance/migration dosyaları özel review isteyecek.
+- [x] Dependabot/Renovate benzeri dependency PR otomasyonu kontrollü kurulacak; otomatik merge yok.
+- [x] Pull request template; risk, migration, test, rollback, data-classification ve evidence alanları içerecek.
 
 ### 9.6 Kabul kriterleri
 
 - [ ] Exact bir commit SHA'sında backend, frontend, security ve RAG integration workflow'ları otomatik tetiklenmiş ve yeşil.
-- [ ] Workflow'lar manual-only değil.
+- [x] Workflow'lar manual-only değil.
 - [ ] Backend formatter sonrasında lint/type/test/migration/coverage adımlarının gerçekten çalıştığı run loguyla kanıtlı.
-- [ ] Migration workflow'u LLM key olmadan geçiyor.
+- [x] Migration workflow'u LLM key olmadan geçiyor.
 - [ ] Branch ruleset API çıktısı public-safe receipt'e eklenmiş.
 - [ ] Direct push testinin engellendiği doğrulanmış.
-- [ ] High/critical dependency veya image açığı için belgelenmemiş istisna yok.
-- [ ] Lockfile dışı dependency drift'i CI tarafından yakalanıyor.
+- [x] High/critical dependency veya image açığı için belgelenmemiş istisna yok.
+- [x] Lockfile dışı dependency drift'i CI tarafından yakalanıyor.
+
+### 9.7 A2 yerel kapanış kaydı — 2026-09-05
+
+- Durum: `PASS_LOCAL_ONLY`; implementation commit'i
+  `26899b8b6abaeb1e6db8cec1300cf0c4b24d294e`, tree
+  `02a69c55b6cf9fa5b26b6ecb1e3d8abf4b5ed5b5`.
+- Compose PostgreSQL/Redis/MinIO image'ları immutable digest'e pinlendi.
+  Security image build'i stale package layer kullanmamak için
+  `--pull --no-cache` oldu; regression testi stateful service digest'lerini,
+  third-party action SHA'larını ve fresh build kapısını denetliyor.
+- Fresh `linux/arm64` backend image'ı Docker Scout ile tarandı:
+  `0 critical / 0 high`. Python audit `119` dependency ve Node audit `548`
+  package için `0` bilinen açık; lisans politikası `644` package için PASS.
+- Backend tam regresyonu yeni `cv3_a2_local_20260905_03` DB'sinde
+  `cv3_00000006` head'e migrate edilerek `1070 passed, 2 skipped`; frontend
+  lint/typecheck, `26` unit, generated-client drift, production build ve bundle
+  taraması PASS. Mevcut DB/bucket silinmedi veya resetlenmedi.
+- Public-safe kanıt:
+  `artifacts/ci/2026-09-05-a2-local-closeout/`.
+- Açık kapılar: Node kullanan frontend image'ı henüz yok; GitHub private
+  environment, `main` ruleset/protection, direct-push rejection ve exact SHA'da
+  gerçek remote workflow run/formatter log receipt'i yok. Bu nedenle A2 genel
+  durumu `OPEN_REMOTE_GATES`; remote kanıt uydurulmadı.
 
 ---
 
