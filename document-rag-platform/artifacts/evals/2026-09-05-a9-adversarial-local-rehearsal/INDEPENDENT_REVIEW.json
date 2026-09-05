@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "decision": "APPROVE",
+  "scope": "source patch and focused A9 admission contracts only",
+  "repository_revision": "4a51109d373fc6beb27222d738949e0d567c07c7",
+  "findings": {
+    "p0": 0,
+    "p1": 0,
+    "p2": 0
+  },
+  "verified": [
+    "project-wide prior active sources do not create false active-version leakage",
+    "old-version and foreign citations fail closed as invalid and critical",
+    "receipt, private manifest, report, and evidence use bounded regular no-follow reads",
+    "private bundle, label file, execution file, execution projection, report, runner, environment, and model identities are bound",
+    "receipt binding cannot authenticate authority or promote release eligibility"
+  ],
+  "limitations": [
+    "this review is not owner review of the private pack",
+    "this review is not an independent provider-request capture or golden non-transfer receipt",
+    "this review is not a human baseline seal or release authorization"
+  ]
+}

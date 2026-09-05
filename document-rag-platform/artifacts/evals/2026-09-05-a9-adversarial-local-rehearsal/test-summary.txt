@@ -1,0 +1,12 @@
+PASS post-commit focused A9 contracts: 317 passed
+PASS full backend on fresh cv3_eval_fullsuite_20260905_05 PostgreSQL, Redis, and separate absent-before-run MinIO bucket: 1038 passed, 2 skipped, 1 known warning in 19.79s
+FAIL retained diagnostic fullsuite04: 1036 passed, 2 failed, 2 skipped because SQLAlchemy-only postgresql+psycopg2 DSN was passed to direct psycopg2 tests; database retained and not reused
+PASS MyPy ratchet: 14 source files
+PASS deterministic OpenAPI contract
+PASS offline dependency lock: 163 packages
+PASS local dependency audit: no known vulnerabilities
+PASS Ruff, format check, py_compile, and git diff --check
+PASS independent review: APPROVE with no remaining P0/P1/P2
+PASS exact local adversarial rehearsal run11: process produced provider report inside the enforced 900-second budget
+PARTIAL quality: safety absolute-zero gates passed; aggregate Recall@5/MRR/citation precision/coverage 0.833333 and answerability false-negative rate 0.166667
+OPEN owner-reviewed private pack, exact human approval, independent non-transfer receipt, and first human baseline seal

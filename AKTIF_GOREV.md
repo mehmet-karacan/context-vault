@@ -2045,6 +2045,78 @@ kapıları nedeniyle A9 AÇIK**.
   non-transfer kanıtı; ilk insan baseline review/seal. Onaysız tek kayıtlı
   fixture bu kapıları veya A9'u kapatmaz; A11 başlatılmadı.
 
+### 16.21 A9 adversarial local-production ve non-transfer binding kaydı — 2026-09-05
+
+Başlangıç SHA: `d45143ecc73bd5476fe9df245ae9fb6f873ff19a`.
+Kaynak SHA: `4a51109d373fc6beb27222d738949e0d567c07c7`.
+Durum: **adversarial local-production safety PASS; kalite PARTIAL; insan/owner
+kapıları nedeniyle A9 AÇIK**.
+
+- Salt-okunur audit, önceki local runner'ın her vakayı yalnız kendi belge ID'leriyle
+  sınırlandırdığı için project/workspace filtresini gerçek rakip veriyle bağımsız
+  sınamadığını ve aynı Document altında inactive predecessor üretemediğini kanıtladı.
+  Ayrıca response içindeki foreign citation'ın scoring öncesi sessizce düşebildiği
+  yeniden üretildi.
+- Execution sözleşmesi artık yalnız altı desteklenen permission persona'yı kabul
+  eder; `document_scope=case|project` ve aynı vaka içinde geriye referans veren
+  nullable `revises_document_id` zorunludur. Forward/unknown revision, unknown
+  persona ve bilinmeyen scope provider/model kurulmadan fail-closed reddedilir.
+- `project` scope vaka-belge whitelist'ini kaldırır ve production
+  project/workspace/source-type/active-version/profile filtrelerini önceden mevcut
+  rakip veriye karşı çalıştırır. Version zinciri ikinci ingestion'a gerçek
+  `existing_document` verir. Physical document+version kimliği logical pack ID'sine
+  bağlanır; out-of-case aktif kaynak opaque kalır, inactive/foreign citation ise
+  sessiz kaybolmak yerine invalid citation ve critical finding üretir.
+- Bağımsız golden non-transfer receipt için strict v1 schema ve salt-okunur CLI
+  checker eklendi. Checker exact source revision, runner bundle, private manifest
+  ve bundle, golden/execution dosyaları, normalize execution projection, candidate
+  report, environment, iki model kimliği, request count ve bağımsız evidence SHA'yı
+  bağlar. Receipt/manifest/report/evidence aynı bounded regular `O_NOFOLLOW` FD
+  byte'larından parse+hash edilir. Araç receipt veya reviewer otoritesi üretmez;
+  `receipt_authority_verified=false` ve `release_gate_eligible=false` kalır.
+- İlk bağımsız review, cross-case aktif kaynağın yanlış version leakage sayılması,
+  inactive citation kapısı ve receipt TOCTOU/symlink/unbounded-read yolları nedeniyle
+  patch'i `REJECT` etti. Bulgular test-first kapatıldı; stabilized review
+  `APPROVE`, P0/P1/P2 `0` verdi.
+- Repository dışındaki açıkça unapproved sentetik paket 6 kayıt ve 6 query type
+  içerir: cross-project seed, cross-workspace seed, reader/project-wide target,
+  aynı belge v1→v2 temporal vaka, prompt/citation boundary ve no-answer. Bundle SHA
+  `5f43b2cca095d9ac74ffcc452db4a37fd3088f3004554f545868f6ecfe9dab76`,
+  execution projection SHA
+  `ac11ebbd1605c90f4433e1b10411741e470f7908947d29fc24b4c24632097c35`.
+  Paket/ham içerik Git'e yazılmadı ve owner-reviewed private pack sayılmadı.
+- Yeni ve silinmeyen `cv3_eval_a9_local_20260905_11` DB ile
+  `cv3-eval-a9-local-20260905-11` bucket daha önce absent doğrulandı; DB Alembic
+  `cv3_00000006` head'e getirildi. Exact offline BGE-M3 + Qwen2.5-1.5B runner
+  900 saniyelik budget içinde exit `0` raporu üretti. Provider call `22`, input
+  token `7562`, output token `833`, maliyet `0`.
+- Run11 mutlak güvenlik sonuçları: permission/version, active-version, profile,
+  cross-project/workspace leakage; invalid citation; prompt injection; retry,
+  duplicate, orphan ve critical/high finding `0`. Temporal DB kanıtı version 1
+  `superseded`/inactive, version 2 `ready`/active. DB'de project `6`, document `7`,
+  version/completed job `8`, retrieval run `6`, message `12`, citation/claim `4`;
+  bucket nesnesi `24`, AES-GCM envelope `24/24`.
+- Kalite tam geçmedi: reader/project-wide vakasında Qwen structured cevap
+  `malformed_response` no-answer'a düştü. Aggregate Recall@1/3/5/10, MRR, nDCG,
+  context precision, citation precision/recall/coverage ve answer sufficiency
+  `0.833333`; false-negative ve unsupported-claim rate `0.166667`. No-answer,
+  temporal ve prompt-boundary vakaları kendi güvenlik kapılarını geçti. Bu sonuç
+  approved baseline veya quality PASS olarak etiketlenmedi.
+- Post-commit focused **317 PASS**. İlk fresh `fullsuite04` koşusu SQLAlchemy'ye
+  özgü `postgresql+psycopg2://` DSN'i doğrudan psycopg2 kullanan iki teste verdiği
+  için **1036 PASS/2 FAIL/2 SKIP** oldu; DB tutuldu ve tekrar kullanılmadı. Doğru
+  `postgresql://` DSN ve yeni `fullsuite05` ile final backend **1038 PASS, 2 SKIP,
+  1 bilinen uyarı**. MyPy ratchet 14 kaynak, deterministic OpenAPI, 163-package
+  offline lock, dependency audit, Ruff/format, py_compile ve diff-check PASS.
+- Public-safe kanıt:
+  `document-rag-platform/artifacts/evals/2026-09-05-a9-adversarial-local-rehearsal/`.
+- Açık insan/owner kapıları: gerçek private pack'in tüm kayıtları için owner review
+  ve exact approval; gerçek koşunun bağımsız provider-request/golden non-transfer
+  receipt'i; ilk approved report'un insan review ve baseline seal'i. Runner'ın
+  `golden_results_sent_to_provider=false` alanı bağımsız kanıt değildir. Bu kapılar
+  tamamlanmadığı için §16.3, §16.6 ve §16.8 açık; A9 kapatılmadı ve sonraki aşamaya
+  geçilmedi.
+
 ---
 
 ## 17. AŞAMA 10 — Frontend ve ürün sözleşmesi

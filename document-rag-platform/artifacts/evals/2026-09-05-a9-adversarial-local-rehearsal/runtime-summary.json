@@ -1,0 +1,74 @@
+{
+  "schema_version": "1.0",
+  "status": "LOCAL_ADVERSARIAL_REHEARSAL_SAFETY_PASS_QUALITY_PARTIAL_A9_OPEN",
+  "repository_revision": "4a51109d373fc6beb27222d738949e0d567c07c7",
+  "commit_tree": "326b7431f24ea54fb3d70fff4fbc64b85bc62046",
+  "runner_bundle_sha256": "83b74af61e7c2dd13ce33c8e11eaed4330ca2ebf1153d9de909cb5ebd8c5b21f",
+  "environment_hash": "bf95455c4fe8a691b73ebbec1e5370b8db7cd1b8977b712c3eecb9d2519a0658",
+  "pack_kind": "unapproved-synthetic-local-adversarial-rehearsal",
+  "pack_bundle_sha256": "5f43b2cca095d9ac74ffcc452db4a37fd3088f3004554f545868f6ecfe9dab76",
+  "execution_projection_sha256": "ac11ebbd1605c90f4433e1b10411741e470f7908947d29fc24b4c24632097c35",
+  "unapproved_metadata_sha256": "62e93190802aa7fcc168c450f3d9f9e801646a1e9aa1159b6317041fa6e7ddb6",
+  "provider_report_sha256": "7ed00b50d724514746dd5758327bfac8dcf7a76e210d7588bc140d794fa8e011",
+  "records": 6,
+  "database": "cv3_eval_a9_local_20260905_11",
+  "bucket": "cv3-eval-a9-local-20260905-11",
+  "alembic_head": "cv3_00000006",
+  "database_counts": {
+    "projects": 6,
+    "documents": 7,
+    "versions": 8,
+    "completed_ingestion_jobs": 8,
+    "retrieval_runs": 6,
+    "messages": 12,
+    "message_citations": 4,
+    "claims": 4
+  },
+  "temporal_version": {
+    "versions": 2,
+    "version_1_status": "superseded",
+    "version_1_active": false,
+    "version_2_status": "ready",
+    "version_2_active": true
+  },
+  "storage": {
+    "objects": 24,
+    "encrypted_objects": 24
+  },
+  "safety_metrics": {
+    "permission_version_leakage": 0,
+    "active_version_leakage": 0.0,
+    "profile_leakage": 0.0,
+    "cross_project_leakage": 0.0,
+    "cross_workspace_leakage": 0.0,
+    "invalid_citation_labels": 0,
+    "prompt_injection_success_rate": 0.0,
+    "critical_high_security_findings": 0,
+    "retry_count": 0,
+    "duplicate_count": 0,
+    "orphan_count": 0
+  },
+  "quality_metrics": {
+    "recall_at_5": 0.8333333333333334,
+    "mrr_at_10": 0.8333333333333334,
+    "citation_precision": 0.8333333333333334,
+    "citation_coverage": 0.8333333333333334,
+    "answer_sufficiency": 0.8333333333333334,
+    "answerability_false_negative_rate": 0.16666666666666666,
+    "unsupported_claim_rate": 0.16666666666666666
+  },
+  "usage": {
+    "provider_calls": 22,
+    "input_tokens": 7562,
+    "output_tokens": 833,
+    "cost_usd": 0.0
+  },
+  "known_quality_failure": {
+    "query_type": "permission-cross-scope",
+    "result": "false-negative",
+    "persistence_reason": "malformed_response"
+  },
+  "golden_results_sent_to_provider": "runner-asserted-false-not-independent-proof",
+  "a9_closed": false,
+  "a11_started": false
+}
