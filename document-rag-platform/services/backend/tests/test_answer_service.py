@@ -162,6 +162,7 @@ def test_evidence_label_packaged_document_variant():
     assert 'Belge: "rules.docx"' in block
     assert 'Bölüm: "Tahsilat" > "PAYMENT_FLAG"' in block
     assert 'Sayfa: "12"-"13"' in block
+    assert 'Alıntı: "Ödeme için PAYMENT_FLAG=1 kontrol edilir."' in block
     assert 'İçerik: "Ödeme için PAYMENT_FLAG=1 kontrol edilir."' in block
     # First evidence resolved its content; second has no resolver hit, so empty.
     assert evidence[1].content == ""
@@ -187,7 +188,45 @@ def test_evidence_code_variant_repository():
     assert 'Repository: "context-vault"' in block
     assert 'Dosya: "services/backend/src/main.py"' in block
     assert 'Satırlar: "220"-"315"' in block
+    assert 'Alıntı: "def query_chat(): pass"' in block
     assert 'İçerik: "def query_chat(): pass"' in block
+
+
+def test_prompt_names_exact_visible_snippet_support_surface():
+    early_claim = "ERKEN_KANIT"
+    late_claim = "GEC_KANIT"
+    content = f"{early_claim}{'x' * 220}{late_claim}"
+    evidence = pack_evidence(
+        [cand("c1", rank=1, score=0.9)],
+        dict_resolver(
+            {
+                "c1": chunk_obj(
+                    "c1",
+                    content,
+                    metadata={
+                        "document_name": "surface.txt",
+                        "source_type": "document",
+                    },
+                )
+            }
+        ),
+    )
+
+    block = evidence[0].to_block()
+    quote_line = next(
+        line for line in block.splitlines() if line.startswith("Alıntı: ")
+    )
+    content_line = next(
+        line for line in block.splitlines() if line.startswith("İçerik: ")
+    )
+    prompt = build_prompt("kanıt yüzeyi nedir?", evidence)
+    repair = _application_repair_user(prompt["user"], ["S1"])
+
+    assert early_claim in quote_line
+    assert late_claim not in quote_line
+    assert late_claim in content_line
+    assert "`Alıntı` alanından aynen kopyala" in prompt["system"]
+    assert "`Alıntı` alanından aynen kopyalanmalıdır" in repair
 
 
 # --------------------------------------------------------------------------- #
@@ -395,6 +434,7 @@ def test_3584_budget_rejects_base_prompt_that_structured_repairs_overflow(
     assert selected is not None
     assert "The previous response failed validation" in worst_system
     assert "claim_text, answer_text içinde" in worst_user
+    assert "`Alıntı` alanından aynen kopyalanmalıdır" in worst_user
     assert "used_source_labels" in worst_user
     monkeypatch.setattr(settings, "ANSWER_CONTEXT_WINDOW_TOKENS", 4_096)
     monkeypatch.setattr(settings, "ANSWER_RESERVED_OUTPUT_TOKENS", 256)
@@ -478,6 +518,8 @@ def test_application_repair_prompt_states_grounding_invariants_without_payload()
     assert "no_answer_reason null" in repair
     assert "answer_text ve claims boş olmamalı" in repair
     assert "claim_text, answer_text içinde" in repair
+    assert "`Alıntı` alanından aynen kopyalanmalıdır" in repair
+    assert "yeniden ifade etme" in repair
     assert "ilk görülme sırasına göre tekrarsız" in repair
     assert "answerable=false" in repair
     assert "claims ve used_source_labels boş" in repair
