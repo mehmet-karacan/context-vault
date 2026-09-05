@@ -10,6 +10,11 @@ RUN pip install --no-cache-dir uv==0.12.5 \
 
 FROM ${PYTHON_IMAGE} AS runtime
 
+ARG SOURCE_REVISION
+
+LABEL org.opencontainers.image.source="https://github.com/mehmet-karacan/context-vault" \
+      org.opencontainers.image.revision="${SOURCE_REVISION}"
+
 WORKDIR /app
 
 # Keep compilers and uv out of the runtime image. The numeric identity makes
