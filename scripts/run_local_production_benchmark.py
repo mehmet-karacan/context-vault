@@ -10,6 +10,7 @@ non-transfer.
 
 from __future__ import annotations
 
+import gc
 import hashlib
 import importlib.util
 import json
@@ -19,6 +20,7 @@ import re
 import statistics
 import sys
 import time
+from collections import deque
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 from urllib.parse import unquote, urlsplit
@@ -49,9 +51,10 @@ aggregate_request_hashes = _pack_module.aggregate_request_hashes
 bundle_descriptor = _pack_module.bundle_descriptor
 LocalBgeProvider = _provider_module.LocalBgeProvider
 LocalQwenClient = _provider_module.LocalQwenClient
+DeferredLocalQwenClient = _provider_module.DeferredLocalQwenClient
 production_case_executor = _executor_module.production_case_executor
 
-TOOL_VERSION = "1.0.0"
+TOOL_VERSION = "1.1.0"
 EMBEDDING_PROVIDER = "local-sentence-transformers"
 GENERATION_PROVIDER = "local-transformers"
 BGE_MODEL = "BAAI/bge-m3"
@@ -62,7 +65,7 @@ QWEN_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"
 QWEN_REVISION = "989aa7980e4cf806f80c7fef2b1adb7bc71aa306"
 QWEN_IDENTITY = f"{QWEN_MODEL}@{QWEN_REVISION}"
 QWEN_BUNDLE_SHA256 = "5a6a6259762fed70e38ae346763b105a7b05aa981e5ab078c8e5b033f87f0c87"
-LOCAL_GENERATION_MAX_OUTPUT_TOKENS = 64
+LOCAL_GENERATION_MAX_OUTPUT_TOKENS = 256
 
 _SHA256 = re.compile(r"[a-f0-9]{64}\Z")
 _QUERY_TYPE = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}\Z")
@@ -336,15 +339,7 @@ def _provider_factory(
     config: Mapping[str, Any], observer: Callable[[dict[str, Any]], None]
 ):
     env = config["env"]
-    embedding = LocalBgeProvider(
-        snapshot=Path(env["CV_LOCAL_BGE_SNAPSHOT"]),
-        expected_model=BGE_MODEL,
-        expected_revision=BGE_REVISION,
-        expected_bundle_sha256=BGE_BUNDLE_SHA256,
-        device="mps",
-        request_observer=observer,
-    )
-    generation = LocalQwenClient(
+    generation = DeferredLocalQwenClient(
         snapshot=Path(env["CV_LOCAL_GENERATION_SNAPSHOT"]),
         expected_model=QWEN_MODEL,
         expected_revision=QWEN_REVISION,
@@ -353,7 +348,33 @@ def _provider_factory(
         max_output_tokens=LOCAL_GENERATION_MAX_OUTPUT_TOKENS,
         request_observer=observer,
     )
+    embedding = LocalBgeProvider(
+        snapshot=Path(env["CV_LOCAL_BGE_SNAPSHOT"]),
+        expected_model=BGE_MODEL,
+        expected_revision=BGE_REVISION,
+        expected_bundle_sha256=BGE_BUNDLE_SHA256,
+        device="mps",
+        request_observer=observer,
+    )
     return embedding, generation
+
+
+def _cleanup_local_model_memory() -> None:
+    """Release Python and MPS caches between the two local-model phases."""
+
+    gc.collect()
+    try:
+        import torch
+    except ImportError:
+        return
+    try:
+        if torch.backends.mps.is_available():
+            torch.mps.synchronize()
+            torch.mps.empty_cache()
+    except Exception as exc:  # noqa: BLE001 - accelerator cleanup boundary
+        raise LocalProductionBenchmarkError(
+            "local model memory cleanup failed"
+        ) from exc
 
 
 def _provider_attestation(embedding: Any, generation: Any) -> dict[str, Any]:
@@ -459,7 +480,7 @@ class _ObservedLedger:
 
     def select(self, case_id: str) -> None:
         self.active_case = case_id
-        self.events[case_id] = []
+        self.events.setdefault(case_id, [])
 
     def observe(self, event: dict[str, Any]) -> None:
         if self.requests_closed:
@@ -930,7 +951,7 @@ def _usage(embedding: Any, generation: Any, provider_calls: int) -> dict[str, An
 
 
 def _executor_provenance(executor: Any) -> dict[str, Any]:
-    expected = {
+    expected_base = {
         "pipeline": "context-vault-production-core",
         "ingestion": "IngestionOrchestrator.accept_source/process_job",
         "retrieval": "RetrievalService.retrieve",
@@ -938,6 +959,16 @@ def _executor_provenance(executor: Any) -> dict[str, Any]:
         "celery_delivery_exercised": False,
         "redis_role": "health-only",
     }
+    phase_one = getattr(executor, "phase_one", None)
+    phase_two = getattr(executor, "phase_two", None)
+    is_phased = callable(phase_one) and callable(phase_two)
+    if callable(phase_one) != callable(phase_two):
+        raise LocalProductionBenchmarkError(
+            "production executor phase contract is incomplete"
+        )
+    expected = dict(expected_base)
+    if is_phased:
+        expected["model_residency_strategy"] = "phased"
     provenance_fn = getattr(executor, "provenance", None)
     if not callable(provenance_fn) or provenance_fn() != expected:
         raise LocalProductionBenchmarkError(
@@ -1047,6 +1078,35 @@ def execute(
     lifecycle_error: Exception | None = None
     prepare = getattr(case_executor, "prepare", None)
     finalize = getattr(case_executor, "finalize", None)
+    phase_one = getattr(case_executor, "phase_one", None)
+    phase_two = getattr(case_executor, "phase_two", None)
+    phased = callable(phase_one) and callable(phase_two)
+    embedding_closed = False
+
+    def duration_gate() -> None:
+        if clock() > deadline:
+            raise LocalProductionBenchmarkError(
+                "benchmark duration budget exceeded"
+            )
+
+    def close_embedding_for_phase_transition() -> None:
+        nonlocal embedding_closed
+        close = getattr(embedding, "close", None)
+        if not callable(close):
+            raise LocalProductionBenchmarkError(
+                "phased embedding provider close hook is unavailable"
+            )
+        try:
+            close()
+            embedding_closed = True
+            _cleanup_local_model_memory()
+        except LocalProductionBenchmarkError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - provider cleanup boundary
+            raise LocalProductionBenchmarkError(
+                "local provider close failed"
+            ) from exc
+
     try:
         if prepare is not None:
             if not callable(prepare):
@@ -1055,27 +1115,68 @@ def execute(
                 )
             prepare(config, embedding, generation)
         executor_attestation = _executor_attestation(case_executor)
-        for case in executions:
-            case_id = _execution_view(case)["id"]
-            if clock() > deadline:
-                raise LocalProductionBenchmarkError(
-                    "benchmark duration budget exceeded"
-                )
-            ledger.select(case_id)
-            try:
-                raw = case_executor(
-                    case,
-                    embedding_provider=embedding,
-                    generation_client=generation,
-                    observe_request=ledger.observe,
-                )
-            except LocalProductionBenchmarkError:
-                raise
-            except Exception as exc:  # noqa: BLE001 - production executor boundary
-                raise LocalProductionBenchmarkError(
-                    "production case execution failed"
-                ) from exc
-            observations.append(_observation(raw, case_id))
+        if phased:
+            handles: deque[tuple[Mapping[str, Any], Any]] = deque()
+            for case in executions:
+                case_id = _execution_view(case)["id"]
+                duration_gate()
+                ledger.select(case_id)
+                try:
+                    handle = phase_one(
+                        case,
+                        embedding_provider=embedding,
+                        observe_request=ledger.observe,
+                    )
+                except LocalProductionBenchmarkError:
+                    raise
+                except Exception as exc:  # noqa: BLE001 - production boundary
+                    raise LocalProductionBenchmarkError(
+                        "production retrieval phase failed"
+                    ) from exc
+                handles.append((case, handle))
+                duration_gate()
+
+            close_embedding_for_phase_transition()
+            while handles:
+                case, handle = handles.popleft()
+                case_id = _execution_view(case)["id"]
+                duration_gate()
+                ledger.select(case_id)
+                try:
+                    raw = phase_two(
+                        case,
+                        handle=handle,
+                        generation_client=generation,
+                        observe_request=ledger.observe,
+                    )
+                except LocalProductionBenchmarkError:
+                    raise
+                except Exception as exc:  # noqa: BLE001 - production boundary
+                    raise LocalProductionBenchmarkError(
+                        "production answer phase failed"
+                    ) from exc
+                observations.append(_observation(raw, case_id))
+                duration_gate()
+        else:
+            for case in executions:
+                case_id = _execution_view(case)["id"]
+                duration_gate()
+                ledger.select(case_id)
+                try:
+                    raw = case_executor(
+                        case,
+                        embedding_provider=embedding,
+                        generation_client=generation,
+                        observe_request=ledger.observe,
+                    )
+                except LocalProductionBenchmarkError:
+                    raise
+                except Exception as exc:  # noqa: BLE001 - production executor boundary
+                    raise LocalProductionBenchmarkError(
+                        "production case execution failed"
+                    ) from exc
+                observations.append(_observation(raw, case_id))
+                duration_gate()
         if _executor_attestation(case_executor) != executor_attestation:
             raise LocalProductionBenchmarkError(
                 "production executor attestation changed during execution"
@@ -1114,7 +1215,10 @@ def execute(
                             "production executor finalize failed"
                         )
                         lifecycle_error.__cause__ = exc
-        for provider in (generation, embedding):
+        providers_to_close = [generation]
+        if not embedding_closed:
+            providers_to_close.append(embedding)
+        for provider in providers_to_close:
             close = getattr(provider, "close", None)
             if close is not None:
                 if not callable(close):
@@ -1137,6 +1241,7 @@ def execute(
         raise LocalProductionBenchmarkError(
             "production benchmark lifecycle failed"
         ) from lifecycle_error
+    duration_gate()
     assert usage is not None
     assert executor_attestation is not None
     ledger_records = ledger.records(_execution_view(case)["id"] for case in executions)
@@ -1179,6 +1284,12 @@ def execute(
                 "request_ledger_sha256": pack.request_ledger_sha256,
                 "executor": executor_provenance,
                 "pipeline_config_hash": executor_attestation["pipeline_config_hash"],
+                "model_residency_strategy": executor_provenance.get(
+                    "model_residency_strategy", "single-phase-fallback"
+                ),
+                "generation_max_output_tokens": (
+                    LOCAL_GENERATION_MAX_OUTPUT_TOKENS
+                ),
                 "model_device": "mps",
                 "redis_role": "health-only",
                 "database_isolation_prefix": "cv3_eval_",

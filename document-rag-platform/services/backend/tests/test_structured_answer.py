@@ -97,7 +97,7 @@ def _envelope(answer, labels):
 
 def test_unknown_label_repairs_before_any_persistence():
     result = _result()
-    invalid = _envelope("doğrulanmış cevap", ["S99"])
+    invalid = _envelope("TOP_SECRET malformed provider output", ["S99"])
     valid = _envelope("doğrulanmış cevap", ["S1"])
     llm = StructuredLLM(invalid, valid)
     response = generate_answer(
@@ -110,6 +110,11 @@ def test_unknown_label_repairs_before_any_persistence():
     assert [item["label"] for item in response["citations"]] == ["S1"]
     assert len(llm.calls) == 2
     assert "S99" not in llm.calls[1][1]
+    assert "TOP_SECRET" not in llm.calls[1][1]
+    repair = llm.calls[1][1].rsplit("<REPAIR>", 1)[1]
+    assert "İzin verilen source_labels tam olarak: S1." in repair
+    assert "Belge ve dosya adları source label değildir." in repair
+    assert "doc-1.txt" not in repair
 
 
 def test_only_claimed_two_of_five_sources_are_persisted():
@@ -172,9 +177,9 @@ def test_injection_is_delimited_data_and_cannot_add_tools_or_labels():
 
 def test_context_budget_keeps_whole_label_content_blocks(monkeypatch):
     result = _result(3)
-    monkeypatch.setattr(settings, "ANSWER_CONTEXT_WINDOW_TOKENS", 1000)
-    monkeypatch.setattr(settings, "ANSWER_RESERVED_OUTPUT_TOKENS", 100)
-    monkeypatch.setattr(settings, "ANSWER_SAFETY_MARGIN_TOKENS", 100)
+    monkeypatch.setattr(settings, "ANSWER_CONTEXT_WINDOW_TOKENS", 4096)
+    monkeypatch.setattr(settings, "ANSWER_RESERVED_OUTPUT_TOKENS", 256)
+    monkeypatch.setattr(settings, "ANSWER_SAFETY_MARGIN_TOKENS", 256)
     llm = StructuredLLM(_envelope("tek kanıt", ["S1"]), remote=False)
     response = generate_answer(
         query=result.query,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -33,6 +34,14 @@ class _Runtime:
     def execute_case(self, case):
         self.events.append(("case", case["id"]))
         return {"id": case["id"]}
+
+    def retrieve_case(self, case):
+        self.events.append(("retrieve", case["id"]))
+        return {"id": case["id"], "private": "handle"}
+
+    def answer_case(self, handle):
+        self.events.append(("answer", handle["id"]))
+        return {"id": handle["id"]}
 
     def attestation(self):
         return {
@@ -108,7 +117,162 @@ def test_provenance_is_exact_and_does_not_claim_celery_delivery():
         "answer": "application.answer_service.generate_answer",
         "celery_delivery_exercised": False,
         "redis_role": "health-only",
+        "model_residency_strategy": "phased",
     }
+
+
+def test_executor_exposes_two_phase_retrieval_then_answer_contract():
+    module = _module()
+    created = []
+
+    def factory(config, embedding, generation):
+        runtime = _Runtime(config, embedding, generation)
+        created.append(runtime)
+        return runtime
+
+    executor = module.ProductionCoreExecutor(runtime_factory=factory)
+    embedding = object()
+    generation = object()
+    executor.prepare({"execution_sha256": "a" * 64}, embedding, generation)
+
+    first = executor.phase_one(
+        {"id": "one"},
+        embedding_provider=embedding,
+        observe_request=lambda _event: None,
+    )
+    second = executor.phase_one(
+        {"id": "two"},
+        embedding_provider=embedding,
+        observe_request=lambda _event: None,
+    )
+    assert created[0].events == [
+        "prepare",
+        ("retrieve", "one"),
+        ("retrieve", "two"),
+    ]
+
+    assert executor.phase_two(
+        {"id": "one"},
+        handle=first,
+        generation_client=generation,
+        observe_request=lambda _event: None,
+    ) == {"id": "one"}
+    assert executor.phase_two(
+        {"id": "two"},
+        handle=second,
+        generation_client=generation,
+        observe_request=lambda _event: None,
+    ) == {"id": "two"}
+    assert created[0].events[-2:] == [("answer", "one"), ("answer", "two")]
+    executor.finalize()
+
+
+def test_runtime_rejects_foreign_and_replayed_retrieval_handles():
+    module = _module()
+    runtime = module._ProductionRuntime.__new__(module._ProductionRuntime)
+    runtime._prepared = True
+    runtime._finalized = False
+    case = {"id": "one", "query": "question"}
+    handle = {
+        "case": case,
+        "case_started": 0.0,
+        "principal": SimpleNamespace(id="principal"),
+        "workspace": SimpleNamespace(id="workspace"),
+        "project": SimpleNamespace(id="project"),
+        "document_ids": {},
+        "version_ids": {},
+        "job_ids": [],
+        "ingestion_ms": 1.0,
+        "retrieval": SimpleNamespace(ranked_candidates=[]),
+        "chunk_resolver": lambda _chunk_id: None,
+        "retrieval_ms": 1.0,
+    }
+    runtime._pending_handles = {"one": handle}
+
+    foreign = dict(handle)
+    with pytest.raises(module.LocalProductionExecutorError, match="invalid"):
+        runtime.answer_case(foreign)
+
+    class Column:
+        @staticmethod
+        def in_(_values):
+            return True
+
+    class IngestionAttempt:
+        job_id = Column()
+
+    class StorageObject:
+        storage_key = object()
+
+    class Query:
+        def filter(self, *_args):
+            return self
+
+        @staticmethod
+        def count():
+            return 0
+
+        @staticmethod
+        def all():
+            return []
+
+    class Database:
+        @staticmethod
+        def commit():
+            return None
+
+        @staticmethod
+        def query(*_args):
+            return Query()
+
+    runtime.db = Database()
+    runtime.storage = SimpleNamespace(list_keys=lambda: [])
+    runtime.generation_client = object()
+    runtime.profile = SimpleNamespace(id="profile")
+    runtime._modules = {
+        "IngestionAttempt": IngestionAttempt,
+        "StorageObject": StorageObject,
+        "ensure_conversation": lambda *_args, **_kwargs: "conversation",
+        "generate_answer": lambda **_kwargs: {
+            "answerable": False,
+            "answer": "No context",
+            "claims": [],
+            "citations": [],
+        },
+    }
+
+    assert runtime.answer_case(handle)["id"] == "one"
+    with pytest.raises(module.LocalProductionExecutorError, match="already consumed"):
+        runtime.answer_case(handle)
+
+
+def test_runtime_finalize_rejects_unanswered_handles_and_closes_resources():
+    module = _module()
+    events = []
+
+    class Resource:
+        def __init__(self, name):
+            self.name = name
+
+        def close(self):
+            events.append(f"{self.name}.close")
+
+        def dispose(self):
+            events.append(f"{self.name}.dispose")
+
+    runtime = module._ProductionRuntime.__new__(module._ProductionRuntime)
+    runtime._prepared = True
+    runtime._finalized = False
+    runtime._pending_handles = {"one": {"case": {"id": "one"}}}
+    runtime.db = Resource("db")
+    runtime.engine = Resource("engine")
+    runtime.redis = Resource("redis")
+
+    with pytest.raises(module.LocalProductionExecutorError, match="unanswered"):
+        runtime.finalize()
+
+    assert runtime._finalized is True
+    assert events == ["db.close", "engine.dispose", "redis.close"]
 
 
 @pytest.mark.parametrize(

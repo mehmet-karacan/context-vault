@@ -63,6 +63,25 @@ generation_verifier = _load_verifier(
 )
 
 
+def _load_structured_prompt_contract() -> Any:
+    path = (
+        SCRIPT_DIR.parent
+        / "document-rag-platform/services/backend/src/application"
+        / "structured_prompt_contract.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "cv_local_structured_prompt_contract", path
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("local structured prompt contract is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+structured_prompt_contract = _load_structured_prompt_contract()
+
+
 def _offline_environment() -> None:
     os.environ["HF_HUB_OFFLINE"] = "1"
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -839,19 +858,18 @@ class LocalQwenClient:
         if not isinstance(schema, dict) or not schema:
             raise LocalBenchmarkProviderError("structured schema must be an object")
         try:
-            schema_text = json.dumps(
-                schema, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            structured_system, structured_user = (
+                structured_prompt_contract.local_structured_prompts(
+                    self._text("system prompt", system),
+                    self._text("user prompt", user),
+                    schema,
+                )
             )
         except (TypeError, ValueError) as exc:
             raise LocalBenchmarkProviderError("structured schema is not JSON") from exc
-        structured_system = (
-            f"{self._text('system prompt', system)}\n\n"
-            "Return exactly one JSON object matching this schema; no prose:\n"
-            f"{schema_text}"
-        )
         raw = self._generate_request(
             system_prompt=structured_system,
-            user_prompt=self._text("user prompt", user),
+            user_prompt=structured_user,
             model=model,
             kind="generation",
         )
@@ -860,11 +878,15 @@ class LocalQwenClient:
             self._validate_schema(parsed, schema)
             return parsed
         except LocalBenchmarkProviderError:
-            repair_system = (
-                "Return exactly one corrected JSON object matching the supplied "
-                "schema. Do not add prose or markdown."
+            del raw
+            repair_system, repair_user = (
+                structured_prompt_contract.local_structured_prompts(
+                    self._text("system prompt", system),
+                    structured_user,
+                    schema,
+                    internal_repair=True,
+                )
             )
-            repair_user = f"SCHEMA:\n{schema_text}\n\nINVALID OUTPUT:\n{raw}"
             repaired = self._generate_request(
                 system_prompt=repair_system,
                 user_prompt=repair_user,
@@ -888,6 +910,206 @@ class LocalQwenClient:
 
         self._model = None
         self._tokenizer = None
+        self._closed = True
+
+    def report(self) -> dict[str, Any]:
+        return {
+            "is_remote": False,
+            "model": self.exact_model_identity,
+            "model_revision": self.model_revision,
+            "model_bundle_sha256": self.model_bundle_sha256,
+            "deterministic_generation": True,
+            "counters": self.counters(),
+        }
+
+
+class DeferredLocalQwenClient:
+    """Admit an exact Qwen snapshot now and load its runtime on first use."""
+
+    is_remote = False
+
+    def __init__(
+        self,
+        *,
+        snapshot: Path,
+        expected_model: str,
+        expected_revision: str,
+        expected_bundle_sha256: str,
+        device: str = "cpu",
+        max_prompt_bytes: int = DEFAULT_MAX_PROMPT_BYTES,
+        max_prompt_tokens: int = DEFAULT_MAX_PROMPT_TOKENS,
+        max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
+        max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
+        max_context_bytes: int = DEFAULT_MAX_CONTEXT_BYTES,
+        max_context_tokens: int = DEFAULT_MAX_CONTEXT_TOKENS,
+        loader: Callable[..., Any] | None = None,
+        tokenizer_loader: Callable[..., Any] | None = None,
+        model_loader: Callable[..., Any] | None = None,
+        tokenizer: Any | None = None,
+        model_instance: Any | None = None,
+        model: Any | None = None,
+        request_observer: Callable[[dict[str, Any]], None] | None = None,
+    ) -> None:
+        if device not in {"cpu", "mps"}:
+            raise LocalBenchmarkProviderError("device must be cpu or mps")
+        bounds = {
+            "max_prompt_bytes": _positive_bound(
+                "max_prompt_bytes", max_prompt_bytes, HARD_MAX_PROMPT_BYTES
+            ),
+            "max_prompt_tokens": _positive_bound(
+                "max_prompt_tokens", max_prompt_tokens, HARD_MAX_PROMPT_TOKENS
+            ),
+            "max_output_bytes": _positive_bound(
+                "max_output_bytes", max_output_bytes, HARD_MAX_OUTPUT_BYTES
+            ),
+            "max_output_tokens": _positive_bound(
+                "max_output_tokens", max_output_tokens, HARD_MAX_OUTPUT_TOKENS
+            ),
+            "max_context_bytes": _positive_bound(
+                "max_context_bytes", max_context_bytes, HARD_MAX_CONTEXT_BYTES
+            ),
+            "max_context_tokens": _positive_bound(
+                "max_context_tokens", max_context_tokens, HARD_MAX_CONTEXT_TOKENS
+            ),
+        }
+        if request_observer is not None and not callable(request_observer):
+            raise LocalBenchmarkProviderError("request observer must be callable")
+        injected_model = model_instance if model_instance is not None else model
+        if model_instance is not None and model is not None:
+            raise LocalBenchmarkProviderError("only one injected Qwen model is allowed")
+        if loader is not None and any(
+            value is not None
+            for value in (tokenizer_loader, model_loader, tokenizer, injected_model)
+        ):
+            raise LocalBenchmarkProviderError(
+                "combined Qwen loader cannot be mixed with component injection"
+            )
+        if (tokenizer is None) != (injected_model is None) and (
+            tokenizer_loader is None or model_loader is None
+        ):
+            raise LocalBenchmarkProviderError(
+                "Qwen tokenizer and model must both be supplied or loadable"
+            )
+
+        self._guard = _SnapshotGuard(
+            verifier=generation_verifier,
+            snapshot=snapshot,
+            expected_model=expected_model,
+            expected_revision=expected_revision,
+            expected_bundle_sha256=expected_bundle_sha256,
+        )
+        self.model_name = expected_model
+        self.model_revision = expected_revision
+        self.model_bundle_sha256 = expected_bundle_sha256
+        self.exact_model_identity = f"{expected_model}@{expected_revision}"
+        self.device = device
+        self._delegate: LocalQwenClient | None = None
+        self._closed = False
+        self._load_kwargs = {
+            "snapshot": snapshot,
+            "expected_model": expected_model,
+            "expected_revision": expected_revision,
+            "expected_bundle_sha256": expected_bundle_sha256,
+            "device": device,
+            **bounds,
+            "loader": loader,
+            "tokenizer_loader": tokenizer_loader,
+            "model_loader": model_loader,
+            "tokenizer": tokenizer,
+            "model_instance": model_instance,
+            "model": model,
+            "request_observer": request_observer,
+        }
+
+    def _client(self) -> LocalQwenClient:
+        if self._closed:
+            raise LocalBenchmarkProviderError("local Qwen client is closed")
+        if self._delegate is None:
+            before = self._guard.metadata_fingerprint()
+            loaded = LocalQwenClient(**self._load_kwargs)
+            try:
+                self._guard.verify_metadata_unchanged(before)
+            except Exception:
+                loaded.close()
+                raise
+            self._delegate = loaded
+            for name in (
+                "loader",
+                "tokenizer_loader",
+                "model_loader",
+                "tokenizer",
+                "model_instance",
+                "model",
+            ):
+                self._load_kwargs[name] = None
+        return self._delegate
+
+    def resolve_model(self, requested: str | None = None) -> str:
+        if requested is None or requested == self.exact_model_identity:
+            return self.exact_model_identity
+        raise LocalBenchmarkProviderError(
+            "requested model is not the exact approved model"
+        )
+
+    def generate(
+        self,
+        system_prompt: str,
+        user_prompt: str | None = None,
+        *,
+        model: str | None = None,
+    ) -> str:
+        return self._client().generate(system_prompt, user_prompt, model=model)
+
+    def complete(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model: str | None = None,
+    ) -> str:
+        return self._client().complete(system_prompt, user_prompt, model=model)
+
+    def generate_answer(
+        self,
+        query: str,
+        context_chunks: list[str],
+        model: str | None = None,
+    ) -> str:
+        return self._client().generate_answer(query, context_chunks, model=model)
+
+    def complete_structured(
+        self,
+        system: str,
+        user: str,
+        *,
+        schema: dict[str, Any],
+        model: str | None = None,
+    ) -> dict[str, Any]:
+        return self._client().complete_structured(
+            system, user, schema=schema, model=model
+        )
+
+    def counters(self) -> dict[str, int]:
+        if self._delegate is None:
+            return {
+                "generation_calls": 0,
+                "repair_calls": 0,
+                "prompt_tokens": 0,
+                "generated_tokens": 0,
+            }
+        return self._delegate.counters()
+
+    def close(self) -> None:
+        if self._delegate is not None:
+            self._delegate.close()
+        for name in (
+            "loader",
+            "tokenizer_loader",
+            "model_loader",
+            "tokenizer",
+            "model_instance",
+            "model",
+        ):
+            self._load_kwargs[name] = None
         self._closed = True
 
     def report(self) -> dict[str, Any]:

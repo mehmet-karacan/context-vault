@@ -398,15 +398,39 @@ def test_default_qwen_model_loader_uses_admitted_device_dtype(
 
 def test_qwen_structured_repairs_once_and_returns_only_json_object(tmp_path):
     module = _module()
-    client, _model, _tokenizer = _qwen(
+    client, _model, tokenizer = _qwen(
         module,
         _qwen_snapshot(tmp_path),
         ["not json TOP_SECRET", '```json\n{"answer":"ok"}\n```'],
     )
 
-    result = client.complete_structured("system", "user", schema={"type": "object"})
+    result = client.complete_structured(
+        "system",
+        "ORIGINAL_EVIDENCE_MARKER query",
+        schema={"type": "object"},
+    )
 
     assert result == {"answer": "ok"}
+    expected_first = module.structured_prompt_contract.local_structured_prompts(
+        "system", "ORIGINAL_EVIDENCE_MARKER query", {"type": "object"}
+    )
+    expected_repair = module.structured_prompt_contract.local_structured_prompts(
+        "system",
+        "ORIGINAL_EVIDENCE_MARKER query",
+        {"type": "object"},
+        internal_repair=True,
+    )
+    assert tokenizer.templates[0] == [
+        {"role": "system", "content": expected_first[0]},
+        {"role": "user", "content": expected_first[1]},
+    ]
+    assert tokenizer.templates[1] == [
+        {"role": "system", "content": expected_repair[0]},
+        {"role": "user", "content": expected_repair[1]},
+    ]
+    repair_prompt = json.dumps(tokenizer.templates[1])
+    assert "ORIGINAL_EVIDENCE_MARKER" in repair_prompt
+    assert "TOP_SECRET" not in repair_prompt
     assert client.generation_calls == 1
     assert client.repair_calls == 1
     assert "TOP_SECRET" not in json.dumps(client.report())
@@ -472,3 +496,120 @@ def test_qwen_close_releases_runtime_but_preserves_bounded_report(tmp_path):
     assert client.report() == before
     with pytest.raises(module.LocalBenchmarkProviderError, match="closed"):
         client.complete("s", "u")
+
+
+def test_deferred_qwen_admits_snapshot_without_loading_until_generation(tmp_path):
+    module = _module()
+    snapshot = _qwen_snapshot(tmp_path)
+    bundle = module.generation_verifier.snapshot_bundle(snapshot)
+    calls = []
+    tokenizer = _Tokenizer(["answer"])
+    model = _Model()
+
+    client = module.DeferredLocalQwenClient(
+        snapshot=snapshot,
+        expected_model="Qwen/Qwen2.5-1.5B-Instruct",
+        expected_revision="revision-a",
+        expected_bundle_sha256=bundle["sha256"],
+        tokenizer_loader=lambda path, **kwargs: (
+            calls.append(("tokenizer", path, kwargs)),
+            tokenizer,
+        )[1],
+        model_loader=lambda path, **kwargs: (
+            calls.append(("model", path, kwargs)),
+            model,
+        )[1],
+    )
+
+    assert calls == []
+    assert client.report()["model"] == (
+        "Qwen/Qwen2.5-1.5B-Instruct@revision-a"
+    )
+    assert client.report()["counters"] == {
+        "generation_calls": 0,
+        "repair_calls": 0,
+        "prompt_tokens": 0,
+        "generated_tokens": 0,
+    }
+    assert client.complete("s", "u") == "answer"
+    assert [item[0] for item in calls] == ["tokenizer", "model"]
+    assert client.report()["counters"]["generation_calls"] == 1
+    assert client._load_kwargs["tokenizer_loader"] is None
+    assert client._load_kwargs["model_loader"] is None
+
+
+def test_deferred_qwen_close_before_generation_never_loads(tmp_path):
+    module = _module()
+    snapshot = _qwen_snapshot(tmp_path)
+    bundle = module.generation_verifier.snapshot_bundle(snapshot)
+    calls = []
+    client = module.DeferredLocalQwenClient(
+        snapshot=snapshot,
+        expected_model="Qwen/Qwen2.5-1.5B-Instruct",
+        expected_revision="revision-a",
+        expected_bundle_sha256=bundle["sha256"],
+        loader=lambda *_args, **_kwargs: calls.append("loaded"),
+    )
+
+    client.close()
+    client.close()
+
+    assert calls == []
+    assert client._load_kwargs["loader"] is None
+    with pytest.raises(module.LocalBenchmarkProviderError, match="closed"):
+        client.complete("s", "u")
+
+
+def test_deferred_qwen_rejects_snapshot_drift_before_loading(tmp_path):
+    module = _module()
+    snapshot = _qwen_snapshot(tmp_path)
+    bundle = module.generation_verifier.snapshot_bundle(snapshot)
+    calls = []
+    client = module.DeferredLocalQwenClient(
+        snapshot=snapshot,
+        expected_model="Qwen/Qwen2.5-1.5B-Instruct",
+        expected_revision="revision-a",
+        expected_bundle_sha256=bundle["sha256"],
+        loader=lambda *_args, **_kwargs: calls.append("loaded"),
+    )
+    (snapshot / "tokenizer.json").write_text('{"drift":true}\n')
+
+    with pytest.raises(module.LocalBenchmarkProviderError, match="SHA-256 mismatch"):
+        client.complete("s", "u")
+
+    assert calls == []
+
+
+def test_deferred_qwen_close_after_load_releases_all_runtime_references(tmp_path):
+    module = _module()
+    snapshot = _qwen_snapshot(tmp_path)
+    bundle = module.generation_verifier.snapshot_bundle(snapshot)
+    tokenizer = _Tokenizer(["answer"])
+    model = _Model()
+    client = module.DeferredLocalQwenClient(
+        snapshot=snapshot,
+        expected_model="Qwen/Qwen2.5-1.5B-Instruct",
+        expected_revision="revision-a",
+        expected_bundle_sha256=bundle["sha256"],
+        tokenizer_loader=lambda *_args, **_kwargs: tokenizer,
+        model_loader=lambda *_args, **_kwargs: model,
+    )
+    assert client.complete("s", "u") == "answer"
+    delegate = client._delegate
+    assert delegate is not None
+    assert delegate._tokenizer is tokenizer
+    assert delegate._model is model
+
+    client.close()
+
+    assert delegate._tokenizer is None
+    assert delegate._model is None
+    for name in (
+        "loader",
+        "tokenizer_loader",
+        "model_loader",
+        "tokenizer",
+        "model_instance",
+        "model",
+    ):
+        assert client._load_kwargs[name] is None

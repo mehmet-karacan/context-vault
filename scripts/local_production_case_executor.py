@@ -41,6 +41,7 @@ PROVENANCE = {
     "answer": "application.answer_service.generate_answer",
     "celery_delivery_exercised": False,
     "redis_role": "health-only",
+    "model_residency_strategy": "phased",
 }
 
 SOURCE_TYPES_BY_SCOPE = {
@@ -200,13 +201,14 @@ class _ProductionRuntime:
         self._prepared = False
         self._finalized = False
         self._attestation: dict[str, str] | None = None
+        self._pending_handles: dict[str, dict[str, Any]] = {}
 
     def _load_backend(self) -> None:
         # These fixed child-only values prevent construction of a usable remote
         # provider and keep the answer envelope inside Qwen's admitted window.
         os.environ["LITELLM_API_KEY"] = "local-eval-remote-provider-disabled"
         os.environ["ANSWER_CONTEXT_WINDOW_TOKENS"] = "4096"
-        os.environ["ANSWER_RESERVED_OUTPUT_TOKENS"] = "64"
+        os.environ["ANSWER_RESERVED_OUTPUT_TOKENS"] = "256"
         os.environ["ANSWER_SAFETY_MARGIN_TOKENS"] = "256"
         os.environ["CONTEXT_MAX_TOKENS"] = "3000"
         if str(BACKEND) not in sys.path:
@@ -448,6 +450,7 @@ class _ProductionRuntime:
             "celery_delivery_exercised": False,
             "redis_role": "health-only",
             "model_device": "mps",
+            "model_residency_strategy": "phased",
         }
         return {
             "embedding_profile_hash": self.profile.config_hash,
@@ -534,10 +537,17 @@ class _ProductionRuntime:
         )
         return principal, workspace, project, context
 
-    def execute_case(self, case: Mapping[str, Any]) -> dict[str, Any]:
+    def retrieve_case(self, case: Mapping[str, Any]) -> dict[str, Any]:
         if not self._prepared or self._finalized:
             raise LocalProductionExecutorError(
                 "production runtime is not available for case execution"
+            )
+        case_id = case.get("id")
+        if not isinstance(case_id, str) or not case_id:
+            raise LocalProductionExecutorError("production case id is invalid")
+        if case_id in self._pending_handles:
+            raise LocalProductionExecutorError(
+                "production retrieval handle already exists for case"
             )
         case_started = time.perf_counter()
         principal, workspace, project, principal_context = self._identity(case)
@@ -545,8 +555,6 @@ class _ProductionRuntime:
         IngestionOrchestrator = self._modules["IngestionOrchestrator"]
         AcceptSourceCommand = self._modules["AcceptSourceCommand"]
         SourceDescriptor = self._modules["SourceDescriptor"]
-        IngestionAttempt = self._modules["IngestionAttempt"]
-        StorageObject = self._modules["StorageObject"]
 
         ingestion_started = time.perf_counter()
         document_ids: dict[str, uuid.UUID] = {}
@@ -633,6 +641,56 @@ class _ProductionRuntime:
         retrieval_started = time.perf_counter()
         retrieval = service.retrieve(case["query"], retrieval_scope, debug=False)
         retrieval_ms = (time.perf_counter() - retrieval_started) * 1000
+
+        handle = {
+            "case": case,
+            "case_started": case_started,
+            "principal": principal,
+            "workspace": workspace,
+            "project": project,
+            "document_ids": document_ids,
+            "version_ids": version_ids,
+            "job_ids": job_ids,
+            "ingestion_ms": ingestion_ms,
+            "retrieval": retrieval,
+            "chunk_resolver": chunk_resolver,
+            "retrieval_ms": retrieval_ms,
+        }
+        self._pending_handles[case_id] = handle
+        return handle
+
+    def answer_case(self, handle: Mapping[str, Any]) -> dict[str, Any]:
+        if not self._prepared or self._finalized:
+            raise LocalProductionExecutorError(
+                "production runtime is not available for case execution"
+            )
+        if not isinstance(handle, dict):
+            raise LocalProductionExecutorError(
+                "production retrieval handle is invalid"
+            )
+        case = handle.get("case")
+        case_id = case.get("id") if isinstance(case, Mapping) else None
+        if (
+            not isinstance(case_id, str)
+            or self._pending_handles.get(case_id) is not handle
+        ):
+            raise LocalProductionExecutorError(
+                "production retrieval handle is invalid or already consumed"
+            )
+        self._pending_handles.pop(case_id)
+        case_started = handle["case_started"]
+        principal = handle["principal"]
+        workspace = handle["workspace"]
+        project = handle["project"]
+        document_ids = handle["document_ids"]
+        version_ids = handle["version_ids"]
+        job_ids = handle["job_ids"]
+        ingestion_ms = handle["ingestion_ms"]
+        retrieval = handle["retrieval"]
+        chunk_resolver = handle["chunk_resolver"]
+        retrieval_ms = handle["retrieval_ms"]
+        IngestionAttempt = self._modules["IngestionAttempt"]
+        StorageObject = self._modules["StorageObject"]
 
         answer_started = time.perf_counter()
         conversation_id = self._modules["ensure_conversation"](
@@ -746,6 +804,11 @@ class _ProductionRuntime:
             "error_code": None,
         }
 
+    def execute_case(self, case: Mapping[str, Any]) -> dict[str, Any]:
+        """Compatibility path for injected single-case callers."""
+
+        return self.answer_case(self.retrieve_case(case))
+
     def finalize(self) -> None:
         if not self._prepared or self._finalized:
             raise LocalProductionExecutorError(
@@ -753,6 +816,10 @@ class _ProductionRuntime:
             )
         error: Exception | None = None
         try:
+            if self._pending_handles:
+                raise LocalProductionExecutorError(
+                    "production runtime has unanswered retrieval handles"
+                )
             StorageObject = self._modules["StorageObject"]
             rows = self.db.query(StorageObject.storage_key, StorageObject.status).all()
             registered = _expected_storage_keys(rows)
@@ -845,6 +912,48 @@ class ProductionCoreExecutor:
                 "executor/provider lifecycle identity is invalid"
             )
         return self._runtime.execute_case(case)
+
+    def phase_one(
+        self,
+        case: Mapping[str, Any],
+        *,
+        embedding_provider: Any,
+        observe_request: Callable[[dict[str, Any]], None],
+    ) -> Any:
+        del observe_request  # Provider is already bound to the runner observer.
+        if (
+            self._runtime is None
+            or self._finalized
+            or embedding_provider is not self._embedding_provider
+        ):
+            raise LocalProductionExecutorError(
+                "executor/provider lifecycle identity is invalid"
+            )
+        return self._runtime.retrieve_case(case)
+
+    def phase_two(
+        self,
+        case: Mapping[str, Any],
+        *,
+        handle: Any,
+        generation_client: Any,
+        observe_request: Callable[[dict[str, Any]], None],
+    ) -> dict[str, Any]:
+        del observe_request  # Provider is already bound to the runner observer.
+        if (
+            self._runtime is None
+            or self._finalized
+            or generation_client is not self._generation_client
+        ):
+            raise LocalProductionExecutorError(
+                "executor/provider lifecycle identity is invalid"
+            )
+        handle_case = handle.get("case", handle) if isinstance(handle, Mapping) else None
+        if not isinstance(handle_case, Mapping) or handle_case.get("id") != case.get("id"):
+            raise LocalProductionExecutorError(
+                "executor retrieval handle does not match the case"
+            )
+        return self._runtime.answer_case(handle)
 
     def attestation(self) -> dict[str, str]:
         if self._runtime is None:

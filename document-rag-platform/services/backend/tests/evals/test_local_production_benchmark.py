@@ -185,6 +185,28 @@ def _pack(tmp_path: Path) -> tuple[Path, str]:
     return root, pack_module.bundle_descriptor(root)["sha256"]
 
 
+def _pack_two(tmp_path: Path) -> tuple[Path, str]:
+    root, _sha = _pack(tmp_path)
+    execution_path = root / "execution/cases.jsonl"
+    label_path = root / "labels/golden.jsonl"
+    first_case = json.loads(execution_path.read_text())
+    second_case = json.loads(execution_path.read_text())
+    second_case["id"] = "case-2"
+    second_case["documents"][0]["document_id"] = "doc-2"
+    second_case["documents"][0]["filename"] = "fact-two.txt"
+    first_label = json.loads(label_path.read_text())
+    second_label = json.loads(label_path.read_text())
+    second_label["id"] = "case-2"
+    second_label["expected_source_constraints"][0]["document_id"] = "doc-2"
+    execution_path.write_text(
+        json.dumps(first_case) + "\n" + json.dumps(second_case) + "\n"
+    )
+    label_path.write_text(
+        json.dumps(first_label) + "\n" + json.dumps(second_label) + "\n"
+    )
+    return root, pack_module.bundle_descriptor(root)["sha256"]
+
+
 def _env(tmp_path: Path, pack_root: Path, pack_sha: str) -> dict[str, str]:
     output = tmp_path / "report.json"
     return {
@@ -246,7 +268,7 @@ def test_default_provider_factory_observes_both_exact_local_adapters(
         return None
 
     monkeypatch.setattr(runner, "LocalBgeProvider", embedding)
-    monkeypatch.setattr(runner, "LocalQwenClient", generation)
+    monkeypatch.setattr(runner, "DeferredLocalQwenClient", generation)
     runner._provider_factory(
         {
             "env": {
@@ -266,6 +288,7 @@ def test_default_provider_factory_observes_both_exact_local_adapters(
     assert (
         captured["generation"]["max_output_tokens"]
         == runner.LOCAL_GENERATION_MAX_OUTPUT_TOKENS
+        == 256
     )
     assert captured["generation"]["request_observer"] is observer
 
@@ -293,6 +316,426 @@ def test_happy_path_writes_only_bounded_v2_report(tmp_path):
     serialized = json.dumps(report)
     for secret in ("approved fact", "private-reviewer", "private notes", "test-secret"):
         assert secret not in serialized
+
+
+def test_config_hash_binds_phased_generation_token_limit(tmp_path, monkeypatch):
+    pack_root, pack_sha = _pack(tmp_path)
+    first_env = _env(tmp_path, pack_root, pack_sha)
+    first = runner.execute(
+        first_env, case_executor=FakeExecutor(), provider_factory=_providers
+    )
+
+    second_env = dict(first_env)
+    second_env["CV_EVAL_OUTPUT"] = str(tmp_path / "second-report.json")
+    monkeypatch.setattr(runner, "LOCAL_GENERATION_MAX_OUTPUT_TOKENS", 127)
+    second = runner.execute(
+        second_env, case_executor=FakeExecutor(), provider_factory=_providers
+    )
+
+    assert runner.TOOL_VERSION == "1.1.0"
+    assert first["config_hash"] != second["config_hash"]
+
+
+def test_phased_runner_completes_all_retrieval_before_release_and_answers(
+    tmp_path, monkeypatch
+):
+    pack_root, pack_sha = _pack_two(tmp_path)
+    env = _env(tmp_path, pack_root, pack_sha)
+    env["CV_EVAL_PRIVATE_PACK_RECORDS"] = "2"
+    env["CV_EVAL_MAX_PROVIDER_CALLS"] = "8"
+    events = []
+    original_labels = runner.LocalBenchmarkPack.load_labels
+
+    def labels(self):
+        events.append("labels")
+        return original_labels(self)
+
+    monkeypatch.setattr(runner.LocalBenchmarkPack, "load_labels", labels)
+
+    class Embedding(FakeEmbedding):
+        def __init__(self, observer):
+            super().__init__()
+            self.observer = observer
+            self.calls = 0
+
+        def request(self, case_id):
+            self.calls += 1
+            events.append(("retrieve", case_id))
+            self.observer(
+                {
+                    "ordinal": self.calls,
+                    "kind": "query",
+                    "model": runner.BGE_IDENTITY,
+                    "item_count": 1,
+                    "byte_count": 8,
+                    "token_count": 2,
+                    "payload_sha256": str(self.calls) * 64,
+                }
+            )
+
+        def close(self):
+            events.append("embedding_close")
+
+        def report(self):
+            value = super().report()
+            value["counters"].update(
+                batch_calls=0,
+                batch_tokens=0,
+                query_calls=self.calls,
+                query_tokens=self.calls * 2,
+            )
+            return value
+
+    class Generation(FakeGeneration):
+        def __init__(self, observer):
+            super().__init__()
+            self.observer = observer
+            self.calls = 0
+            self.loaded = False
+
+        def request(self, case_id):
+            if not self.loaded:
+                self.loaded = True
+                events.append("generation_load")
+            self.calls += 1
+            events.append(("answer", case_id))
+            self.observer(
+                {
+                    "ordinal": self.calls,
+                    "kind": "generation",
+                    "model": runner.QWEN_IDENTITY,
+                    "field_names": ["input"],
+                    "byte_counts": {"input": 8},
+                    "token_counts": {"prompt": 2, "maximum_output": 256},
+                    "payload_sha256": str(self.calls + 2) * 64,
+                }
+            )
+
+        def report(self):
+            value = super().report()
+            value["counters"].update(
+                generation_calls=self.calls,
+                prompt_tokens=self.calls * 2,
+                generated_tokens=self.calls,
+            )
+            return value
+
+        def close(self):
+            events.append("generation_close")
+
+    class Executor(FakeExecutor):
+        def provenance(self):
+            return {
+                **super().provenance(),
+                "model_residency_strategy": "phased",
+            }
+
+        def phase_one(self, case, *, embedding_provider, observe_request):
+            del observe_request
+            embedding_provider.request(case["id"])
+            return {"id": case["id"]}
+
+        def phase_two(
+            self, case, *, handle, generation_client, observe_request
+        ):
+            del observe_request
+            assert handle["id"] == case["id"]
+            generation_client.request(case["id"])
+            value = super().__call__(
+                case,
+                embedding_provider=None,
+                generation_client=None,
+                observe_request=lambda _event: None,
+            )
+            value["retrieved_source_ids"] = [
+                case["documents"][0]["document_id"]
+            ]
+            value["cited_source_ids"] = list(value["retrieved_source_ids"])
+            return value
+
+        def finalize(self):
+            events.append("finalize")
+
+    def providers(_config, observer):
+        return Embedding(observer), Generation(observer)
+
+    monkeypatch.setattr(
+        runner, "_cleanup_local_model_memory", lambda: events.append("memory_cleanup")
+    )
+    runner.execute(env, case_executor=Executor(), provider_factory=providers)
+    assert events == [
+        ("retrieve", "case-1"),
+        ("retrieve", "case-2"),
+        "embedding_close",
+        "memory_cleanup",
+        "generation_load",
+        ("answer", "case-1"),
+        ("answer", "case-2"),
+        "finalize",
+        "generation_close",
+        "labels",
+    ]
+
+
+def test_repeated_ledger_selection_preserves_both_phase_hashes():
+    ledger = runner._ObservedLedger({"max_provider_calls": 4})
+    ledger.select("case-1")
+    ledger.observe(
+        {
+            "ordinal": 1,
+            "kind": "query",
+            "model": runner.BGE_IDENTITY,
+            "item_count": 1,
+            "byte_count": 8,
+            "token_count": 2,
+            "payload_sha256": "1" * 64,
+        }
+    )
+    first = list(ledger.events["case-1"])
+    ledger.select("case-1")
+    ledger.observe(
+        {
+            "ordinal": 1,
+            "kind": "generation",
+            "model": runner.QWEN_IDENTITY,
+            "field_names": ["input"],
+            "byte_counts": {"input": 8},
+            "token_counts": {"prompt": 2, "maximum_output": 256},
+            "payload_sha256": "2" * 64,
+        }
+    )
+    assert ledger.events["case-1"][:1] == first
+    assert len(ledger.events["case-1"]) == 2
+    assert len(ledger.records(["case-1"])[0]["request_sha256"]) == 64
+
+
+def test_duration_is_checked_after_each_case(tmp_path):
+    pack_root, pack_sha = _pack(tmp_path)
+    env = _env(tmp_path, pack_root, pack_sha)
+    env["CV_EVAL_MAX_DURATION_SECONDS"] = "60"
+    ticks = iter((0.0, 1.0, 61.0))
+    with pytest.raises(runner.LocalProductionBenchmarkError, match="duration"):
+        runner.execute(
+            env,
+            case_executor=FakeExecutor(),
+            provider_factory=_providers,
+            clock=lambda: next(ticks),
+        )
+    assert not Path(env["CV_EVAL_OUTPUT"]).exists()
+
+
+@pytest.mark.parametrize(
+    ("failure", "message", "expected_events"),
+    [
+        (
+            "phase_one",
+            "retrieval phase",
+            ["phase_one", "finalize", "generation_close", "embedding_close"],
+        ),
+        (
+            "phase_two",
+            "answer phase",
+            [
+                "phase_one",
+                "embedding_close",
+                "memory_cleanup",
+                "phase_two",
+                "finalize",
+                "generation_close",
+            ],
+        ),
+        (
+            "cleanup",
+            "cleanup failure",
+            [
+                "phase_one",
+                "embedding_close",
+                "memory_cleanup",
+                "finalize",
+                "generation_close",
+            ],
+        ),
+    ],
+)
+def test_phased_failures_finalize_close_and_never_open_labels(
+    tmp_path, monkeypatch, failure, message, expected_events
+):
+    pack_root, pack_sha = _pack(tmp_path)
+    env = _env(tmp_path, pack_root, pack_sha)
+    events = []
+    labels_called = False
+
+    def labels(_self):
+        nonlocal labels_called
+        labels_called = True
+        raise AssertionError("golden labels must remain closed")
+
+    monkeypatch.setattr(runner.LocalBenchmarkPack, "load_labels", labels)
+
+    class Embedding(FakeEmbedding):
+        def __init__(self, observer):
+            super().__init__()
+            self.observer = observer
+
+        def request(self):
+            self.observer(
+                {
+                    "ordinal": 1,
+                    "kind": "query",
+                    "model": runner.BGE_IDENTITY,
+                    "item_count": 1,
+                    "byte_count": 8,
+                    "token_count": 2,
+                    "payload_sha256": "1" * 64,
+                }
+            )
+
+        def close(self):
+            events.append("embedding_close")
+
+    class Generation(FakeGeneration):
+        def __init__(self, observer):
+            super().__init__()
+            self.observer = observer
+
+        def request(self):
+            self.observer(
+                {
+                    "ordinal": 1,
+                    "kind": "generation",
+                    "model": runner.QWEN_IDENTITY,
+                    "field_names": ["input"],
+                    "byte_counts": {"input": 8},
+                    "token_counts": {"prompt": 2, "maximum_output": 256},
+                    "payload_sha256": "2" * 64,
+                }
+            )
+
+        def close(self):
+            events.append("generation_close")
+
+    class Executor(FakeExecutor):
+        def provenance(self):
+            return {
+                **super().provenance(),
+                "model_residency_strategy": "phased",
+            }
+
+        def phase_one(self, case, *, embedding_provider, observe_request):
+            del observe_request
+            events.append("phase_one")
+            embedding_provider.request()
+            if failure == "phase_one":
+                raise RuntimeError("injected phase-one failure")
+            return {"id": case["id"]}
+
+        def phase_two(
+            self, case, *, handle, generation_client, observe_request
+        ):
+            del observe_request
+            assert handle["id"] == case["id"]
+            events.append("phase_two")
+            generation_client.request()
+            raise RuntimeError("injected phase-two failure")
+
+        def finalize(self):
+            events.append("finalize")
+
+    def providers(_config, observer):
+        return Embedding(observer), Generation(observer)
+
+    def cleanup():
+        events.append("memory_cleanup")
+        if failure == "cleanup":
+            raise runner.LocalProductionBenchmarkError("injected cleanup failure")
+
+    monkeypatch.setattr(runner, "_cleanup_local_model_memory", cleanup)
+    with pytest.raises(runner.LocalProductionBenchmarkError, match=message):
+        runner.execute(
+            env,
+            case_executor=Executor(),
+            provider_factory=providers,
+        )
+
+    assert events == expected_events
+    assert labels_called is False
+    assert not Path(env["CV_EVAL_OUTPUT"]).exists()
+
+
+def test_phased_duration_is_checked_after_answer_phase(tmp_path, monkeypatch):
+    pack_root, pack_sha = _pack(tmp_path)
+    env = _env(tmp_path, pack_root, pack_sha)
+    labels_called = False
+
+    def labels(_self):
+        nonlocal labels_called
+        labels_called = True
+        raise AssertionError("golden labels must remain closed")
+
+    monkeypatch.setattr(runner.LocalBenchmarkPack, "load_labels", labels)
+    monkeypatch.setattr(runner, "_cleanup_local_model_memory", lambda: None)
+
+    class Embedding(FakeEmbedding):
+        def close(self):
+            return None
+
+    class Executor(FakeExecutor):
+        def provenance(self):
+            return {
+                **super().provenance(),
+                "model_residency_strategy": "phased",
+            }
+
+        def phase_one(self, case, *, embedding_provider, observe_request):
+            observe_request(
+                {
+                    "ordinal": 1,
+                    "kind": "query",
+                    "model": runner.BGE_IDENTITY,
+                    "item_count": 1,
+                    "byte_count": 8,
+                    "token_count": 2,
+                    "payload_sha256": "1" * 64,
+                }
+            )
+            return {"id": case["id"]}
+
+        def phase_two(
+            self, case, *, handle, generation_client, observe_request
+        ):
+            assert handle["id"] == case["id"]
+            observe_request(
+                {
+                    "ordinal": 1,
+                    "kind": "generation",
+                    "model": runner.QWEN_IDENTITY,
+                    "field_names": ["input"],
+                    "byte_counts": {"input": 8},
+                    "token_counts": {"prompt": 2, "maximum_output": 256},
+                    "payload_sha256": "2" * 64,
+                }
+            )
+            return super().__call__(
+                case,
+                embedding_provider=None,
+                generation_client=generation_client,
+                observe_request=lambda _event: None,
+            )
+
+    def providers(_config, _observer):
+        return Embedding(), FakeGeneration()
+
+    ticks = iter((0.0, 1.0, 2.0, 3.0, 61.0))
+    with pytest.raises(runner.LocalProductionBenchmarkError, match="duration"):
+        runner.execute(
+            env,
+            case_executor=Executor(),
+            provider_factory=providers,
+            clock=lambda: next(ticks),
+        )
+
+    assert labels_called is False
+    assert not Path(env["CV_EVAL_OUTPUT"]).exists()
 
 
 def test_label_only_change_cannot_change_execution_identity(tmp_path):
