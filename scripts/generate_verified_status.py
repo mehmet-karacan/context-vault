@@ -11,7 +11,7 @@ import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -44,7 +44,22 @@ REQUIRED_CI_WORKFLOWS = {
     "ci-rag-contract",
     "ci-security",
 }
-REQUIRED_STATUS_CHECKS = REQUIRED_CI_WORKFLOWS | {"commit-ownership"}
+CI_WORKFLOW_PATHS = {
+    "ci-backend": ".github/workflows/ci-backend.yml",
+    "ci-frontend": ".github/workflows/ci-frontend.yml",
+    "ci-rag-contract": ".github/workflows/ci-rag-eval.yml",
+    "ci-security": ".github/workflows/ci-security.yml",
+}
+REQUIRED_STATUS_CHECKS = {
+    "backend",
+    "frontend",
+    "offline-contract-fixture",
+    "supply-chain",
+    "codeql (python)",
+    "codeql (javascript-typescript)",
+    "check-ownership",
+}
+GitHubGet = Callable[[str], dict[str, Any]]
 
 
 def git(*args: str) -> str:
@@ -150,7 +165,47 @@ def _remote_receipt(path: Path) -> tuple[dict[str, Any] | None, dict[str, Any]]:
     return payload, result
 
 
-def inspect_remote_ci_receipt(path: Path, *, head: str) -> dict[str, Any]:
+def github_api(endpoint: str) -> dict[str, Any]:
+    """Read one authenticated GitHub REST resource, failing closed."""
+    try:
+        completed = subprocess.run(
+            [
+                "gh",
+                "api",
+                "--method",
+                "GET",
+                "--header",
+                "Accept: application/vnd.github+json",
+                "--header",
+                "X-GitHub-Api-Version: 2022-11-28",
+                endpoint,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        payload = json.loads(completed.stdout)
+    except (
+        FileNotFoundError,
+        json.JSONDecodeError,
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+    ) as error:
+        raise RuntimeError("authenticated GitHub API lookup failed") from error
+    if not isinstance(payload, dict):
+        raise RuntimeError("authenticated GitHub API response is not an object")
+    return payload
+
+
+def _github_repository(payload: dict[str, Any]) -> str | None:
+    repository = payload.get("repository")
+    return repository.get("full_name") if isinstance(repository, dict) else None
+
+
+def inspect_remote_ci_receipt(
+    path: Path, *, head: str, github_get: GitHubGet = github_api
+) -> dict[str, Any]:
     payload, result = _remote_receipt(path)
     if payload is None:
         return result
@@ -163,9 +218,13 @@ def inspect_remote_ci_receipt(path: Path, *, head: str) -> dict[str, Any]:
     for field, value in expected.items():
         if payload.get(field) != value:
             result["errors"].append(f"{field} must equal {value!r}")
+    if result["errors"]:
+        result["successful_workflows"] = []
+        return result
 
     runs = payload.get("runs")
     successful: set[str] = set()
+    seen_run_ids: set[int] = set()
     if not isinstance(runs, list):
         result["errors"].append("runs must be a list")
     else:
@@ -180,17 +239,82 @@ def inspect_remote_ci_receipt(path: Path, *, head: str) -> dict[str, Any]:
                 result["errors"].append(f"{name} is not bound to exact HEAD")
             if run.get("conclusion") != "success":
                 result["errors"].append(f"{name} conclusion is not success")
+            if run.get("status") != "completed":
+                result["errors"].append(f"{name} status is not completed")
             if run.get("event") not in {"push", "pull_request"}:
                 result["errors"].append(f"{name} event is not automatic")
-            if not isinstance(run.get("run_id"), int) or run["run_id"] <= 0:
+            workflow_id = run.get("workflow_id")
+            if not isinstance(workflow_id, int) or workflow_id <= 0:
+                result["errors"].append(f"{name} workflow_id is invalid")
+            run_attempt = run.get("run_attempt")
+            if not isinstance(run_attempt, int) or run_attempt <= 0:
+                result["errors"].append(f"{name} run_attempt is invalid")
+            run_id = run.get("run_id")
+            if not isinstance(run_id, int) or run_id <= 0:
                 result["errors"].append(f"{name} run_id is invalid")
+            elif run_id in seen_run_ids:
+                result["errors"].append(f"{name} run_id is duplicated")
+            else:
+                seen_run_ids.add(run_id)
             run_url = run.get("run_url")
             if not isinstance(run_url, str) or not run_url.startswith(
                 "https://github.com/mehmet-karacan/context-vault/actions/runs/"
             ):
                 result["errors"].append(f"{name} run_url is invalid")
-            if not any(error.startswith(name) for error in result["errors"]):
-                successful.add(name)
+            if any(error.startswith(name) for error in result["errors"]):
+                continue
+            try:
+                remote_run = github_get(f"repos/{REPOSITORY_ID}/actions/runs/{run_id}")
+                remote_workflow = github_get(
+                    f"repos/{REPOSITORY_ID}/actions/workflows/{workflow_id}"
+                )
+            except RuntimeError:
+                result["errors"].append(f"{name} GitHub API lookup failed")
+                continue
+            authoritative = {
+                "id": run_id,
+                "name": name,
+                "head_sha": head,
+                "status": "completed",
+                "conclusion": "success",
+                "event": run.get("event"),
+                "workflow_id": workflow_id,
+                "run_attempt": run_attempt,
+                "html_url": run_url,
+                "repository": REPOSITORY_ID,
+            }
+            observed = {
+                "id": remote_run.get("id"),
+                "name": remote_run.get("name"),
+                "head_sha": remote_run.get("head_sha"),
+                "status": remote_run.get("status"),
+                "conclusion": remote_run.get("conclusion"),
+                "event": remote_run.get("event"),
+                "workflow_id": remote_run.get("workflow_id"),
+                "run_attempt": remote_run.get("run_attempt"),
+                "html_url": remote_run.get("html_url"),
+                "repository": _github_repository(remote_run),
+            }
+            if observed != authoritative:
+                result["errors"].append(
+                    f"{name} receipt does not match authenticated GitHub API state"
+                )
+                continue
+            expected_workflow = {
+                "id": workflow_id,
+                "name": name,
+                "path": CI_WORKFLOW_PATHS[name],
+                "state": "active",
+            }
+            observed_workflow = {
+                field: remote_workflow.get(field) for field in expected_workflow
+            }
+            if observed_workflow != expected_workflow:
+                result["errors"].append(
+                    f"{name} workflow does not match authenticated GitHub API state"
+                )
+                continue
+            successful.add(name)
     missing = sorted(REQUIRED_CI_WORKFLOWS - successful)
     if missing:
         result["errors"].append(f"missing successful workflows: {', '.join(missing)}")
@@ -199,7 +323,72 @@ def inspect_remote_ci_receipt(path: Path, *, head: str) -> dict[str, Any]:
     return result
 
 
-def inspect_main_ruleset_receipt(path: Path, *, head: str) -> dict[str, Any]:
+def _rules_by_type(ruleset: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    rules = ruleset.get("rules")
+    if not isinstance(rules, list):
+        return {}
+    return {
+        rule["type"]: rule
+        for rule in rules
+        if isinstance(rule, dict) and isinstance(rule.get("type"), str)
+    }
+
+
+def _ruleset_targets_main(ruleset: dict[str, Any]) -> bool:
+    conditions = ruleset.get("conditions")
+    ref_name = conditions.get("ref_name") if isinstance(conditions, dict) else None
+    if not isinstance(ref_name, dict):
+        return False
+    include = ref_name.get("include")
+    exclude = ref_name.get("exclude")
+    if not isinstance(include, list) or not isinstance(exclude, list):
+        return False
+    targets_main = "~DEFAULT_BRANCH" in include or "refs/heads/main" in include
+    excludes_main = "~DEFAULT_BRANCH" in exclude or "refs/heads/main" in exclude
+    return targets_main and not excludes_main
+
+
+def _ruleset_status_checks(ruleset: dict[str, Any]) -> tuple[set[str], bool]:
+    status_rule = _rules_by_type(ruleset).get("required_status_checks", {})
+    parameters = status_rule.get("parameters")
+    if not isinstance(parameters, dict):
+        return set(), False
+    raw_checks = parameters.get("required_status_checks")
+    checks = {
+        item["context"]
+        for item in raw_checks or []
+        if isinstance(item, dict) and isinstance(item.get("context"), str)
+    }
+    return checks, parameters.get("strict_required_status_checks_policy") is True
+
+
+def _ruleset_pull_request_policy(ruleset: dict[str, Any]) -> tuple[bool, bool]:
+    pull_rule = _rules_by_type(ruleset).get("pull_request", {})
+    parameters = pull_rule.get("parameters")
+    if not isinstance(parameters, dict):
+        return False, False
+    return True, parameters.get("required_review_thread_resolution") is True
+
+
+def _ruleset_owner_only_bypass(ruleset: dict[str, Any]) -> bool:
+    actors = ruleset.get("bypass_actors")
+    if not isinstance(actors, list) or not actors:
+        return False
+    # GitHub's repository role id 5 is the Admin role. This personal repository has
+    # one administrator/owner, so this is the only remotely enforceable owner-only
+    # bypass representation; the emergency-receipt procedure remains documented.
+    return all(
+        isinstance(actor, dict)
+        and actor.get("actor_type") == "RepositoryRole"
+        and actor.get("actor_id") == 5
+        and actor.get("bypass_mode") == "always"
+        for actor in actors
+    )
+
+
+def inspect_main_ruleset_receipt(
+    path: Path, *, head: str, github_get: GitHubGet = github_api
+) -> dict[str, Any]:
     payload, result = _remote_receipt(path)
     if payload is None:
         return result
@@ -216,7 +405,6 @@ def inspect_main_ruleset_receipt(path: Path, *, head: str) -> dict[str, Any]:
         "deletion_allowed": False,
         "conversation_resolution_required": True,
         "bypass_policy": "owner_emergency_receipt_only",
-        "direct_push_probe": "blocked",
     }
     for field, value in expected.items():
         if payload.get(field) != value:
@@ -233,8 +421,68 @@ def inspect_main_ruleset_receipt(path: Path, *, head: str) -> dict[str, Any]:
     ruleset_id = payload.get("ruleset_id")
     if not isinstance(ruleset_id, int) or ruleset_id <= 0:
         result["errors"].append("ruleset_id must be a positive integer")
+    if result["errors"]:
+        result["required_status_checks"] = sorted(set(checks))
+        return result
+
+    try:
+        ruleset = github_get(f"repos/{REPOSITORY_ID}/rulesets/{ruleset_id}")
+        branch = github_get(f"repos/{REPOSITORY_ID}/branches/main")
+    except RuntimeError:
+        result["errors"].append("authenticated GitHub API lookup failed")
+        result["required_status_checks"] = sorted(set(checks))
+        return result
+
+    rules = _rules_by_type(ruleset)
+    remote_checks, strict_checks = _ruleset_status_checks(ruleset)
+    pr_required, conversation_resolution = _ruleset_pull_request_policy(ruleset)
+    branch_commit = branch.get("commit")
+    branch_sha = branch_commit.get("sha") if isinstance(branch_commit, dict) else None
+    remote_state = {
+        "ruleset_id": ruleset.get("id"),
+        "target": ruleset.get("target"),
+        "source_type": ruleset.get("source_type"),
+        "source": ruleset.get("source"),
+        "enforcement": ruleset.get("enforcement"),
+        "targets_main": _ruleset_targets_main(ruleset),
+        "main_head_sha": branch_sha,
+        "pull_request_required": pr_required,
+        "required_branch_up_to_date": strict_checks,
+        "force_push_allowed": "non_fast_forward" not in rules,
+        "deletion_allowed": "deletion" not in rules,
+        "conversation_resolution_required": conversation_resolution,
+        "owner_only_bypass": _ruleset_owner_only_bypass(ruleset),
+    }
+    expected_remote_state = {
+        "ruleset_id": ruleset_id,
+        "target": "branch",
+        "source_type": "Repository",
+        "source": REPOSITORY_ID,
+        "enforcement": "active",
+        "targets_main": True,
+        "main_head_sha": head,
+        "pull_request_required": True,
+        "required_branch_up_to_date": True,
+        "force_push_allowed": False,
+        "deletion_allowed": False,
+        "conversation_resolution_required": True,
+        "owner_only_bypass": True,
+    }
+    if remote_state != expected_remote_state:
+        result["errors"].append(
+            "receipt does not match authenticated GitHub ruleset/main state"
+        )
+    if set(checks) != remote_checks:
+        result["errors"].append(
+            "receipt status checks do not match authenticated GitHub ruleset"
+        )
+    missing_remote = sorted(REQUIRED_STATUS_CHECKS - remote_checks)
+    if missing_remote:
+        result["errors"].append(
+            f"GitHub ruleset misses required status checks: {', '.join(missing_remote)}"
+        )
     result["valid"] = not result["errors"]
-    result["required_status_checks"] = sorted(set(checks))
+    result["required_status_checks"] = sorted(remote_checks)
     return result
 
 

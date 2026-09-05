@@ -71,8 +71,11 @@ def _valid_ci_receipt(module, head: str) -> dict:
                 "workflow": workflow,
                 "head_sha": head,
                 "conclusion": "success",
+                "status": "completed",
                 "event": "push",
                 "run_id": index,
+                "workflow_id": 100 + index,
+                "run_attempt": 1,
                 "run_url": (
                     "https://github.com/mehmet-karacan/context-vault/actions/runs/"
                     f"{index}"
@@ -81,6 +84,36 @@ def _valid_ci_receipt(module, head: str) -> dict:
             for index, workflow in enumerate(sorted(module.REQUIRED_CI_WORKFLOWS), 1)
         ],
     }
+
+
+def _ci_api(module, payload: dict):
+    runs = {run["run_id"]: run for run in payload["runs"]}
+    workflows = {run["workflow_id"]: run for run in payload["runs"]}
+
+    def get(endpoint: str) -> dict:
+        if "/actions/workflows/" in endpoint:
+            run = workflows[int(endpoint.rsplit("/", 1)[1])]
+            return {
+                "id": run["workflow_id"],
+                "name": run["workflow"],
+                "path": module.CI_WORKFLOW_PATHS[run["workflow"]],
+                "state": "active",
+            }
+        run = runs[int(endpoint.rsplit("/", 1)[1])]
+        return {
+            "id": run["run_id"],
+            "name": run["workflow"],
+            "head_sha": run["head_sha"],
+            "conclusion": run["conclusion"],
+            "status": run["status"],
+            "event": run["event"],
+            "workflow_id": run["workflow_id"],
+            "run_attempt": run["run_attempt"],
+            "html_url": run["run_url"],
+            "repository": {"full_name": "mehmet-karacan/context-vault"},
+        }
+
+    return get
 
 
 def test_remote_ci_receipt_rejects_presence_only_or_wrong_head(tmp_path: Path) -> None:
@@ -104,10 +137,88 @@ def test_remote_ci_receipt_requires_every_successful_automatic_run(
     payload = _valid_ci_receipt(module, head)
     payload["runs"][0]["event"] = "workflow_dispatch"
     _write_json(path, payload)
-    assert module.inspect_remote_ci_receipt(path, head=head)["valid"] is False
+    assert (
+        module.inspect_remote_ci_receipt(
+            path, head=head, github_get=_ci_api(module, payload)
+        )["valid"]
+        is False
+    )
 
-    _write_json(path, _valid_ci_receipt(module, head))
-    assert module.inspect_remote_ci_receipt(path, head=head)["valid"] is True
+    payload = _valid_ci_receipt(module, head)
+    _write_json(path, payload)
+    assert (
+        module.inspect_remote_ci_receipt(
+            path, head=head, github_get=_ci_api(module, payload)
+        )["valid"]
+        is True
+    )
+
+
+def test_hand_authored_ci_receipt_fails_when_github_disagrees(tmp_path: Path) -> None:
+    module = _module()
+    head = "a" * 40
+    path = tmp_path / "ci.json"
+    payload = _valid_ci_receipt(module, head)
+    _write_json(path, payload)
+
+    def disagree(_endpoint: str) -> dict:
+        return {
+            "id": 999,
+            "name": "forged",
+            "head_sha": "b" * 40,
+            "conclusion": "success",
+            "status": "completed",
+            "event": "push",
+            "workflow_id": 999,
+            "run_attempt": 1,
+            "html_url": "https://github.com/mehmet-karacan/context-vault/actions/runs/999",
+            "repository": {"full_name": module.REPOSITORY_ID},
+        }
+
+    result = module.inspect_remote_ci_receipt(path, head=head, github_get=disagree)
+    assert result["valid"] is False
+    assert any("authenticated GitHub API state" in error for error in result["errors"])
+
+
+def _ruleset_api(module, head: str, checks: list[str]):
+    def get(endpoint: str) -> dict:
+        if endpoint.endswith("/branches/main"):
+            return {"commit": {"sha": head}}
+        return {
+            "id": 42,
+            "name": "Protect main",
+            "target": "branch",
+            "source_type": "Repository",
+            "source": module.REPOSITORY_ID,
+            "enforcement": "active",
+            "bypass_actors": [
+                {
+                    "actor_id": 5,
+                    "actor_type": "RepositoryRole",
+                    "bypass_mode": "always",
+                }
+            ],
+            "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
+            "rules": [
+                {"type": "deletion"},
+                {"type": "non_fast_forward"},
+                {
+                    "type": "pull_request",
+                    "parameters": {"required_review_thread_resolution": True},
+                },
+                {
+                    "type": "required_status_checks",
+                    "parameters": {
+                        "strict_required_status_checks_policy": True,
+                        "required_status_checks": [
+                            {"context": context} for context in checks
+                        ],
+                    },
+                },
+            ],
+        }
+
+    return get
 
 
 def test_ruleset_receipt_rejects_unprotected_or_incomplete_state(
@@ -129,14 +240,56 @@ def test_ruleset_receipt_rejects_unprotected_or_incomplete_state(
         "deletion_allowed": False,
         "conversation_resolution_required": True,
         "bypass_policy": "owner_emergency_receipt_only",
-        "direct_push_probe": "blocked",
         "required_status_checks": sorted(module.REQUIRED_STATUS_CHECKS),
         "ruleset_id": 42,
     }
     _write_json(path, payload)
-    assert module.inspect_main_ruleset_receipt(path, head=head)["valid"] is True
+    assert (
+        module.inspect_main_ruleset_receipt(
+            path,
+            head=head,
+            github_get=_ruleset_api(
+                module, head, sorted(module.REQUIRED_STATUS_CHECKS)
+            ),
+        )["valid"]
+        is True
+    )
 
     payload["force_push_allowed"] = True
     payload["required_status_checks"] = []
     _write_json(path, payload)
     assert module.inspect_main_ruleset_receipt(path, head=head)["valid"] is False
+
+
+def test_hand_authored_ruleset_receipt_fails_when_github_disagrees(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    head = "a" * 40
+    path = tmp_path / "ruleset.json"
+    payload = {
+        "schema_version": "1.0",
+        "repository": module.REPOSITORY_ID,
+        "head_sha": head,
+        "status": "PASS",
+        "branch": "main",
+        "enforcement": "active",
+        "pull_request_required": True,
+        "required_branch_up_to_date": True,
+        "force_push_allowed": False,
+        "deletion_allowed": False,
+        "conversation_resolution_required": True,
+        "bypass_policy": "owner_emergency_receipt_only",
+        "required_status_checks": sorted(module.REQUIRED_STATUS_CHECKS),
+        "ruleset_id": 42,
+    }
+    _write_json(path, payload)
+    result = module.inspect_main_ruleset_receipt(
+        path,
+        head=head,
+        github_get=_ruleset_api(
+            module, "b" * 40, sorted(module.REQUIRED_STATUS_CHECKS)
+        ),
+    )
+    assert result["valid"] is False
+    assert any("GitHub ruleset/main state" in error for error in result["errors"])
