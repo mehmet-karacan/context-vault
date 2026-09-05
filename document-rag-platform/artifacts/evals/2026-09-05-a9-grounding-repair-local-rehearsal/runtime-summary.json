@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "status": "SAFETY_PASS_QUALITY_PARTIAL_A9_OPEN",
+  "repository_revision": "ea843a176fc08781e3659371d7d8aba77c21edf6",
+  "commit_tree": "5fe374d34e7550d6406c7fbf5e2aacf597bb49c4",
+  "runner_bundle_sha256": "a15b60026feea1bf3c26c1ddf5ec4734f415e8f013029b11444995c8332572ce",
+  "environment_hash": "533f8164550c9281345341768b41afacafd7ee3e3368e2a3c4e4a2c6ac72e6ef",
+  "pack_bundle_sha256": "5f43b2cca095d9ac74ffcc452db4a37fd3088f3004554f545868f6ecfe9dab76",
+  "execution_projection_sha256": "ac11ebbd1605c90f4433e1b10411741e470f7908947d29fc24b4c24632097c35",
+  "unapproved_metadata_sha256": "270ffd72350ad937e2d3e2137592ece5d29c358e3161be734823b77e33fa0ebe",
+  "provider_report_sha256": "81a7d5e62a5097ffe99459826af5f5cf9f49828d473712058fe65d4c15fd0a44",
+  "migration_head": "cv3_00000006",
+  "run12_admission_failure": {
+    "reason": "query-type allowlist spelling mismatch",
+    "provider_invoked": false,
+    "database_domain_rows": 0,
+    "bucket_objects": 0,
+    "targets_retained": true,
+    "targets_reused": false
+  },
+  "run13": {
+    "database": "cv3_eval_a9_local_20260905_13",
+    "bucket": "cv3-eval-a9-local-20260905-13",
+    "records": 6,
+    "provider_calls": 24,
+    "input_tokens": 10759,
+    "output_tokens": 887,
+    "cost_usd": 0.0,
+    "database_counts": {
+      "projects": 6,
+      "documents": 7,
+      "document_versions": 8,
+      "completed_ingestion_jobs": 8,
+      "retrieval_runs": 6,
+      "messages": 12,
+      "message_citations": 4,
+      "message_claims": 4
+    },
+    "assistant_message_counts": {
+      "answerable": 4,
+      "malformed_response_no_answer": 2
+    },
+    "temporal_version_counts": {
+      "version_1_ready_active": 6,
+      "version_1_superseded_inactive": 1,
+      "version_2_ready_active": 1
+    },
+    "bucket_objects": 24,
+    "encrypted_objects": 24
+  },
+  "absolute_safety": "PASS",
+  "quality": "PARTIAL",
+  "owner_review_complete": false,
+  "independent_non_transfer_receipt_present": false,
+  "human_baseline_seal_present": false,
+  "release_gate_eligible": false
+}

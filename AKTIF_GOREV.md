@@ -2117,6 +2117,68 @@ kapıları nedeniyle A9 AÇIK**.
   tamamlanmadığı için §16.3, §16.6 ve §16.8 açık; A9 kapatılmadı ve sonraki aşamaya
   geçilmedi.
 
+### 16.22 A9 grounding-repair ve ikinci adversarial rehearsal kaydı — 2026-09-05
+
+Başlangıç SHA: `292d21e4279bc8904b060aee39ba4efcee383980`.
+Kaynak SHA: `ea843a176fc08781e3659371d7d8aba77c21edf6`.
+Durum: **kod doğrulaması PASS; adversarial safety PASS; kalite PARTIAL; insan/owner
+kapıları nedeniyle A9 AÇIK**.
+
+- Run11'deki `malformed_response` yolu yeniden incelendi. LocalQwen katmanının
+  strict JSON/schema onarımı ile application katmanının grounding onarımının ayrı
+  olduğu; mevcut application repair promptunun JSON Schema'da ifade edilemeyen
+  claim/etiket tutarlılık kurallarını modele açıklamadığı kanıtlandı. Ham model
+  çıktısı saklanmadığı için geçmiş run11'in exact alt ihlali sonradan uydurulmadı.
+- `answerable=true/false` şekli, `claim_text` değerinin `answer_text` içinde
+  kesintisiz bulunması, her claim'in izinli ve boş olmayan label taşıması ve
+  `used_source_labels` listesinin claims sırasındaki ilk-görülme tekilleştirmesi
+  hem ana hem application-repair promptuna eklendi. Validator gevşetilmedi, retry
+  sayısı artırılmadı ve rejected provider payload repair promptuna eklenmedi.
+- Regression testi gerçek LocalQwen test double'ı üzerinden schema-valid fakat
+  grounding-invalid çıktı → application repair → malformed JSON → internal repair
+  → valid grounded çıktı zincirini çalıştırdı; `generation_calls=2`,
+  `repair_calls=1`, üç prompt sırası ve iki rejected output'un prompt/rapora
+  taşınmaması doğrulandı. Worst-case token-budget testi genişleyen iki katmanlı
+  repair zarfını ölçüyor. Bağımsız final review `APPROVE`, P0/P1/P2 `0`.
+- Exact kaynakta focused **69 PASS**; fresh `cv3_eval_fullsuite_20260905_07` DB,
+  Redis ve absent-before-run ayrı MinIO bucket ile tam backend **1041 PASS, 2 SKIP,
+  1 bilinen Starlette uyarısı**. DB migration head `cv3_00000006`. MyPy ratchet
+  14 strict kaynak, deterministic OpenAPI, 163-package offline lock, dependency
+  audit (bilinen açık yok), Ruff, format, py_compile ve diff-check PASS.
+- İlk yeni rehearsal hedefi `run12`, temporal query-type allowlist'inde yanlış
+  `version-temporal` yazımı nedeniyle pack admission'da provider/model kurulmadan
+  fail-closed oldu. Fresh DB ve bucket'ta domain row/object `0`; hedefler silinmeden
+  tutuldu ve tekrar kullanılmadı.
+- Fresh `cv3_eval_a9_local_20260905_13` DB ve
+  `cv3-eval-a9-local-20260905-13` bucket absent doğrulandı, Alembic head'e
+  getirildi ve exact offline BGE-M3 + Qwen2.5-1.5B runner 900 saniyelik sınır
+  içinde exit `0` raporu üretti. Runner bundle
+  `a15b60026feea1bf3c26c1ddf5ec4734f415e8f013029b11444995c8332572ce`,
+  environment hash
+  `533f8164550c9281345341768b41afacafd7ee3e3368e2a3c4e4a2c6ac72e6ef`,
+  provider report SHA
+  `81a7d5e62a5097ffe99459826af5f5cf9f49828d473712058fe65d4c15fd0a44`.
+- Run13 provider call `24`, input token `10759`, output token `887`, maliyet `0`.
+  Permission/version, active-version, profile, cross-project/workspace leakage;
+  invalid citation; prompt injection; retry, duplicate, orphan ve critical/high
+  finding yine `0`. DB sayımları project `6`, document `7`, version/completed job
+  `8`, retrieval run `6`, message `12`, citation/claim `4`; bucket `24` nesne ve
+  AES-GCM envelope `24/24`. Temporal predecessor `superseded`/inactive, version 2
+  `ready`/active olarak yeniden üretildi.
+- Kalite kapanmadı: aynı reader/cross-scope vaka fail-closed
+  `malformed_response` no-answer kaldı. Aggregate Recall/MRR/citation/sufficiency
+  `0.833333`, false-negative rate `0.166667`. Grounding düzeltmesinden sonra
+  unsupported-claim rate run11 `0.166667` değerinden run13 `0.0` değerine indi;
+  bu ölçümlü kısmi iyileşmedir, quality PASS veya baseline seal değildir.
+- Public-safe kanıt:
+  `document-rag-platform/artifacts/evals/2026-09-05-a9-grounding-repair-local-rehearsal/`.
+  Raw external pack Git'e alınmadı. `golden_results_sent_to_provider=false` yalnız
+  runner iddiası olarak kaldı.
+- Açık kapılar değişmedi: owner-reviewed gerçek private pack ve exact insan
+  approval; bağımsız provider-request/golden non-transfer receipt; ilk approved
+  report için insan review ve baseline seal. Bu dış otoriteler olmadan §16.3,
+  §16.6 ve §16.8 tamamlandı işaretlenmedi; A9 kapatılmadı ve A11'e geçilmedi.
+
 ---
 
 ## 17. AŞAMA 10 — Frontend ve ürün sözleşmesi
