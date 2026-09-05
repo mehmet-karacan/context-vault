@@ -5,10 +5,20 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from pydantic import ValidationError
 
-from src.application.answer_service import generate_answer
+from src.application.answer_service import (
+    StructuredGenerationDiagnostics,
+    generate_answer,
+)
 from src.application.retrieval_service import RetrievalResult
 from src.config import settings
+from src.domain.answer import (
+    AnswerEnvelope,
+    AnswerValidationCode,
+    AnswerValidationError,
+    validate_grounding,
+)
 from src.infrastructure.retrieval.base import RetrievalCandidate
 from src.infrastructure.retrieval.no_answer import INTENT_DOCUMENT, Answerability
 
@@ -95,16 +105,106 @@ def _envelope(answer, labels):
     }
 
 
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        (
+            {
+                **_envelope("kanıt", ["S1"]),
+                "no_answer_reason": "insufficient_evidence",
+            },
+            AnswerValidationCode.ANSWERABLE_REASON_PRESENT,
+        ),
+        (
+            {**_envelope("kanıt", ["S1"]), "answer_text": " "},
+            AnswerValidationCode.ANSWERABLE_TEXT_EMPTY,
+        ),
+        (
+            {**_envelope("kanıt", ["S1"]), "claims": []},
+            AnswerValidationCode.ANSWERABLE_CLAIMS_EMPTY,
+        ),
+        (
+            {
+                "answerable": False,
+                "no_answer_reason": None,
+                "answer_text": "kaynaklarda bilgi yok",
+                "claims": [],
+                "used_source_labels": [],
+                "uncertainty": [],
+                "safety_flags": [],
+            },
+            AnswerValidationCode.UNANSWERABLE_REASON_MISSING,
+        ),
+    ],
+)
+def test_answer_shape_failures_expose_only_bounded_codes(payload, expected):
+    with pytest.raises(ValidationError) as failure:
+        AnswerEnvelope.model_validate(payload)
+
+    errors = failure.value.errors(
+        include_url=False, include_context=False, include_input=False
+    )
+    assert len(errors) == 1
+    assert errors[0]["type"] == expected.value
+    assert "kanıt" not in str(errors)
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        (
+            {
+                "answerable": False,
+                "no_answer_reason": "insufficient_evidence",
+                "answer_text": "kaynaklarda bilgi yok",
+                "claims": [{"claim_text": "SECRET", "source_labels": ["S1"]}],
+                "used_source_labels": ["S1"],
+                "uncertainty": [],
+                "safety_flags": [],
+            },
+            AnswerValidationCode.UNANSWERABLE_CITATIONS_PRESENT,
+        ),
+        (
+            _envelope("SECRET", ["S999"]),
+            AnswerValidationCode.CLAIM_SOURCE_LABELS_INVALID,
+        ),
+        (
+            {
+                **_envelope("doğrulanmış cevap", ["S1"]),
+                "claims": [{"claim_text": "SECRET", "source_labels": ["S1"]}],
+            },
+            AnswerValidationCode.CLAIM_TEXT_NOT_IN_ANSWER,
+        ),
+        (
+            {**_envelope("doğrulanmış cevap", ["S1"]), "used_source_labels": []},
+            AnswerValidationCode.USED_SOURCE_LABELS_MISMATCH,
+        ),
+    ],
+)
+def test_grounding_failures_expose_only_bounded_codes(payload, expected):
+    envelope = AnswerEnvelope.model_validate(payload)
+
+    with pytest.raises(AnswerValidationError) as failure:
+        validate_grounding(envelope, allowed_labels={"S1"})
+
+    assert failure.value.code is expected
+    assert str(failure.value) == "structured answer validation failed"
+    assert "SECRET" not in str(failure.value)
+    assert "S999" not in str(failure.value)
+
+
 def test_unknown_label_repairs_before_any_persistence():
     result = _result()
     invalid = _envelope("TOP_SECRET malformed provider output", ["S99"])
     valid = _envelope("doğrulanmış cevap", ["S1"])
     llm = StructuredLLM(invalid, valid)
+    diagnostics = StructuredGenerationDiagnostics()
     response = generate_answer(
         query=result.query,
         retrieval_result=result,
         chunk_resolver=_resolver(result),
         llm_client=llm,
+        generation_diagnostics=diagnostics,
     )
     assert response["answerable"] is True
     assert [item["label"] for item in response["citations"]] == ["S1"]
@@ -115,6 +215,7 @@ def test_unknown_label_repairs_before_any_persistence():
     assert "İzin verilen source_labels tam olarak: S1." in repair
     assert "Belge ve dosya adları source label değildir." in repair
     assert "doc-1.txt" not in repair
+    assert diagnostics.terminal_validation_code is None
 
 
 def test_only_claimed_two_of_five_sources_are_persisted():
@@ -148,15 +249,18 @@ def test_sourceless_claim_fails_closed_after_bounded_repair():
         "uncertainty": [],
         "safety_flags": [],
     }
+    diagnostics = StructuredGenerationDiagnostics()
     response = generate_answer(
         query=result.query,
         retrieval_result=result,
         chunk_resolver=_resolver(result),
         llm_client=StructuredLLM(malformed, malformed),
+        generation_diagnostics=diagnostics,
     )
     assert response["answerable"] is False
     assert response["citations"] == []
     assert response["no_answer_reason"] == "malformed_response"
+    assert diagnostics.terminal_validation_code is AnswerValidationCode.ENVELOPE_SCHEMA
 
 
 def test_injection_is_delimited_data_and_cannot_add_tools_or_labels():
@@ -197,15 +301,18 @@ def test_context_budget_keeps_whole_label_content_blocks(monkeypatch):
 @pytest.mark.parametrize("failure", [TimeoutError(), RuntimeError("partial stream")])
 def test_provider_timeout_or_partial_stream_is_safe_terminal(failure):
     result = _result()
+    diagnostics = StructuredGenerationDiagnostics()
     response = generate_answer(
         query=result.query,
         retrieval_result=result,
         chunk_resolver=_resolver(result),
         llm_client=StructuredLLM(failure),
+        generation_diagnostics=diagnostics,
     )
     assert response["answerable"] is False
     assert response["no_answer_reason"] == "provider_failure"
     assert response["citations"] == []
+    assert diagnostics.terminal_validation_code is None
 
 
 def test_remote_policy_denial_prevents_provider_call():

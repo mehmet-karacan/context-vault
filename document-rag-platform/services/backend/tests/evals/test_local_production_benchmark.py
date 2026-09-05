@@ -320,6 +320,23 @@ def test_happy_path_writes_only_bounded_v2_report(tmp_path):
         assert secret not in serialized
 
 
+def test_observation_accepts_only_bounded_answer_validation_codes():
+    value = FakeExecutor()(
+        {"id": "case-1"},
+        embedding_provider=None,
+        generation_client=None,
+        observe_request=lambda _event: None,
+    )
+    code = "answer_validation.used_source_labels_mismatch"
+    value["error_code"] = code
+
+    assert runner._observation(value, "case-1")["error_code"] == code
+
+    value["error_code"] = "secret_dynamic_code"
+    with pytest.raises(runner.LocalProductionBenchmarkError, match="error code"):
+        runner._observation(value, "case-1")
+
+
 def test_config_hash_binds_phased_generation_token_limit(tmp_path, monkeypatch):
     pack_root, pack_sha = _pack(tmp_path)
     first_env = _env(tmp_path, pack_root, pack_sha)

@@ -256,6 +256,9 @@ def test_runtime_rejects_foreign_and_replayed_retrieval_handles():
     runtime._modules = {
         "IngestionAttempt": IngestionAttempt,
         "StorageObject": StorageObject,
+        "StructuredGenerationDiagnostics": lambda: SimpleNamespace(
+            terminal_validation_code=None
+        ),
         "ensure_conversation": lambda *_args, **_kwargs: "conversation",
         "generate_answer": lambda **_kwargs: {
             "answerable": False,
@@ -486,6 +489,9 @@ def test_foreign_response_citation_is_not_silently_dropped():
     runtime._modules = {
         "IngestionAttempt": IngestionAttempt,
         "StorageObject": StorageObject,
+        "StructuredGenerationDiagnostics": lambda: SimpleNamespace(
+            terminal_validation_code=None
+        ),
         "ensure_conversation": lambda *_args, **_kwargs: "conversation",
         "generate_answer": lambda **_kwargs: {
             "answerable": True,
@@ -641,3 +647,49 @@ def test_supported_claim_count_requires_literal_support_in_every_cited_snippet()
         {"claim_text": "unsupported assertion", "source_labels": ["S1"]},
     ]
     assert module._supported_claim_count(claims, citations) == 1
+
+
+def test_validation_diagnostic_allowlist_matches_domain_contract():
+    from src.domain.answer import AnswerValidationCode
+
+    module = _module()
+
+    assert module.ANSWER_VALIDATION_ERROR_CODES == {
+        code.value for code in AnswerValidationCode
+    }
+
+
+def test_terminal_validation_diagnostic_is_bounded_and_response_consistent():
+    module = _module()
+    code = "answer_validation.claim_text_not_in_answer"
+    diagnostics = SimpleNamespace(terminal_validation_code=SimpleNamespace(value=code))
+
+    assert (
+        module._terminal_validation_error_code(
+            {"no_answer_reason": "malformed_response"}, diagnostics
+        )
+        == code
+    )
+    assert (
+        module._terminal_validation_error_code(
+            {"no_answer_reason": None},
+            SimpleNamespace(terminal_validation_code=None),
+        )
+        is None
+    )
+    with pytest.raises(module.LocalProductionExecutorError, match="lacks"):
+        module._terminal_validation_error_code(
+            {"no_answer_reason": "malformed_response"},
+            SimpleNamespace(terminal_validation_code=None),
+        )
+    with pytest.raises(module.LocalProductionExecutorError, match="inconsistent"):
+        module._terminal_validation_error_code(
+            {"no_answer_reason": "provider_failure"}, diagnostics
+        )
+    with pytest.raises(module.LocalProductionExecutorError, match="bounded"):
+        module._terminal_validation_error_code(
+            {"no_answer_reason": "malformed_response"},
+            SimpleNamespace(
+                terminal_validation_code=SimpleNamespace(value="SECRET_DYNAMIC_CODE")
+            ),
+        )

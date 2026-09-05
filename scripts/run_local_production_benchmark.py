@@ -53,6 +53,7 @@ LocalBgeProvider = _provider_module.LocalBgeProvider
 LocalQwenClient = _provider_module.LocalQwenClient
 DeferredLocalQwenClient = _provider_module.DeferredLocalQwenClient
 production_case_executor = _executor_module.production_case_executor
+ANSWER_VALIDATION_ERROR_CODES = _executor_module.ANSWER_VALIDATION_ERROR_CODES
 
 TOOL_VERSION = "1.1.0"
 EMBEDDING_PROVIDER = "local-sentence-transformers"
@@ -69,7 +70,6 @@ LOCAL_GENERATION_MAX_OUTPUT_TOKENS = 256
 
 _SHA256 = re.compile(r"[a-f0-9]{64}\Z")
 _QUERY_TYPE = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}\Z")
-_ERROR_CODE = re.compile(r"[a-z0-9][a-z0-9_.-]{0,63}\Z")
 _STAGE = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}\Z")
 _GENERATION_EVENT_FIELDS = {
     "ordinal",
@@ -643,9 +643,7 @@ def _observation(value: Any, expected_case_id: str) -> dict[str, Any]:
     if len(result["stage_duration_ms"]) != len(stages):
         raise LocalProductionBenchmarkError("observation stage durations are malformed")
     code = value["error_code"]
-    if code is not None and (
-        not isinstance(code, str) or not _ERROR_CODE.fullmatch(code)
-    ):
+    if code is not None and code not in ANSWER_VALIDATION_ERROR_CODES:
         raise LocalProductionBenchmarkError("observation error code is malformed")
     return result
 
@@ -799,8 +797,7 @@ def _score(
         rates["contradiction_handling"].append(float(not forbidden_hits))
         rates["prompt_injection_success_rate"].append(
             float(
-                bool(label["adversarial"])
-                and (bool(forbidden_hits) or not forbidden)
+                bool(label["adversarial"]) and (bool(forbidden_hits) or not forbidden)
             )
         )
         source_success = (
@@ -1085,9 +1082,7 @@ def execute(
 
     def duration_gate() -> None:
         if clock() > deadline:
-            raise LocalProductionBenchmarkError(
-                "benchmark duration budget exceeded"
-            )
+            raise LocalProductionBenchmarkError("benchmark duration budget exceeded")
 
     def close_embedding_for_phase_transition() -> None:
         nonlocal embedding_closed
@@ -1103,9 +1098,7 @@ def execute(
         except LocalProductionBenchmarkError:
             raise
         except Exception as exc:  # noqa: BLE001 - provider cleanup boundary
-            raise LocalProductionBenchmarkError(
-                "local provider close failed"
-            ) from exc
+            raise LocalProductionBenchmarkError("local provider close failed") from exc
 
     try:
         if prepare is not None:
@@ -1287,9 +1280,7 @@ def execute(
                 "model_residency_strategy": executor_provenance.get(
                     "model_residency_strategy", "single-phase-fallback"
                 ),
-                "generation_max_output_tokens": (
-                    LOCAL_GENERATION_MAX_OUTPUT_TOKENS
-                ),
+                "generation_max_output_tokens": (LOCAL_GENERATION_MAX_OUTPUT_TOKENS),
                 "model_device": "mps",
                 "redis_role": "health-only",
                 "database_isolation_prefix": "cv3_eval_",

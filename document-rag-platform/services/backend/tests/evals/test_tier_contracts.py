@@ -1592,6 +1592,31 @@ def test_successful_regression_comparison_requires_complete_valid_metrics(
     assert run_eval._finite_number(10**1000) is False
 
 
+def test_provider_report_error_distribution_is_exactly_allowlisted(
+    tmp_path, monkeypatch
+):
+    from src.domain.answer import AnswerValidationCode
+
+    _, _, report, _ = benchmark_fixture(tmp_path, monkeypatch)
+    assert run_eval.ANSWER_VALIDATION_ERROR_CODES == {
+        code.value for code in AnswerValidationCode
+    }
+    code = AnswerValidationCode.CLAIM_TEXT_NOT_IN_ANSWER.value
+    report["metrics"]["error_code_distribution"] = {code: 1}
+
+    assert run_eval._benchmark_report(report)["metrics"]["error_code_distribution"] == {
+        code: 1
+    }
+
+    report["metrics"]["error_code_distribution"] = {"secret_dynamic_code": 1}
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="error distribution"):
+        run_eval._benchmark_report(report)
+
+    report["metrics"]["error_code_distribution"] = {code: 2}
+    with pytest.raises(run_eval.EnvironmentUnavailable, match="dataset records"):
+        run_eval._benchmark_report(report)
+
+
 @pytest.mark.parametrize(
     "field,value,pre_dispatch",
     [

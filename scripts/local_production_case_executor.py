@@ -56,6 +56,19 @@ CLASSIFICATION_RANK = {
     "confidential": 2,
     "restricted": 3,
 }
+ANSWER_VALIDATION_ERROR_CODES = frozenset(
+    {
+        "answer_validation.envelope_schema",
+        "answer_validation.answerable_reason_present",
+        "answer_validation.answerable_text_empty",
+        "answer_validation.answerable_claims_empty",
+        "answer_validation.unanswerable_reason_missing",
+        "answer_validation.unanswerable_citations_present",
+        "answer_validation.claim_source_labels_invalid",
+        "answer_validation.claim_text_not_in_answer",
+        "answer_validation.used_source_labels_mismatch",
+    }
+)
 
 
 class LocalProductionExecutorError(RuntimeError):
@@ -205,6 +218,25 @@ def _supported_claim_count(
     return supported
 
 
+def _terminal_validation_error_code(
+    response: Mapping[str, Any], diagnostics: Any
+) -> str | None:
+    code = getattr(diagnostics, "terminal_validation_code", None)
+    code_value = getattr(code, "value", None)
+    malformed = response.get("no_answer_reason") == "malformed_response"
+    if malformed:
+        if code_value not in ANSWER_VALIDATION_ERROR_CODES:
+            raise LocalProductionExecutorError(
+                "malformed response lacks a bounded validation diagnostic"
+            )
+        return code_value
+    if code is not None:
+        raise LocalProductionExecutorError(
+            "validation diagnostic is inconsistent with the response"
+        )
+    return None
+
+
 class _ProductionRuntime:
     """State shared by all cases in one admitted runner process."""
 
@@ -250,6 +282,7 @@ class _ProductionRuntime:
 
             from src.application.answer_service import (
                 RAG_SYSTEM_PROMPT,
+                StructuredGenerationDiagnostics,
                 ensure_conversation,
                 generate_answer,
             )
@@ -299,6 +332,7 @@ class _ProductionRuntime:
                 "settings": settings,
                 "AnswerEnvelope": AnswerEnvelope,
                 "RAG_SYSTEM_PROMPT": RAG_SYSTEM_PROMPT,
+                "StructuredGenerationDiagnostics": StructuredGenerationDiagnostics,
                 "ensure_conversation": ensure_conversation,
                 "generate_answer": generate_answer,
                 "AcceptSourceCommand": AcceptSourceCommand,
@@ -758,6 +792,7 @@ class _ProductionRuntime:
             workspace_id=str(workspace.id),
             principal_id=str(principal.id),
         )
+        generation_diagnostics = self._modules["StructuredGenerationDiagnostics"]()
         response = self._modules["generate_answer"](
             query=case["query"],
             retrieval_result=retrieval,
@@ -768,6 +803,10 @@ class _ProductionRuntime:
             model=QWEN_IDENTITY,
             debug=False,
             feature_new_citations=True,
+            generation_diagnostics=generation_diagnostics,
+        )
+        terminal_error_code = _terminal_validation_error_code(
+            response, generation_diagnostics
         )
         self.db.commit()
         answer_ms = (time.perf_counter() - answer_started) * 1000
@@ -871,7 +910,7 @@ class _ProductionRuntime:
                 "retrieval": retrieval_ms,
                 "answer": answer_ms,
             },
-            "error_code": None,
+            "error_code": terminal_error_code,
         }
 
     def execute_case(self, case: Mapping[str, Any]) -> dict[str, Any]:

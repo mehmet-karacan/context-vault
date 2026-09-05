@@ -74,6 +74,7 @@ from src.config import settings
 from src.application.structured_prompt_contract import local_structured_prompts
 from src.domain.answer import (
     AnswerEnvelope,
+    AnswerValidationCode,
     AnswerValidationError,
     NoAnswerReason,
     validate_grounding,
@@ -96,7 +97,16 @@ __all__ = [
     "load_conversation_history",
     "NO_ANSWER_TEXT",
     "AnswerEnvelope",
+    "StructuredGenerationDiagnostics",
 ]
+
+
+@dataclass(slots=True)
+class StructuredGenerationDiagnostics:
+    """Content-free terminal diagnostics for trusted local evaluation."""
+
+    terminal_validation_code: AnswerValidationCode | None = None
+
 
 #: Source types whose evidence block is formatted as the code variant
 #: (Repository/Dosya/Sembol/Satırlar) instead of the document variant
@@ -581,6 +591,22 @@ def _parse_envelope(payload: Any, labels: set[str]) -> AnswerEnvelope:
     return validate_grounding(envelope, allowed_labels=labels)
 
 
+def _validation_code(exc: Exception) -> AnswerValidationCode:
+    if isinstance(exc, AnswerValidationError):
+        return exc.code
+    if isinstance(exc, ValidationError) and exc.error_count() == 1:
+        error_type = exc.errors(
+            include_url=False,
+            include_context=False,
+            include_input=False,
+        )[0].get("type")
+        try:
+            return AnswerValidationCode(error_type)
+        except (TypeError, ValueError):
+            pass
+    return AnswerValidationCode.ENVELOPE_SCHEMA
+
+
 def _structured_generation(
     llm_client: Any,
     *,
@@ -591,7 +617,7 @@ def _structured_generation(
     complete = getattr(llm_client, "complete_structured", None)
     if not callable(complete):
         raise TypeError("generation adapter lacks complete_structured")
-    last_error: Exception | None = None
+    last_code = AnswerValidationCode.ENVELOPE_SCHEMA
     user_prompt = prompt["user"]
     for attempt in range(settings.ANSWER_SCHEMA_REPAIR_ATTEMPTS + 1):
         try:
@@ -603,15 +629,13 @@ def _structured_generation(
             )
             return _parse_envelope(payload, labels)
         except (ValidationError, AnswerValidationError, ValueError, TypeError) as exc:
-            last_error = exc
+            last_code = _validation_code(exc)
             if attempt >= settings.ANSWER_SCHEMA_REPAIR_ATTEMPTS:
                 break
             # Do not echo the malformed provider payload. The repair request
             # exposes only the validation class and the allowed dynamic labels.
             user_prompt = _application_repair_user(prompt["user"], list(labels))
-    raise AnswerValidationError(
-        "structured generation validation failed"
-    ) from last_error
+    raise AnswerValidationError(last_code) from None
 
 
 def _no_answer_envelope(
@@ -950,6 +974,7 @@ def generate_answer(
     feature_new_citations: bool = None,
     no_answer_text: str = NO_ANSWER_TEXT,
     conversation_history: tuple[Mapping[str, str], ...] = (),
+    generation_diagnostics: StructuredGenerationDiagnostics | None = None,
 ) -> Dict[str, Any]:
     """Orchestrate retrieval -> evidence -> LLM -> citation persistence.
 
@@ -958,6 +983,11 @@ def generate_answer(
     ``db`` is an optional DB session; when ``None`` persistence is skipped so the
     service is fully DB-free testable.
     """
+    if generation_diagnostics is not None:
+        if not isinstance(generation_diagnostics, StructuredGenerationDiagnostics):
+            raise TypeError("generation diagnostics collector is invalid")
+        if generation_diagnostics.terminal_validation_code is not None:
+            raise ValueError("generation diagnostics collector must be empty")
     if feature_new_citations is None:
         feature_new_citations = settings.FEATURE_NEW_CITATIONS
     resolve_model = getattr(llm_client, "resolve_model", None)
@@ -1081,7 +1111,9 @@ def generate_answer(
                     labels={item.label for item in usable},
                     model=selected_model,
                 )
-            except AnswerValidationError:
+            except AnswerValidationError as exc:
+                if generation_diagnostics is not None:
+                    generation_diagnostics.terminal_validation_code = exc.code
                 envelope = _no_answer_envelope(
                     NoAnswerReason.MALFORMED_RESPONSE, no_answer_text
                 )

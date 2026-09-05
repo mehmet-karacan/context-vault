@@ -6,6 +6,7 @@ from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic_core import PydanticCustomError
 
 
 class NoAnswerReason(StrEnum):
@@ -15,6 +16,24 @@ class NoAnswerReason(StrEnum):
     PROVIDER_FAILURE = "provider_failure"
     PERMISSION_DENIED = "permission_denied"
     MALFORMED_RESPONSE = "malformed_response"
+
+
+class AnswerValidationCode(StrEnum):
+    """Bounded diagnostics for structured-answer validation failures."""
+
+    ENVELOPE_SCHEMA = "answer_validation.envelope_schema"
+    ANSWERABLE_REASON_PRESENT = "answer_validation.answerable_reason_present"
+    ANSWERABLE_TEXT_EMPTY = "answer_validation.answerable_text_empty"
+    ANSWERABLE_CLAIMS_EMPTY = "answer_validation.answerable_claims_empty"
+    UNANSWERABLE_REASON_MISSING = "answer_validation.unanswerable_reason_missing"
+    UNANSWERABLE_CITATIONS_PRESENT = "answer_validation.unanswerable_citations_present"
+    CLAIM_SOURCE_LABELS_INVALID = "answer_validation.claim_source_labels_invalid"
+    CLAIM_TEXT_NOT_IN_ANSWER = "answer_validation.claim_text_not_in_answer"
+    USED_SOURCE_LABELS_MISMATCH = "answer_validation.used_source_labels_mismatch"
+
+
+def _shape_error(code: AnswerValidationCode) -> PydanticCustomError:
+    return PydanticCustomError(code.value, "structured answer shape is invalid")
 
 
 class AnswerClaim(BaseModel):
@@ -41,11 +60,13 @@ class AnswerEnvelope(BaseModel):
     def _coherent_shape(self) -> "AnswerEnvelope":
         if self.answerable:
             if self.no_answer_reason is not None:
-                raise ValueError("answerable response cannot have no_answer_reason")
-            if not self.answer_text.strip() or not self.claims:
-                raise ValueError("answerable response requires text and claims")
+                raise _shape_error(AnswerValidationCode.ANSWERABLE_REASON_PRESENT)
+            if not self.answer_text.strip():
+                raise _shape_error(AnswerValidationCode.ANSWERABLE_TEXT_EMPTY)
+            if not self.claims:
+                raise _shape_error(AnswerValidationCode.ANSWERABLE_CLAIMS_EMPTY)
         elif self.no_answer_reason is None:
-            raise ValueError("unanswerable response requires no_answer_reason")
+            raise _shape_error(AnswerValidationCode.UNANSWERABLE_REASON_MISSING)
         return self
 
     @classmethod
@@ -55,6 +76,10 @@ class AnswerEnvelope(BaseModel):
 
 class AnswerValidationError(ValueError):
     """Raised when a schema-valid envelope is not grounded in its bundle."""
+
+    def __init__(self, code: AnswerValidationCode) -> None:
+        self.code = code
+        super().__init__("structured answer validation failed")
 
 
 def validate_grounding(
@@ -66,7 +91,9 @@ def validate_grounding(
 
     if not envelope.answerable:
         if envelope.claims or envelope.used_source_labels:
-            raise AnswerValidationError("no-answer response cannot cite evidence")
+            raise AnswerValidationError(
+                AnswerValidationCode.UNANSWERABLE_CITATIONS_PRESENT
+            )
         return envelope
 
     claimed: list[str] = []
@@ -74,12 +101,14 @@ def validate_grounding(
     for claim in envelope.claims:
         labels = tuple(dict.fromkeys(claim.source_labels))
         if not labels or not set(labels).issubset(allowed_labels):
-            raise AnswerValidationError("claim contains unknown or empty source labels")
+            raise AnswerValidationError(
+                AnswerValidationCode.CLAIM_SOURCE_LABELS_INVALID
+            )
         normalized_claim = " ".join(claim.claim_text.casefold().split())
         if normalized_claim not in normalized_answer:
-            raise AnswerValidationError("claim text is not present in answer text")
+            raise AnswerValidationError(AnswerValidationCode.CLAIM_TEXT_NOT_IN_ANSWER)
         claimed.extend(label for label in labels if label not in claimed)
     used = list(dict.fromkeys(envelope.used_source_labels))
     if used != claimed or not set(used).issubset(allowed_labels):
-        raise AnswerValidationError("used_source_labels do not match grounded claims")
+        raise AnswerValidationError(AnswerValidationCode.USED_SOURCE_LABELS_MISMATCH)
     return envelope

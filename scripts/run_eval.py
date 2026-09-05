@@ -106,6 +106,19 @@ PROVIDER_MODEL_FIELDS = (
     "generation_provider",
     "generation_model",
 )
+ANSWER_VALIDATION_ERROR_CODES = frozenset(
+    {
+        "answer_validation.envelope_schema",
+        "answer_validation.answerable_reason_present",
+        "answer_validation.answerable_text_empty",
+        "answer_validation.answerable_claims_empty",
+        "answer_validation.unanswerable_reason_missing",
+        "answer_validation.unanswerable_citations_present",
+        "answer_validation.claim_source_labels_invalid",
+        "answer_validation.claim_text_not_in_answer",
+        "answer_validation.used_source_labels_mismatch",
+    }
+)
 RESERVED_RUNNER_ENV_PREFIX = "CV_EVAL_"
 EXECUTION_CONTROL_ENV_NAMES = frozenset(
     {
@@ -1232,8 +1245,7 @@ def _benchmark_report(report: Any) -> dict[str, Any]:
     safe_errors = {}
     for code, count in error_distribution.items():
         if (
-            not isinstance(code, str)
-            or not re.fullmatch(r"[a-z0-9][a-z0-9_.-]{0,63}", code)
+            code not in ANSWER_VALIDATION_ERROR_CODES
             or not isinstance(count, int)
             or isinstance(count, bool)
             or count < 0
@@ -1279,6 +1291,12 @@ def _benchmark_report(report: Any) -> dict[str, Any]:
                 "provider report has invalid query-type metrics"
             )
         safe_breakdown[name] = {metric: values[metric] for metric in required_breakdown}
+    if sum(safe_errors.values()) > sum(
+        values["records"] for values in safe_breakdown.values()
+    ):
+        raise EnvironmentUnavailable(
+            "provider report error distribution exceeds dataset records"
+        )
     usage = report.get("usage")
     if not isinstance(usage, dict):
         raise EnvironmentUnavailable("provider report lacks usage/cost metrics")
