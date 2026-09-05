@@ -37,6 +37,14 @@ HISTORICAL_PROJECTIONS = (
     "done/completed-tasks.md",
 )
 PROJECTION_SHA = re.compile(r"\*\*last_verified_sha:\*\*\s*`([0-9a-f]{40})`")
+REPOSITORY_ID = "mehmet-karacan/context-vault"
+REQUIRED_CI_WORKFLOWS = {
+    "ci-backend",
+    "ci-frontend",
+    "ci-rag-contract",
+    "ci-security",
+}
+REQUIRED_STATUS_CHECKS = REQUIRED_CI_WORKFLOWS | {"commit-ownership"}
 
 
 def git(*args: str) -> str:
@@ -121,6 +129,115 @@ def inspect_historical_projection(content: str, *, head: str) -> dict[str, Any]:
     }
 
 
+def _remote_receipt(path: Path) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    result: dict[str, Any] = {
+        "present": path.is_file(),
+        "sha256": sha256(path) if path.is_file() else None,
+        "valid": False,
+        "errors": [],
+    }
+    if not path.is_file():
+        result["errors"].append("missing receipt")
+        return None, result
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        result["errors"].append("receipt is not valid UTF-8 JSON")
+        return None, result
+    if not isinstance(payload, dict):
+        result["errors"].append("receipt root must be an object")
+        return None, result
+    return payload, result
+
+
+def inspect_remote_ci_receipt(path: Path, *, head: str) -> dict[str, Any]:
+    payload, result = _remote_receipt(path)
+    if payload is None:
+        return result
+    expected = {
+        "schema_version": "1.0",
+        "repository": REPOSITORY_ID,
+        "head_sha": head,
+        "status": "PASS",
+    }
+    for field, value in expected.items():
+        if payload.get(field) != value:
+            result["errors"].append(f"{field} must equal {value!r}")
+
+    runs = payload.get("runs")
+    successful: set[str] = set()
+    if not isinstance(runs, list):
+        result["errors"].append("runs must be a list")
+    else:
+        for index, run in enumerate(runs):
+            if not isinstance(run, dict):
+                result["errors"].append(f"runs[{index}] must be an object")
+                continue
+            name = run.get("workflow")
+            if name not in REQUIRED_CI_WORKFLOWS:
+                continue
+            if run.get("head_sha") != head:
+                result["errors"].append(f"{name} is not bound to exact HEAD")
+            if run.get("conclusion") != "success":
+                result["errors"].append(f"{name} conclusion is not success")
+            if run.get("event") not in {"push", "pull_request"}:
+                result["errors"].append(f"{name} event is not automatic")
+            if not isinstance(run.get("run_id"), int) or run["run_id"] <= 0:
+                result["errors"].append(f"{name} run_id is invalid")
+            run_url = run.get("run_url")
+            if not isinstance(run_url, str) or not run_url.startswith(
+                "https://github.com/mehmet-karacan/context-vault/actions/runs/"
+            ):
+                result["errors"].append(f"{name} run_url is invalid")
+            if not any(error.startswith(name) for error in result["errors"]):
+                successful.add(name)
+    missing = sorted(REQUIRED_CI_WORKFLOWS - successful)
+    if missing:
+        result["errors"].append(f"missing successful workflows: {', '.join(missing)}")
+    result["valid"] = not result["errors"]
+    result["successful_workflows"] = sorted(successful)
+    return result
+
+
+def inspect_main_ruleset_receipt(path: Path, *, head: str) -> dict[str, Any]:
+    payload, result = _remote_receipt(path)
+    if payload is None:
+        return result
+    expected = {
+        "schema_version": "1.0",
+        "repository": REPOSITORY_ID,
+        "head_sha": head,
+        "status": "PASS",
+        "branch": "main",
+        "enforcement": "active",
+        "pull_request_required": True,
+        "required_branch_up_to_date": True,
+        "force_push_allowed": False,
+        "deletion_allowed": False,
+        "conversation_resolution_required": True,
+        "bypass_policy": "owner_emergency_receipt_only",
+        "direct_push_probe": "blocked",
+    }
+    for field, value in expected.items():
+        if payload.get(field) != value:
+            result["errors"].append(f"{field} must equal {value!r}")
+    checks = payload.get("required_status_checks")
+    if not isinstance(checks, list) or not all(
+        isinstance(item, str) for item in checks
+    ):
+        result["errors"].append("required_status_checks must be a string list")
+        checks = []
+    missing = sorted(REQUIRED_STATUS_CHECKS - set(checks))
+    if missing:
+        result["errors"].append(f"missing required status checks: {', '.join(missing)}")
+    ruleset_id = payload.get("ruleset_id")
+    if not isinstance(ruleset_id, int) or ruleset_id <= 0:
+        result["errors"].append("ruleset_id must be a positive integer")
+    result["valid"] = not result["errors"]
+    result["required_status_checks"] = sorted(set(checks))
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
@@ -142,6 +259,10 @@ def main() -> int:
         }
         for relative in (*REQUIRED_EVIDENCE, *REMOTE_EVIDENCE)
     }
+    remote_ci = inspect_remote_ci_receipt(REPO / REMOTE_EVIDENCE[0], head=head)
+    main_ruleset = inspect_main_ruleset_receipt(REPO / REMOTE_EVIDENCE[1], head=head)
+    evidence[REMOTE_EVIDENCE[0]].update(remote_ci)
+    evidence[REMOTE_EVIDENCE[1]].update(main_ruleset)
     eval_data = json.loads(EVAL_REPORT.read_text(encoding="utf-8"))
     adr_files, missing_adrs = indexed_files(
         REPO / "document-rag-platform/docs/adr/README.md", "ADR-*.md"
@@ -169,8 +290,8 @@ def main() -> int:
         "required_local_evidence_present": all(
             evidence[path]["present"] for path in REQUIRED_EVIDENCE
         ),
-        "remote_ci_evidence_present": evidence[REMOTE_EVIDENCE[0]]["present"],
-        "main_ruleset_evidence_present": evidence[REMOTE_EVIDENCE[1]]["present"],
+        "remote_ci_evidence_valid": remote_ci["valid"],
+        "main_ruleset_evidence_valid": main_ruleset["valid"],
         "synthetic_eval_has_no_quality_claim": (
             eval_data.get("classification") == "offline_contract_fixture"
             and eval_data.get("quality_claim") is False
@@ -185,7 +306,7 @@ def main() -> int:
     payload = {
         "schema_version": 1,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "repository": "mehmet-karacan/context-vault",
+        "repository": REPOSITORY_ID,
         "head_sha": head,
         "verified": verified,
         "checks": checks,

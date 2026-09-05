@@ -17,7 +17,7 @@ Kanonik uygulama dizini: **`document-rag-platform/`** (repo kökü, `AKTIF_GOREV
 | Migration | Alembic — `alembic upgrade head` (bkz. `services/backend/MIGRATION_RUNBOOK.md`) |
 | Dağıtım | Docker Compose — `postgres` · `redis` · `minio` · `backend` (uvicorn :8000) · `worker`/`scheduler` (Celery); `apps/web` (Next.js) ayrı çalışır |
 
-> Eşikler ve top-k değerleri kodda **sabit değildir**; `services/backend/src/config.py` üzerinden ortam değişkeniyle yönetilir ve `GET /debug/retrieval` ile görüntülenebilir. Aşağıdaki tüm sayılar o dosyadaki **varsayılanlardır** ve `.env` ile değiştirilebilir.
+> Eşikler ve top-k değerleri kodda **sabit değildir**; `services/backend/src/config.py` üzerinden ortam değişkeniyle yönetilir ve admin/feature-gated `POST /api/v1/debug/retrieval` ile görüntülenebilir. Aşağıdaki tüm sayılar o dosyadaki **varsayılanlardır** ve `.env` ile değiştirilebilir.
 
 ## Servisler
 
@@ -99,9 +99,9 @@ bağlanır. Yalnız anonim liveness/readiness probe'ları kökte kalır:
 
 Yükleme tek durable job/outbox yolunu kullanır:
 
-1. `POST /documents/upload` anında `Document` + ilk `DocumentVersion` + `IngestionJob` (`status=queued`) kaydeder, orijinal dosyayı MinIO'ya (`object_keys.original_key`) yazar ve Celery task'ını kuyruğa atar; **parse/chunk/embed'ü beklemez** (`documents.py:_upload_document_async`).
+1. `POST /api/v1/documents/upload` anında `Document` + ilk `DocumentVersion` + `IngestionJob` (`status=queued`) kaydeder, orijinal dosyayı MinIO'ya (`object_keys.original_key`) yazar ve Celery task'ını kuyruğa atar; **parse/chunk/embed'ü beklemez** (`documents.py:_upload_document_async`).
 2. `worker` (`src/workers/ingestion_tasks.py:process_ingestion_job`) job'ı `validating → storing → parsing → chunking → embedding → indexing → activating` aşamalarından geçirir.
-3. Her aşama `ingestion_events`'e yazılır; durum `GET /ingestion-jobs/{id}` (+ `/events`) ve `GET /documents/{id}/status` ile izlenir.
+3. Her aşama `ingestion_events`'e yazılır; durum `GET /api/v1/ingestion-jobs/{id}` (+ `/events`) ve `GET /api/v1/documents/{id}/status` ile izlenir.
 4. Tüm chunk/embedding hazır olduktan sonra version `ready` olur ve `documents.active_version_id` atomik olarak değiştirilir (`activating`); yeni version hazır olana dek eski aktif version okumaya devam eder.
 
 Worker güvenliği (Aşama 2 kabul kriterleri): `task_acks_late=True`, `task_reject_on_worker_lost=True`, `worker_prefetch_multiplier=1`; geçici hatalar `INGESTION_MAX_RETRIES` (varsayılan 3) kez üstel backoff ile yeniden denenir, kalıcı doğrulama hataları asla yeniden denenmez. Aynı job yeniden alınırsa idempotent "wipe + rewrite" sayesinde duplicate chunk oluşmaz.
@@ -110,7 +110,7 @@ Bu akış ve job yönetimi için bkz. `docs/runbooks/upload-and-ingestion-jobs.m
 
 ## Retrieval pipeline (sohbet)
 
-`POST /chat/query` (`src/application/retrieval_service.py`):
+`POST /api/v1/chat/query` (`src/application/retrieval_service.py`):
 
 ```
 sorgu + filtreler
@@ -137,11 +137,11 @@ Retrieval aday/eşikleri (varsayılanlar): `VECTOR_CANDIDATE_K=40`, `LEXICAL_CAN
 
 | Kaynak | Uç | Adaptör |
 |---|---|---|
-| Belge (PDF/DOCX/TXT/MD) | `POST /documents/upload` | `parsers` (`pdf_parser`, `docx_parser`, `plain_text_parser`) |
+| Belge (PDF/DOCX/TXT/MD) | `POST /api/v1/documents/upload` | `parsers` (`pdf_parser`, `docx_parser`, `plain_text_parser`) |
 | Görsel / OCR | görsel parser + OCR | `ocr` (`docling` / `tesseract`) |
-| Git repository | `POST /repositories/ingest` | `repositories/git_source.py` |
-| ZIP/TAR arşiv | `POST /archives/upload` | `repositories/archive_source.py` |
-| Klasör | `POST /directories/scan` | `repositories/discovery.py` |
+| Git repository | `POST /api/v1/repositories/ingest` | `repositories/git_source.py` |
+| ZIP/TAR arşiv | `POST /api/v1/archives/upload` | `repositories/archive_source.py` |
+| Klasör | `POST /api/v1/directories/scan` | `repositories/discovery.py` |
 
 Repository/arşiv/klasör taraması `FEATURE_REPOSITORY_INGESTION` arkasındadır
 (varsayılan `false`). Yalnız izinli deployment'ta açılır. Tarama güvenlik
@@ -195,7 +195,7 @@ Ayrıntılı iç yapı için `AKTIF_GOREV.md` Bölüm 7 (hedef dizin) ve 8 (veri
 Başlıca operasyon dokümanları:
 
 - `upload-and-ingestion-jobs.md` — asenkron yükleme, job yaşam döngüsü, worker yeniden başlatma ve retry
-- `reindex.md` — orijinal artifact'tan re-index (`POST /documents/{id}/refresh`, `ReindexService`)
+- `reindex.md` — orijinal artifact'tan re-index (`POST /api/v1/documents/{id}/refresh`, `ReindexService`)
 - `embedding-model-change.md` — embedding modeli/profil değişimi ve kontrollü re-index
 - `ocr-models.md` — OCR provider'ları, dil profili ve language pack kurulumu
 - `repository-scan-limits.md` — `CODE_*` scan limitleri ve güvenlik kuralları

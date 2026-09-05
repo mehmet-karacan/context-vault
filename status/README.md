@@ -10,4 +10,6 @@ python scripts/generate_verified_status.py
 ```
 
 Dirty tree, eksik immutable evidence, birden çok migration head, sentetik evalin
-kalite iddiası veya eksik remote CI/ruleset receipt'i `verified=false` üretir.
+kalite iddiası veya eksik/geçersiz remote CI/ruleset receipt'i `verified=false`
+üretir. Remote dosya varlığı yeterli değildir; exact-HEAD ve semantik sözleşme
+`remote-evidence-contract.md` uyarınca fail-closed doğrulanır.

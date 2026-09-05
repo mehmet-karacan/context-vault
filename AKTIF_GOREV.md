@@ -581,7 +581,7 @@ Backend, frontend, RAG eval ve security workflow'ları:
 - [x] Migration workflow'u LLM key olmadan geçiyor.
 - [ ] Branch ruleset API çıktısı public-safe receipt'e eklenmiş.
 - [ ] Direct push testinin engellendiği doğrulanmış.
-- [x] High/critical dependency veya image açığı için belgelenmemiş istisna yok.
+- [ ] High/critical dependency veya image açığı için belgelenmemiş istisna yok.
 - [x] Lockfile dışı dependency drift'i CI tarafından yakalanıyor.
 
 ### 9.7 A2 yerel kapanış kaydı — 2026-09-05
@@ -594,8 +594,10 @@ Backend, frontend, RAG eval ve security workflow'ları:
   `--pull --no-cache` oldu; regression testi stateful service digest'lerini,
   third-party action SHA'larını ve fresh build kapısını denetliyor.
 - Fresh `linux/arm64` backend image'ı Docker Scout ile tarandı:
-  `0 critical / 0 high`. Python audit `119` dependency ve Node audit `548`
-  package için `0` bilinen açık; lisans politikası `644` package için PASS.
+  `0 critical / 0 high`. `local-eval` dahil Python audit `141` distribution ve
+  Node audit `629` dependency kaydı için `0` bilinen açık; lisans politikası
+  `665` package için PASS. Bu yerel arm64 sonucu remote amd64/final-candidate
+  mutlak kapısı yerine geçmediğinden §9.6 high/critical kutusu açık kaldı.
 - Backend tam regresyonu yeni `cv3_a2_local_20260905_03` DB'sinde
   `cv3_00000006` head'e migrate edilerek `1070 passed, 2 skipped`; frontend
   lint/typecheck, `26` unit, generated-client drift, production build ve bundle
@@ -658,9 +660,9 @@ Bir ajanın veya geliştiricinin hangi dosyanın gerçek, hangi dizinin placehol
 
 ### 10.5 Public-safe kaynak temizliği
 
-- [x] `ttroot-g3.crt` için sahiplik/provenance/politika kararı alınacak.
-- [x] Kuruma özel CA ise public tree'den çıkarılacak; deployment sırasında secret/mount/build-arg ile inject edilecek.
-- [x] Public ve dağıtılabilir bir CA ise bile kaynak, lisans, checksum ve neden gerektiği belgelenmeden repoda tutulmayacak.
+- [ ] `ttroot-g3.crt` için sahiplik/provenance/politika kararı alınacak.
+- [ ] Kuruma özel CA ise public tree'den çıkarılacak; deployment sırasında secret/mount/build-arg ile inject edilecek.
+- [ ] Public ve dağıtılabilir bir CA ise bile kaynak, lisans, checksum ve neden gerektiği belgelenmeden repoda tutulmayacak.
 - [x] Corporate endpoint varsayılanları `.env.example` ve `config.py` içinden çıkarılacak; `*.example.invalid` benzeri nötr örnek kullanılacak.
 - [x] Kurum içi deployment değerleri public repodan ayrı overlay'de tutulacak.
 - [x] Tüm Git geçmişi secret/certificate/private endpoint açısından taranacak.
@@ -690,12 +692,16 @@ Bir ajanın veya geliştiricinin hangi dosyanın gerçek, hangi dizinin placehol
   `ee0b95891447b5d9a146468474372da2e91bc8b1` SHA'sını taşıdı;
   root skeleton, tek migration head, local evidence, ADR/runbook completeness ve
   projection safety geçti. `verified=false` sonucu doğrudur: remote CI ve main
-  ruleset receipt'leri yoktur.
+  ruleset receipt'leri yoktur. Generator remote dosya varlığını yeterli
+  saymaz; exact HEAD, otomatik başarılı run seti ve ruleset koruma semantiğini
+  fail-closed doğrular.
 - Public tree `279` tracked dosyada PASS; deterministic OpenAPI ve altı
   repository/status regression testi PASS.
 - Public-safe kanıt:
   `artifacts/repository/2026-09-05-a3-closeout/`.
-- Açık kapılar: public lisans/proprietary kararı owner authority gerektirir;
+- Açık kapılar: `ttroot-g3.crt` provenance/politika ve gerekiyorsa
+  deployment CA injection kararı ile public lisans/proprietary kararı owner
+  authority gerektirir;
   `verified-state.json verified=true` exact remote CI + ruleset kanıtına
   bağlıdır. Bu iki kutu bilerek açık tutuldu.
 

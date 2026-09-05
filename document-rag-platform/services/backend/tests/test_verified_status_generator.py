@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 
 
@@ -53,3 +54,89 @@ def test_stale_projection_with_warning_is_safe_but_still_reported_stale() -> Non
     assert status["safe"] is True
     assert status["is_stale"] is True
     assert status["stale_warning_present"] is True
+
+
+def _write_json(path: Path, payload: dict) -> None:
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _valid_ci_receipt(module, head: str) -> dict:
+    return {
+        "schema_version": "1.0",
+        "repository": module.REPOSITORY_ID,
+        "head_sha": head,
+        "status": "PASS",
+        "runs": [
+            {
+                "workflow": workflow,
+                "head_sha": head,
+                "conclusion": "success",
+                "event": "push",
+                "run_id": index,
+                "run_url": (
+                    "https://github.com/mehmet-karacan/context-vault/actions/runs/"
+                    f"{index}"
+                ),
+            }
+            for index, workflow in enumerate(sorted(module.REQUIRED_CI_WORKFLOWS), 1)
+        ],
+    }
+
+
+def test_remote_ci_receipt_rejects_presence_only_or_wrong_head(tmp_path: Path) -> None:
+    module = _module()
+    path = tmp_path / "ci.json"
+    _write_json(path, {})
+    assert module.inspect_remote_ci_receipt(path, head="a" * 40)["valid"] is False
+
+    payload = _valid_ci_receipt(module, "a" * 40)
+    payload["head_sha"] = "b" * 40
+    _write_json(path, payload)
+    assert module.inspect_remote_ci_receipt(path, head="a" * 40)["valid"] is False
+
+
+def test_remote_ci_receipt_requires_every_successful_automatic_run(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    head = "a" * 40
+    path = tmp_path / "ci.json"
+    payload = _valid_ci_receipt(module, head)
+    payload["runs"][0]["event"] = "workflow_dispatch"
+    _write_json(path, payload)
+    assert module.inspect_remote_ci_receipt(path, head=head)["valid"] is False
+
+    _write_json(path, _valid_ci_receipt(module, head))
+    assert module.inspect_remote_ci_receipt(path, head=head)["valid"] is True
+
+
+def test_ruleset_receipt_rejects_unprotected_or_incomplete_state(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    head = "a" * 40
+    path = tmp_path / "ruleset.json"
+    payload = {
+        "schema_version": "1.0",
+        "repository": module.REPOSITORY_ID,
+        "head_sha": head,
+        "status": "PASS",
+        "branch": "main",
+        "enforcement": "active",
+        "pull_request_required": True,
+        "required_branch_up_to_date": True,
+        "force_push_allowed": False,
+        "deletion_allowed": False,
+        "conversation_resolution_required": True,
+        "bypass_policy": "owner_emergency_receipt_only",
+        "direct_push_probe": "blocked",
+        "required_status_checks": sorted(module.REQUIRED_STATUS_CHECKS),
+        "ruleset_id": 42,
+    }
+    _write_json(path, payload)
+    assert module.inspect_main_ruleset_receipt(path, head=head)["valid"] is True
+
+    payload["force_push_allowed"] = True
+    payload["required_status_checks"] = []
+    _write_json(path, payload)
+    assert module.inspect_main_ruleset_receipt(path, head=head)["valid"] is False
