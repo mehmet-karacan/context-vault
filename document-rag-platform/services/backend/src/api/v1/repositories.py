@@ -169,11 +169,7 @@ def resolve_allowed_scan_path(alias: str, relative_path: str) -> str:
     # Bind the request to the selected alias, not merely to any configured root.
     # Keeping normalization and the boundary comparison adjacent also makes the
     # path-injection barrier explicit to static analysis.
-    try:
-        common_root = os.path.commonpath((root, target))
-    except ValueError:
-        common_root = ""
-    if common_root != root:
+    if target != root and not target.startswith(root + os.sep):
         raise HTTPException(status_code=403, detail="Path escapes the allowed root")
 
     if not os.path.exists(target):
