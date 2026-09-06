@@ -23,11 +23,13 @@ local JSON file is therefore insufficient.
 
 Path: `document-rag-platform/artifacts/governance/latest/main-ruleset.json`
 
-The JSON object must bind the exact checkout SHA and an active positive
-`ruleset_id` for `main`. The generator resolves the ruleset and `main` branch
-through the authenticated GitHub REST API. It requires `main` to point at the
-exact SHA, branch-targeting conditions, required PRs, up-to-date status checks,
-conversation resolution, blocked force-push/deletion, and the owner-only admin
+The JSON object must bind the exact candidate checkout SHA and an active positive
+`ruleset_id` for `main`. The generator resolves the repository-level ruleset and
+default branch through the authenticated GitHub REST API. A pre-merge candidate
+is not required to already be the tip of `main`; candidate identity remains bound
+by the receipt SHA and exact CI runs. The ruleset must provide branch-targeting
+conditions, required PRs, up-to-date status checks, conversation resolution,
+blocked force-push/deletion, and the owner-only admin
 bypass representation. If the ruleset uses GitHub's `~DEFAULT_BRANCH` alias,
 the authenticated repository metadata must identify `main` as that default. The
 dedicated main ruleset must have no ref exclusions,

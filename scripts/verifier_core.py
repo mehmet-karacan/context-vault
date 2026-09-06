@@ -345,6 +345,14 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def is_sha256(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
 def repository_head(repo: Path) -> str:
     try:
         result = subprocess.run(
@@ -859,15 +867,19 @@ def _legacy_evidence_errors(
             errors.append("evaluation lacks the explicit no-golden-transfer assertion")
         for field in ("baseline_report_sha256", "baseline_seal_sha256"):
             value = payload.get(field)
-            if not isinstance(value, str) or len(value) != 64:
-                errors.append(f"evaluation {field} is missing")
+            if not is_sha256(value):
+                errors.append(f"evaluation {field} is missing or invalid")
         if payload.get("regression_findings") != []:
             errors.append("evaluation contains regression findings")
         if not isinstance(payload.get("tool_version"), str):
             errors.append("evaluation tool version is missing")
     elif identity == "run_eval_non_transfer":
+        if payload.get("checker_repository_revision") != expected_sha:
+            errors.append("non-transfer checker is not the exact candidate version")
         if payload.get("source_repository_revision") != expected_sha:
             errors.append("non-transfer evidence is not bound to exact candidate SHA")
+        if not is_sha256(payload.get("report_sha256")):
+            errors.append("non-transfer receipt report hash is missing or invalid")
         if payload.get("status") != "RECEIPT_BOUND_TO_EXACT_CANDIDATE":
             errors.append("non-transfer receipt status is invalid")
         if payload.get("receipt_binding_verified") is not True:
@@ -923,6 +935,7 @@ def verify_release(
             }
         )
     paths = _release_paths(repo, reports_dir, evidence)
+    loaded_payloads: dict[str, dict[str, Any]] = {}
     for name in REQUIRED_RELEASE_EVIDENCE:
         path = paths.get(name)
         errors: list[str] = []
@@ -939,6 +952,7 @@ def verify_release(
                     errors.append("verifier report root is not an object")
                 else:
                     payload = loaded
+                    loaded_payloads[name] = payload
         if payload is not None and name in RELEASE_COMPONENTS:
             if payload.get("schema") != REPORT_SCHEMA:
                 errors.append("verifier report schema is invalid")
@@ -986,6 +1000,28 @@ def verify_release(
                 "evidence": {"error_count": len(errors)},
             }
         )
+
+    run_eval_path = paths.get("run_eval")
+    non_transfer = loaded_payloads.get("run_eval_non_transfer")
+    if (
+        run_eval_path is not None
+        and run_eval_path.is_file()
+        and non_transfer is not None
+        and non_transfer.get("report_sha256") != sha256_file(run_eval_path)
+    ):
+        message = "non-transfer receipt is not bound to the exact run_eval bytes"
+        findings.append(
+            {
+                "criterion": "release_component_run_eval_non_transfer",
+                "severity": "error",
+                "message": message,
+            }
+        )
+        for check in checks:
+            if check["check_id"] == "release.run_eval_non_transfer":
+                check["status"] = "FAIL"
+                check["evidence"]["error_count"] += 1
+                break
 
     checks.sort(key=lambda item: item["check_id"])
     artifacts.sort(key=lambda item: item["tool"])

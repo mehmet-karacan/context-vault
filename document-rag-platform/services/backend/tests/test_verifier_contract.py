@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+
 import json
 import sys
 from datetime import datetime, timezone
@@ -266,6 +268,7 @@ def test_release_requires_every_exact_sha_pass_report(
             "request_type": "golden-non-transfer-receipt-check",
             "status": "RECEIPT_BOUND_TO_EXACT_CANDIDATE",
             "source_repository_revision": HEAD,
+            "checker_repository_revision": HEAD,
             "tool_version": "3.0.0",
             "receipt_binding_verified": True,
             "golden_results_sent_to_provider": False,
@@ -275,8 +278,13 @@ def test_release_requires_every_exact_sha_pass_report(
             "human_release_decision_required": True,
         },
     }
+    run_eval_bytes = json.dumps(legacy["run_eval.json"])
+    legacy["run_eval-non-transfer.json"]["report_sha256"] = hashlib.sha256(
+        run_eval_bytes.encode()
+    ).hexdigest()
     for filename, payload in legacy.items():
-        (evidence_dir / filename).write_text(json.dumps(payload), encoding="utf-8")
+        content = run_eval_bytes if filename == "run_eval.json" else json.dumps(payload)
+        (evidence_dir / filename).write_text(content, encoding="utf-8")
 
     report, exit_code = verifier_core.verify_release(
         repo=repo,
@@ -328,10 +336,17 @@ def test_release_promotes_only_independently_reviewable_eval() -> None:
     candidate["release_gate_eligible"] = True
     errors = verifier_core._legacy_evidence_errors("run_eval", candidate, HEAD)
     assert "evaluation runner improperly granted release authority" in errors
+    candidate["release_gate_eligible"] = False
+    candidate["baseline_report_sha256"] = "z" * 64
+    errors = verifier_core._legacy_evidence_errors("run_eval", candidate, HEAD)
+    assert "evaluation baseline_report_sha256 is missing or invalid" in errors
+    candidate["baseline_report_sha256"] = "a" * 64
 
     non_transfer = {
         "tool_version": "3.0.0",
+        "checker_repository_revision": HEAD,
         "source_repository_revision": HEAD,
+        "report_sha256": "c" * 64,
         "status": "RECEIPT_BOUND_TO_EXACT_CANDIDATE",
         "receipt_binding_verified": True,
         "golden_results_sent_to_provider": False,
@@ -352,6 +367,114 @@ def test_release_promotes_only_independently_reviewable_eval() -> None:
         "run_eval_non_transfer", non_transfer, HEAD
     )
     assert "non-transfer receipt binding is not verified" in errors
+    non_transfer["receipt_binding_verified"] = True
+    del non_transfer["checker_repository_revision"]
+    del non_transfer["report_sha256"]
+    errors = verifier_core._legacy_evidence_errors(
+        "run_eval_non_transfer", non_transfer, HEAD
+    )
+    assert "non-transfer checker is not the exact candidate version" in errors
+    assert "non-transfer receipt report hash is missing or invalid" in errors
+
+
+def test_release_rejects_non_transfer_receipt_not_bound_to_run_eval_bytes(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = tmp_path
+    evidence_dir = repo / "reports"
+    evidence_dir.mkdir()
+    monkeypatch.setattr(verifier_core, "repository_head", lambda _repo: HEAD)
+    monkeypatch.setattr(
+        verifier_core,
+        "repository_dirty",
+        lambda _repo: (False, 0, hashlib.sha256(b"").hexdigest()),
+    )
+
+    for name in verifier_core.RELEASE_COMPONENTS:
+        (evidence_dir / f"{name}.json").write_text(
+            json.dumps(
+                {
+                    "schema": verifier_core.REPORT_SCHEMA,
+                    "tool": name,
+                    "tool_version": verifier_core.TOOL_VERSION,
+                    "repository_head": HEAD,
+                    "repository_state": {"dirty": False},
+                    "strict": True,
+                    "result": "PASS",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    run_eval = {
+        "schema_version": "2.0",
+        "tool_version": "3.0.0",
+        "tier": "real-benchmark",
+        "repository_revision": HEAD,
+        "result": "PASS",
+        "baseline_review_required": False,
+        "regression_candidate_eligible": True,
+        "release_gate_eligible": False,
+        "golden_results_sent_to_provider": False,
+        "baseline_report_sha256": "a" * 64,
+        "baseline_seal_sha256": "b" * 64,
+        "regression_findings": [],
+    }
+    legacy = {
+        "verify_baseline.json": {
+            "schema": "context-vault-baseline-verification/v1",
+            "tool_version": "1.1.0",
+            "repository": {"head_sha": HEAD, "dirty": False},
+            "result": "PASS",
+        },
+        "verify_migrations.json": {
+            "schema": "context-vault-migration-verification/v1",
+            "tool_version": "1.2.0",
+            "repository_head": HEAD,
+            "database": {"revision": "cv3_00000007"},
+            "result": "PASS",
+        },
+        "verified-status.json": {
+            "schema_version": 1,
+            "head_sha": HEAD,
+            "verified": True,
+            "dirty_paths": [],
+        },
+        "run_eval.json": run_eval,
+        "run_eval-non-transfer.json": {
+            "schema_version": "1.0",
+            "request_type": "golden-non-transfer-receipt-check",
+            "status": "RECEIPT_BOUND_TO_EXACT_CANDIDATE",
+            "checker_repository_revision": HEAD,
+            "source_repository_revision": HEAD,
+            "tool_version": "3.0.0",
+            "report_sha256": "0" * 64,
+            "receipt_binding_verified": True,
+            "golden_results_sent_to_provider": False,
+            "provider_invoked": False,
+            "receipt_authority_verified": False,
+            "release_gate_eligible": False,
+            "human_release_decision_required": True,
+        },
+    }
+    for filename, payload in legacy.items():
+        (evidence_dir / filename).write_text(json.dumps(payload), encoding="utf-8")
+
+    report, exit_code = verifier_core.verify_release(
+        repo=repo,
+        expected_sha=HEAD,
+        strict=True,
+        reports_dir=evidence_dir,
+        evidence=[],
+        clock=lambda: FIXED_TIME,
+    )
+    assert exit_code == verifier_core.EXIT_VALIDATION
+    assert report["result"] == "FAIL"
+    assert any(
+        item["message"]
+        == "non-transfer receipt is not bound to the exact run_eval bytes"
+        for item in report["findings"]
+    )
 
 
 def test_dirty_tree_fails_closed_without_exposing_paths(
