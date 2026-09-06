@@ -253,8 +253,26 @@ def test_release_requires_every_exact_sha_pass_report(
             "tier": "real-benchmark",
             "repository_revision": HEAD,
             "result": "PASS",
-            "release_gate_eligible": True,
+            "baseline_review_required": False,
+            "regression_candidate_eligible": True,
+            "release_gate_eligible": False,
+            "golden_results_sent_to_provider": False,
+            "baseline_report_sha256": "a" * 64,
+            "baseline_seal_sha256": "b" * 64,
             "regression_findings": [],
+        },
+        "run_eval-non-transfer.json": {
+            "schema_version": "1.0",
+            "request_type": "golden-non-transfer-receipt-check",
+            "status": "RECEIPT_BOUND_TO_EXACT_CANDIDATE",
+            "source_repository_revision": HEAD,
+            "tool_version": "3.0.0",
+            "receipt_binding_verified": True,
+            "golden_results_sent_to_provider": False,
+            "provider_invoked": False,
+            "receipt_authority_verified": False,
+            "release_gate_eligible": False,
+            "human_release_decision_required": True,
         },
     }
     for filename, payload in legacy.items():
@@ -289,6 +307,51 @@ def test_release_requires_every_exact_sha_pass_report(
     assert exit_code == verifier_core.EXIT_VALIDATION
     assert report["result"] == "FAIL"
     assert any("exact candidate SHA" in item["message"] for item in report["findings"])
+
+
+def test_release_promotes_only_independently_reviewable_eval() -> None:
+    candidate = {
+        "tool_version": "3.0.0",
+        "tier": "real-benchmark",
+        "repository_revision": HEAD,
+        "result": "PASS",
+        "baseline_review_required": False,
+        "regression_candidate_eligible": True,
+        "release_gate_eligible": False,
+        "golden_results_sent_to_provider": False,
+        "baseline_report_sha256": "a" * 64,
+        "baseline_seal_sha256": "b" * 64,
+        "regression_findings": [],
+    }
+    assert verifier_core._legacy_evidence_errors("run_eval", candidate, HEAD) == []
+
+    candidate["release_gate_eligible"] = True
+    errors = verifier_core._legacy_evidence_errors("run_eval", candidate, HEAD)
+    assert "evaluation runner improperly granted release authority" in errors
+
+    non_transfer = {
+        "tool_version": "3.0.0",
+        "source_repository_revision": HEAD,
+        "status": "RECEIPT_BOUND_TO_EXACT_CANDIDATE",
+        "receipt_binding_verified": True,
+        "golden_results_sent_to_provider": False,
+        "provider_invoked": False,
+        "receipt_authority_verified": False,
+        "release_gate_eligible": False,
+        "human_release_decision_required": True,
+    }
+    assert (
+        verifier_core._legacy_evidence_errors(
+            "run_eval_non_transfer", non_transfer, HEAD
+        )
+        == []
+    )
+
+    non_transfer["receipt_binding_verified"] = False
+    errors = verifier_core._legacy_evidence_errors(
+        "run_eval_non_transfer", non_transfer, HEAD
+    )
+    assert "non-transfer receipt binding is not verified" in errors
 
 
 def test_dirty_tree_fails_closed_without_exposing_paths(

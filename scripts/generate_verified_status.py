@@ -447,7 +447,6 @@ def inspect_main_ruleset_receipt(
 
     try:
         ruleset = github_get(f"repos/{REPOSITORY_ID}/rulesets/{ruleset_id}")
-        branch = github_get(f"repos/{REPOSITORY_ID}/branches/main")
         repository = github_get(f"repos/{REPOSITORY_ID}")
     except RuntimeError:
         result["errors"].append("authenticated GitHub API lookup failed")
@@ -458,8 +457,6 @@ def inspect_main_ruleset_receipt(
     remote_check_sources, strict_checks = _ruleset_status_checks(ruleset)
     remote_checks = set(remote_check_sources)
     pr_required, conversation_resolution = _ruleset_pull_request_policy(ruleset)
-    branch_commit = branch.get("commit")
-    branch_sha = branch_commit.get("sha") if isinstance(branch_commit, dict) else None
     remote_state = {
         "ruleset_id": ruleset.get("id"),
         "target": ruleset.get("target"),
@@ -470,7 +467,6 @@ def inspect_main_ruleset_receipt(
         "targets_main": _ruleset_targets_main(
             ruleset, default_branch=repository.get("default_branch")
         ),
-        "main_head_sha": branch_sha,
         "pull_request_required": pr_required,
         "required_branch_up_to_date": strict_checks,
         "force_push_allowed": "non_fast_forward" not in rules,
@@ -486,7 +482,6 @@ def inspect_main_ruleset_receipt(
         "enforcement": "active",
         "default_branch": "main",
         "targets_main": True,
-        "main_head_sha": head,
         "pull_request_required": True,
         "required_branch_up_to_date": True,
         "force_push_allowed": False,

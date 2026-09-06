@@ -305,7 +305,7 @@ def test_ruleset_receipt_rejects_unprotected_or_incomplete_state(
     assert module.inspect_main_ruleset_receipt(path, head=head)["valid"] is False
 
 
-def test_hand_authored_ruleset_receipt_fails_when_github_disagrees(
+def test_ruleset_receipt_is_candidate_bound_before_candidate_reaches_main(
     tmp_path: Path,
 ) -> None:
     module = _module()
@@ -313,6 +313,8 @@ def test_hand_authored_ruleset_receipt_fails_when_github_disagrees(
     path = tmp_path / "ruleset.json"
     payload = _valid_ruleset_receipt(module, head)
     _write_json(path, payload)
+    # Governance is repository-level. Requiring main's current SHA to equal the
+    # candidate would make the mandatory pre-merge verification impossible.
     result = module.inspect_main_ruleset_receipt(
         path,
         head=head,
@@ -320,8 +322,8 @@ def test_hand_authored_ruleset_receipt_fails_when_github_disagrees(
             module, "b" * 40, sorted(module.REQUIRED_STATUS_CHECKS)
         ),
     )
-    assert result["valid"] is False
-    assert any("GitHub ruleset/main state" in error for error in result["errors"])
+    assert result["valid"] is True
+    assert result["errors"] == []
 
 
 def test_ruleset_rejects_pattern_exclusion_that_can_remove_main(

@@ -313,6 +313,7 @@ SPECS: dict[str, VerifierSpec] = {
 LEGACY_RELEASE_EVIDENCE = (
     "generate_verified_status",
     "run_eval",
+    "run_eval_non_transfer",
     "verify_baseline",
     "verify_migrations",
 )
@@ -771,6 +772,7 @@ def _release_paths(
     names = {
         "generate_verified_status": "verified-status.json",
         "run_eval": "run_eval.json",
+        "run_eval_non_transfer": "run_eval-non-transfer.json",
         "verify_baseline": "verify_baseline.json",
         "verify_migrations": "verify_migrations.json",
     }
@@ -799,6 +801,8 @@ def _release_evidence_identity(payload: Any) -> str | None:
         return "generate_verified_status"
     if "tier" in payload and "repository_revision" in payload:
         return "run_eval"
+    if payload.get("request_type") == "golden-non-transfer-receipt-check":
+        return "run_eval_non_transfer"
     return None
 
 
@@ -842,12 +846,46 @@ def _legacy_evidence_errors(
             errors.append("evaluation is not the approved real-benchmark tier")
         if payload.get("result") != "PASS":
             errors.append("evaluation result is not PASS")
-        if payload.get("release_gate_eligible") is not True:
-            errors.append("evaluation is not release-gate eligible")
+        if payload.get("baseline_review_required") is not False:
+            errors.append("evaluation does not use a human-sealed baseline")
+        if payload.get("regression_candidate_eligible") is not True:
+            errors.append("evaluation is not an approved regression candidate")
+        # A runner must never promote its own report. The independent aggregate
+        # verifier can accept the candidate only together with the separately
+        # issued and checked no-golden-transfer receipt below.
+        if payload.get("release_gate_eligible") is not False:
+            errors.append("evaluation runner improperly granted release authority")
+        if payload.get("golden_results_sent_to_provider") is not False:
+            errors.append("evaluation lacks the explicit no-golden-transfer assertion")
+        for field in ("baseline_report_sha256", "baseline_seal_sha256"):
+            value = payload.get(field)
+            if not isinstance(value, str) or len(value) != 64:
+                errors.append(f"evaluation {field} is missing")
         if payload.get("regression_findings") != []:
             errors.append("evaluation contains regression findings")
         if not isinstance(payload.get("tool_version"), str):
             errors.append("evaluation tool version is missing")
+    elif identity == "run_eval_non_transfer":
+        if payload.get("source_repository_revision") != expected_sha:
+            errors.append("non-transfer evidence is not bound to exact candidate SHA")
+        if payload.get("status") != "RECEIPT_BOUND_TO_EXACT_CANDIDATE":
+            errors.append("non-transfer receipt status is invalid")
+        if payload.get("receipt_binding_verified") is not True:
+            errors.append("non-transfer receipt binding is not verified")
+        if payload.get("golden_results_sent_to_provider") is not False:
+            errors.append("non-transfer receipt does not prove zero golden transfer")
+        if payload.get("provider_invoked") is not False:
+            errors.append(
+                "non-transfer receipt checker unexpectedly invoked a provider"
+            )
+        if payload.get("receipt_authority_verified") is not False:
+            errors.append("non-transfer checker improperly claimed reviewer authority")
+        if payload.get("release_gate_eligible") is not False:
+            errors.append("non-transfer checker improperly granted release authority")
+        if payload.get("human_release_decision_required") is not True:
+            errors.append("non-transfer evidence omits the human release decision gate")
+        if not isinstance(payload.get("tool_version"), str):
+            errors.append("non-transfer checker tool version is missing")
     return errors
 
 

@@ -280,6 +280,13 @@ quality/security review or the final human release decision. Any byte, hash,
 timestamp, source, model or environment mismatch fails closed. The CLI validates a
 receipt; it never generates one.
 
+The aggregate `verify_release` step therefore requires both the successful
+human-sealed regression candidate and this separately checked non-transfer receipt.
+It rejects a benchmark runner or receipt checker that sets its own
+`release_gate_eligible=true`; promotion belongs to the independent aggregate step
+after every exact-SHA component is present. The final merge/tag/release decision
+still remains a separate human authority gate.
+
 ## Local BGE runtime admission
 
 `BAAI/bge-m3` may be admitted as the embedding side of a local benchmark only
