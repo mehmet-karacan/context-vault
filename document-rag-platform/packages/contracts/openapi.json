@@ -2199,7 +2199,7 @@
     },
     "/health/readiness": {
       "get": {
-        "description": "Readiness probe — reports per-dependency health (db/redis/minio/gateway).\n\nReturns 200 with ``status: degraded`` (not an error) when any single\ndependency is down (AKTIF_GOREV.md §9.4).",
+        "description": "Return only ready/not-ready or bounded optional capability degradation.",
         "operationId": "readiness_health_readiness_get",
         "responses": {
           "200": {

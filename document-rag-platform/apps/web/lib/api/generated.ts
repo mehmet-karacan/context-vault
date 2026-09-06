@@ -1,5 +1,5 @@
 // GENERATED from OpenAPI; do not edit.
-// schema-sha256: 767665398fcb1da669afd2f0927b397d7754b48718a689ed06f5d9746aab2c7d
+// schema-sha256: afd7fc1bff4956afdf6b38467436370238c379e6c5bed0bb77c9d5a095be7dba
 export interface Schemas {
   AnswerClaim: { claim_text: string; source_labels: Array<string> };
   Body_upload_archive_api_v1_archives_upload_post: {
