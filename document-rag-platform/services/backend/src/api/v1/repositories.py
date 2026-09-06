@@ -167,14 +167,19 @@ def resolve_allowed_scan_path(alias: str, relative_path: str) -> str:
     target = os.path.realpath(os.path.join(root, rel))
 
     # Bind the request to the selected alias, not merely to any configured root.
-    # Keeping normalization and the boundary comparison adjacent also makes the
-    # path-injection barrier explicit to static analysis.
-    if target != root and not target.startswith(root + os.sep):
-        raise HTTPException(status_code=403, detail="Path escapes the allowed root")
+    # Keep the root case and descendant case as separate, dominating control-flow
+    # paths.  Besides being easier to audit, this is the shape CodeQL's path
+    # sanitizer model recognises and carries through the scanner call graph.
+    if target == root:
+        confined_target = root
+    else:
+        if not target.startswith(root + os.sep):
+            raise HTTPException(status_code=403, detail="Path escapes the allowed root")
+        confined_target = target
 
-    if not os.path.exists(target):
+    if not os.path.exists(confined_target):
         raise HTTPException(status_code=404, detail="Path does not exist")
-    return target
+    return confined_target
 
 
 # ---------------------------------------------------------------------------
