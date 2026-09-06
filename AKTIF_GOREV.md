@@ -3409,6 +3409,13 @@ Aşağıdakiler olmadan release/tag/merge kararı verilemez:
   owner/escalation/delivery receipt'i ve sahibin repository license veya açık
   proprietary/no-license seçimidir. Bu üç authority kanıtı otomasyon tarafından
   üretilmedi; merge/tag/release yapılmadı.
+- Exact aday temiz checkout'unda A9 no-effect approval preflight üretildi:
+  `repository_revision=2c552c4...`, private pack
+  `6bb35ec5...1cf05c8`, dataset `5f43b2cc...e9dab76`, runner closure
+  `dd919240...bba4d2e`, environment `14523d11...867b228`;
+  `provider_invoked=false`, `credential_values_read=false`. Mode-`0600`
+  preflight ve exact-hash pending approval template'i Git dışında tutulur;
+  insan kararı gibi gösterilmedi.
 
 
 ---
