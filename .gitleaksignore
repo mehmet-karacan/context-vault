@@ -15,10 +15,12 @@ document-rag-platform/services/backend/tests/test_redaction.py:private-key:44
 9e6fc43ec1d51c905f3b212b34340327060bf0db:document-rag-platform/artifacts/operations/2026-09-06-a11-backup-dr/SOURCE_MANIFEST.json:generic-api-key:9
 4bf56429304b33fa5b75a2eea05a6c9e918f0d2e:scripts/generate_openapi.py:generic-api-key:23
 60aed18a41dc98feb11f169cb63db1517e8ade68:.github/workflows/ci-rag-eval.yml:generic-api-key:46
+9631f63da3637b91ad9794bc5536a2c29c9ed537:.github/workflows/ci-backend.yml:generic-api-key:38
 1d4a501effd8f65d6646869ada13ad83c9c26989:document-rag-platform/services/backend/tests/integration/test_identity_scope.py:generic-api-key:29
 1d4a501effd8f65d6646869ada13ad83c9c26989:document-rag-platform/services/backend/tests/test_auth_scope.py:generic-api-key:19
 document-rag-platform/artifacts/operations/2026-09-06-a11-backup-dr/SOURCE_MANIFEST.json:generic-api-key:9
 scripts/generate_openapi.py:generic-api-key:23
 .github/workflows/ci-rag-eval.yml:generic-api-key:46
+.github/workflows/ci-backend.yml:generic-api-key:38
 document-rag-platform/services/backend/tests/integration/test_identity_scope.py:generic-api-key:36
 document-rag-platform/services/backend/tests/test_auth_scope.py:generic-api-key:19
