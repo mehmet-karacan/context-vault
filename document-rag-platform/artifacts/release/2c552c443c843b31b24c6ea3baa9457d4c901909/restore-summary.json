@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "candidate_sha": "2c552c443c843b31b24c6ea3baa9457d4c901909",
+  "status": "PASS_PREDECESSOR_DATA_PATH_UNCHANGED",
+  "verified_source_candidate": "91b9bc6d9ffa89351dd557c4e6c36cdc5156b245",
+  "current_candidate_data_path_changed_since_verified_source": false,
+  "fresh_target_verified": true,
+  "source_was_disposable": true,
+  "source_destroyed_before_restore": true,
+  "existing_user_data_mutated": false,
+  "restored_migration_head": "cv3_00000007",
+  "database_references": 1,
+  "objects_restored": 1,
+  "missing_objects": 0,
+  "orphan_objects": 0,
+  "encrypted_object_decryption": "PASS",
+  "smoke": {
+    "migration": "PASS",
+    "auth": "PASS",
+    "retrieval": "PASS",
+    "citation": "PASS"
+  },
+  "measured_rto_seconds": 0.797,
+  "restore_receipt_sha256": "d43fe78f98454455753ee5b8459196894d6b56d651af6ad7bf0524c911bdfe3c"
+}

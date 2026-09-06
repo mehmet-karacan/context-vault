@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "release-verification",
+  "candidate_sha": "2c552c443c843b31b24c6ea3baa9457d4c901909",
+  "report_commit_role": "documentation-only-successor",
+  "observed_at_utc": "2026-09-06T04:14:00Z",
+  "decision": "NO_GO_HUMAN_EXTERNAL_GATES",
+  "machine_verification": "PASS",
+  "independent_verifier": "PASS_IMPLEMENTATION_AND_REMOTE_GATES",
+  "existing_user_data_deleted": false,
+  "remote_branch_and_pr_updated": true,
+  "merge_tag_or_release_performed": false,
+  "public_safe": true,
+  "pull_request": "https://github.com/mehmet-karacan/context-vault/pull/1",
+  "required_files": [
+    "SHA256SUMS",
+    "context-vault-protocol-summary.json",
+    "known-risks.md",
+    "migration-summary.json",
+    "rag-eval-summary.json",
+    "release-manifest.json",
+    "restore-summary.json",
+    "security-summary.json",
+    "test-summary.json",
+    "verification-report.md"
+  ],
+  "remaining_human_external_gates": [
+    "fresh exact-candidate benchmark approval, independent non-transfer receipt, and post-run human seal",
+    "production alert owner, escalation route, and provider delivery acknowledgement",
+    "public repository license or explicit proprietary/no-license owner choice"
+  ],
+  "evidence_hashes": {
+    "verified_status_report": "080483fcd32960dfe51ef7f91dd83d6217aa4d830e71b5be281390f41bef44c7",
+    "remote_ci_receipt": "c49d16138b4beb338f7f235e40ce189c79056d31305cabc9982be6a81d129ce2",
+    "main_ruleset_receipt": "636c7b8d114f3b651c7b0a3586bf75dc4d7de47994ba1040b034bb28125ebcab",
+    "backend_image_sbom": "22fb0de9f0dfcd89431ccbfaa2f074fec46331ff915102e0e8acb5af2e86ec64",
+    "backend_image_scan": "f057c8f1bc45626865f8971ef011ea709d86ad7d5ce76d22d83c90dc8bc2a41e",
+    "backend_image_signature_bundle": "c80a1c37fd83a6e3849c422af03fc2f05852410c49a5e096b5c97f01281867e0",
+    "restore_receipt": "d43fe78f98454455753ee5b8459196894d6b56d651af6ad7bf0524c911bdfe3c"
+  }
+}

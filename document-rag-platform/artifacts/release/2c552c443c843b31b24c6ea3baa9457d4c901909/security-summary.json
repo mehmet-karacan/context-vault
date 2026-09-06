@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "candidate_sha": "2c552c443c843b31b24c6ea3baa9457d4c901909",
+  "status": "PASS",
+  "github_run_id": 34010813887,
+  "public_tree_files_checked": 742,
+  "public_tree_findings": 0,
+  "python_dependencies_audited": 161,
+  "python_vulnerabilities": 0,
+  "node_packages_audited": 629,
+  "node_vulnerabilities": 0,
+  "license_packages_checked": 683,
+  "denied_dependency_licenses": 0,
+  "container_image_digest": "sha256:f2e911a0455fe8f7f3bdb03c47287f0250c6ced9f201a078d2674c06de60a73f",
+  "container_high_vulnerabilities": 0,
+  "container_critical_vulnerabilities": 0,
+  "container_sbom_components": 122,
+  "container_sbom_dependencies": 123,
+  "sbom_sha256": "22fb0de9f0dfcd89431ccbfaa2f074fec46331ff915102e0e8acb5af2e86ec64",
+  "scan_sha256": "f057c8f1bc45626865f8971ef011ea709d86ad7d5ce76d22d83c90dc8bc2a41e",
+  "signature_bundle_sha256": "c80a1c37fd83a6e3849c422af03fc2f05852410c49a5e096b5c97f01281867e0",
+  "signature_identity": "https://github.com/mehmet-karacan/context-vault/.github/workflows/ci-security.yml@refs/heads/codex/context-vault-v3-hardening",
+  "transparency_log_index": 2733924702,
+  "codeql": {
+    "python_analysis_id": 1730919175,
+    "python_results": 0,
+    "javascript_typescript_analysis_id": 1730918943,
+    "javascript_typescript_results": 0
+  }
+}

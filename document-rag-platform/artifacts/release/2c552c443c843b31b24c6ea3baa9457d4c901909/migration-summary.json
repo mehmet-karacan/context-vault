@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "candidate_sha": "2c552c443c843b31b24c6ea3baa9457d4c901909",
+  "status": "PASS",
+  "expected_head": "cv3_00000007",
+  "observed_heads": ["cv3_00000007"],
+  "blank_upgrade": "PASS",
+  "restored_schema_compatibility": "PASS",
+  "measured_invariant_violation_sum": 0,
+  "provider_credentials_loaded": false,
+  "startup_ddl": false,
+  "existing_user_data_mutated": false,
+  "github_run_id": 34010813857
+}

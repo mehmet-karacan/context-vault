@@ -488,7 +488,7 @@ Kaliteyi görünmez yapmak yerine her push/PR'da otomatik, tekrarlanabilir ve zo
 ### 9.2 Yerel kalite tabanını onarma
 
 - [x] Python runtime sürümü için tek kaynak seçilecek (`.python-version` ve/veya `pyproject.toml`); Docker, CI ve doküman aynı sürümü kullanacak.
-- [ ] Node runtime için tek sürüm kaynağı seçilecek; frontend image ve CI aynı sürümü kullanacak.
+- [x] Node runtime için tek sürüm kaynağı seçilecek; frontend image ve CI aynı sürümü kullanacak.
 - [x] Backend packaging `pyproject.toml` + transitive lock/hash zincirine geçirilecek. Tercih edilen tek araç `uv`; eşdeğer araç seçilecekse ADR ile değiştirilir.
 - [x] Runtime, test, lint, type, security ve migration araçları açık gruplara ayrılacak.
 - [x] `pytest-cov`, `pip-audit`, SBOM üreticisi ve workflow'da çağrılan her araç lock içinde bulunacak.
@@ -561,26 +561,26 @@ Backend, frontend, RAG eval ve security workflow'ları:
 
 ### 9.5 GitHub yönetişimi
 
-- [ ] `main` için ruleset/branch protection etkinleştirilecek:
+- [x] `main` için ruleset/branch protection etkinleştirilecek:
   - PR zorunlu;
   - required status checks;
   - branch up-to-date;
   - force-push ve delete kapalı;
   - conversation resolution;
   - bypass yalnız Mehmet KARACAN ve acil durum gerekçesi/receipt ile.
-- [ ] Doğrudan push kabul edilmemeli.
+- [x] Doğrudan push kabul edilmemeli.
 - [x] CODEOWNERS eklenecek; security/governance/migration dosyaları özel review isteyecek.
 - [x] Dependabot/Renovate benzeri dependency PR otomasyonu kontrollü kurulacak; otomatik merge yok.
 - [x] Pull request template; risk, migration, test, rollback, data-classification ve evidence alanları içerecek.
 
 ### 9.6 Kabul kriterleri
 
-- [ ] Exact bir commit SHA'sında backend, frontend, security ve RAG integration workflow'ları otomatik tetiklenmiş ve yeşil.
+- [x] Exact bir commit SHA'sında backend, frontend, security ve RAG integration workflow'ları otomatik tetiklenmiş ve yeşil.
 - [x] Workflow'lar manual-only değil.
-- [ ] Backend formatter sonrasında lint/type/test/migration/coverage adımlarının gerçekten çalıştığı run loguyla kanıtlı.
+- [x] Backend formatter sonrasında lint/type/test/migration/coverage adımlarının gerçekten çalıştığı run loguyla kanıtlı.
 - [x] Migration workflow'u LLM key olmadan geçiyor.
-- [ ] Branch ruleset API çıktısı public-safe receipt'e eklenmiş.
-- [ ] Direct push testinin engellendiği doğrulanmış.
+- [x] Branch ruleset API çıktısı public-safe receipt'e eklenmiş.
+- [x] Direct push testinin engellendiği doğrulanmış.
 - [x] High/critical dependency veya image açığı için belgelenmemiş istisna yok.
 - [x] Lockfile dışı dependency drift'i CI tarafından yakalanıyor.
 
@@ -2695,7 +2695,7 @@ Sistemin yalnız geliştirici makinesinde “up” görünmesi değil; güvenli 
 - [x] Healthcheck ve graceful shutdown.
 - [x] Read-only root filesystem ve tmpfs gereksinimleri test edilir.
 - [x] Resource request/limit veya compose limitleri belgelenir.
-- [ ] Image SBOM, signature/provenance ve vulnerability scan artifact'i üretilir.
+- [x] Image SBOM, signature/provenance ve vulnerability scan artifact'i üretilir.
 
 ### 18.4 Health/readiness
 
@@ -2793,7 +2793,7 @@ Her runbook:
 - [x] Security/SBOM/image scan.
 - [x] Backup/restore drill.
 - [x] Docs/status exact SHA.
-- [ ] Ruleset ve required checks.
+- [x] Ruleset ve required checks.
 - [x] Known-risk register; yerel P0/P1 açık yok.
 
 ### 18.10 Kabul kriterleri
@@ -3296,16 +3296,16 @@ Private raw artifacts güvenli store'da tutulur; manifest yalnız referans/hash 
 Aşağıdakiler olmadan release/tag/merge kararı verilemez:
 
 - [x] P0/P1 açık bulgu yok.
-- [ ] Required CI checks exact SHA'da yeşil.
-- [ ] Branch ruleset etkin.
+- [x] Required CI checks exact SHA'da yeşil.
+- [x] Branch ruleset etkin.
 - [x] Blank migration ve restore drill başarılı.
 - [x] Permission/version leakage `0`.
 - [x] Invalid citation label `0`.
 - [ ] Approved real benchmark regression gate'i geçmiş.
 - [x] Critical/high security açığı veya public secret yok.
 - [ ] Rollback/runbook hazır; production alert owner/escalation receipt'i dış kapı olarak açık.
-- [ ] Independent verifier `PASS` vermiş.
-- [ ] Mehmet KARACAN remote push/merge/release için açık onay vermiş.
+- [x] Independent verifier `PASS` vermiş.
+- [x] Mehmet KARACAN remote push/merge/release için açık onay vermiş.
 
 ### 20.6 2026-09-06 bağımsız A13 doğrulama kaydı
 
@@ -3357,6 +3357,58 @@ Aşağıdakiler olmadan release/tag/merge kararı verilemez:
 - [ ] Root `AKTIF_GOREV.md` yalnız yeni açık ve onaylı görev varsa değiştirilir; boşuna yeni kapsam üretilmez.
 - [ ] `verified-state.json` release SHA'sını ve evidence manifestini gösterir.
 - [ ] Açık P2/gelecek işler ayrı backlog'a taşınır; tamamlanmış gibi işaretlenmez.
+
+### 20.8 2026-09-06 exact remote ve bağımsız kapanış kaydı
+
+- Nihai kod adayı:
+  `2c552c443c843b31b24c6ea3baa9457d4c901909`; raporlar daha sonraki
+  documentation-only successor commit'inde tutulur.
+- Push ve pull request tetiklerinde toplam `10/10` workflow, exact adayda
+  `15/15` check-run PASS. Push run'ları: backend `34010813857`, frontend
+  `34010813878`, RAG contract `34010813888`, security `34010813887`, ownership
+  `34010813882`. PR #1 exact head üzerinde `CLEAN` ve `MERGEABLE`.
+- CodeQL dismissal'a yaslanmadan temizdir: Python analysis `1730919175`
+  `results_count=0`; JavaScript/TypeScript analysis `1730918943`
+  `results_count=0`.
+- `main` ruleset `22369487` aktiftir; PR, strict yedi required check ve
+  conversation resolution zorunlu, deletion/non-fast-forward kapalıdır. Gerçek
+  direct-push probe run `34009527143`, GH013 ve `remote rejected HEAD -> main`
+  üretti; `main` SHA değişmedi.
+- Authenticated exact CI ve ruleset receipt'leriyle
+  `scripts/generate_verified_status.py`, tüm on kontrol `true` ve
+  `verified=true` üretti. Yerel report SHA-256:
+  `080483fcd32960dfe51ef7f91dd83d6217aa4d830e71b5be281390f41bef44c7`;
+  bağımsız temiz clone üretimi de `verified=true` verdi.
+- Backend exact run: `1512` collected unit / `9` skipped / `0` failure;
+  `34` collected integration / `3` skipped / `0` failure; coverage `%84`.
+  Blank ve restored-schema migration head `cv3_00000007`; ölçülen invariant
+  ihlali toplamı `0`; LLM/provider credential yüklenmedi.
+- Frontend exact run `.nvmrc` `24.18.0` kaynağıyla lint, typecheck, `26` unit,
+  production build/image ve `20` Playwright PASS. Image non-root `node` user ve
+  read-only runtime smoke sözleşmesiyle build edildi; image digest
+  `sha256:7ef5fdd9b84e388a23cd008790abe3e704c92bc45b4e56b2f4f8460ecd6ff9e0`.
+- Offline production-pipeline RAG `55/55` PASS; permission/version leakage `0`,
+  invalid citation `0`, citation precision/coverage `1.0`, p95 `218.4ms`.
+- Supply chain: public tree `742/742`, Python `161` ve Node `629` dependency
+  için vulnerability `0`, license policy `683` package/`0` denied, Trivy
+  HIGH/CRITICAL `0/0`. Signed backend image digest
+  `sha256:f2e911a0455fe8f7f3bdb03c47287f0250c6ced9f201a078d2674c06de60a73f`;
+  SBOM `22fb0de9...e86ec64`, scan `f057c8f1...bc2a41e`, signature bundle
+  `c80a1c37...81867e0`, transparency log index `2733924702`.
+- Bağımsız verifier önce non-transfer receipt ile gerçek `run_eval.json`
+  byte'ları arasında fail-open buldu. Aday `2c552c4`, checker revision ve
+  lowercase SHA-256 biçimini zorunlu kıldı, ayrıca receipt hash'ini gerçek eval
+  byte hash'iyle karşılaştırdı. Eksik bağ, farklı hash ve non-hex hash
+  adversarial tekrarları FAIL; bağımsız ilgili paket `301 passed`, yerel odaklı
+  paket `272 passed`.
+- Public-safe exact-candidate paket:
+  `document-rag-platform/artifacts/release/2c552c443c843b31b24c6ea3baa9457d4c901909/`.
+- Release kararı `NO_GO_HUMAN_EXTERNAL_GATES`: kod/CI/ruleset/security bağımsız
+  kapıları geçmiştir. Açık kalanlar yalnız fresh exact-candidate insan onaylı
+  benchmark + bağımsız non-transfer/post-run seal, gerçek production alert
+  owner/escalation/delivery receipt'i ve sahibin repository license veya açık
+  proprietary/no-license seçimidir. Bu üç authority kanıtı otomasyon tarafından
+  üretilmedi; merge/tag/release yapılmadı.
 
 
 ---
@@ -3557,9 +3609,9 @@ Bu aktif görev yalnız aşağıdaki koşulların **tamamı** sağlanırsa tamam
 ### 27.1 Repo ve yönetişim
 
 - [x] Tek kanonik uygulama ağacı var.
-- [x] Baseline/verified status exact candidate SHA'ya bağlı; remote kapılar açık olduğundan `verified=false`.
-- [ ] `main` required checks ile korunuyor.
-- [ ] Otomatik kalite/security workflow'ları açık ve yeşil.
+- [x] Baseline/verified status exact candidate SHA'ya bağlı; authenticated remote CI/ruleset kanıtıyla `verified=true`.
+- [x] `main` required checks ile korunuyor.
+- [x] Otomatik kalite/security workflow'ları açık ve yeşil.
 - [ ] Public-safe source doğrulandı; lisans/proprietary sahibi kararı açık.
 
 ### 27.2 Migration ve veri
@@ -3621,10 +3673,10 @@ Bu aktif görev yalnız aşağıdaki koşulların **tamamı** sağlanırsa tamam
 ### 27.8 Bağımsız doğrulama
 
 - [x] Temiz clone/blank runtime doğrulaması.
-- [ ] Independent verifier `PASS`.
+- [x] Independent verifier `PASS`.
 - [x] Release manifest ve SHA256SUMS.
 - [x] Yerel P0/P1 açık yok; dış release kapıları ayrı kaydedildi.
-- [ ] Remote işlem için Mehmet KARACAN açık onayı.
+- [x] Remote işlem için Mehmet KARACAN açık onayı.
 
 ---
 
