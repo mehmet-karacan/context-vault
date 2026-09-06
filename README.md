@@ -33,3 +33,13 @@ kanıtı veya dirty tree varsa `verified` değeri `false` olur.
 
 Repo kökündeki **`AKTIF_GOREV.md`** tek kanonik görev ve ilerleme kaydıdır. Eski
 checklist, roadmap ve özetlerdeki tamamlanma iddiaları kanıt değildir.
+
+## Lisans durumu
+
+Copyright © 2026 Mehmet Karacan. Tüm hakları saklıdır.
+
+Bu public repository için açık kaynak veya başka bir kullanım lisansı
+verilmemektedir. Kaynak kodun görüntülenebilir olması; kopyalama, değiştirme,
+dağıtma, alt lisanslama ya da ticari kullanım izni verildiği anlamına gelmez.
+Yazılı izin alınmadan bu hakların hiçbiri kullanılamaz. Üçüncü taraf bileşenler
+kendi lisanslarına tabidir.

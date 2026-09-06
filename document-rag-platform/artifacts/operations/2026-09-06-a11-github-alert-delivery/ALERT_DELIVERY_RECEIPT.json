@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "production-alert-route-delivery-rehearsal",
+  "status": "PASS",
+  "candidate_sha": "8ce08125d16f245009a93e6933575684a55ad62a",
+  "provider": "github-issues",
+  "repository": "mehmet-karacan/context-vault",
+  "issue_number": 2,
+  "issue_url": "https://github.com/mehmet-karacan/context-vault/issues/2",
+  "classification": "content-free-test-alert",
+  "severity": "TEST/P1",
+  "owner": "mehmet-karacan",
+  "assignees": [
+    "mehmet-karacan"
+  ],
+  "escalation_target": "repository owner via GitHub Issues",
+  "runbook": "document-rag-platform/docs/runbooks/degraded-readiness.md",
+  "delivered_at_utc": "2026-09-06T05:28:32Z",
+  "acknowledged_at_utc": "2026-09-06T05:28:35Z",
+  "acknowledgement_url": "https://github.com/mehmet-karacan/context-vault/issues/2#issuecomment-5557192180",
+  "acknowledged_by": "mehmet-karacan",
+  "closed_at_utc": "2026-09-06T05:28:36Z",
+  "remote_delivery": true,
+  "owner_assignment_verified": true,
+  "acknowledgement_verified": true,
+  "application_content_included": false,
+  "credentials_included": false,
+  "existing_user_data_mutated": false
+}
