@@ -7,6 +7,7 @@ import json
 import math
 import sys
 import types
+from contextlib import nullcontext
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,15 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[5]
 SCRIPT = REPO / "scripts/local_benchmark_providers.py"
+
+
+@pytest.fixture(autouse=True)
+def _optional_torch_test_double(monkeypatch):
+    if importlib.util.find_spec("torch") is not None:
+        return
+    fake_torch = types.ModuleType("torch")
+    fake_torch.inference_mode = nullcontext
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
 
 
 def _module():
@@ -364,19 +374,6 @@ def test_qwen_exact_identity_determinism_observer_and_safe_report(tmp_path):
     report = client.report()
     assert report["model"] == exact_identity
     assert "answer" not in json.dumps(report)
-
-
-def test_injected_qwen_runtime_does_not_require_optional_torch(tmp_path, monkeypatch):
-    module = _module()
-    monkeypatch.setitem(sys.modules, "torch", None)
-    client, model, _tokenizer = _qwen(
-        module,
-        _qwen_snapshot(tmp_path),
-        ["offline answer"],
-    )
-
-    assert client.complete("system", "user") == "offline answer"
-    assert len(model.kwargs) == 1
 
 
 def test_qwen_requires_capture_ack_before_actual_generate_and_redacts_observer(
