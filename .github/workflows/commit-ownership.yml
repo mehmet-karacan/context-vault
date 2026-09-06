@@ -23,9 +23,16 @@ jobs:
           fetch-depth: 0
 
       - name: Commit sahiplik ve vocab denetimi
+        env:
+          IS_MAIN_REF: ${{ github.ref == 'refs/heads/main' }}
         run: |
+          committer_args=()
+          if [[ "$IS_MAIN_REF" == "true" ]]; then
+            committer_args+=(--allowed-committer "GitHub noreply@github.com")
+          fi
           python scripts/check_commit_ownership.py \
             --repo "$GITHUB_WORKSPACE" \
             --refspec "${{ github.event.pull_request.head.sha || github.sha }}" \
             --allowed-author "mehmet-karacan karacan.mehmet@hotmail.com" \
-            --allowed-author "Mehmet KARACAN karacan.mehmet@hotmail.com"
+            --allowed-author "Mehmet KARACAN karacan.mehmet@hotmail.com" \
+            "${committer_args[@]}"

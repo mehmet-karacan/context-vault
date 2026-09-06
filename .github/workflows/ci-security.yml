@@ -35,12 +35,19 @@ jobs:
           GITLEAKS_ENABLE_COMMENTS: "false"
 
       - name: Commit ownership check
+        env:
+          IS_MAIN_REF: ${{ github.ref == 'refs/heads/main' }}
         run: |
+          committer_args=()
+          if [[ "$IS_MAIN_REF" == "true" ]]; then
+            committer_args+=(--allowed-committer "GitHub noreply@github.com")
+          fi
           python scripts/check_commit_ownership.py \
             --repo "$GITHUB_WORKSPACE" \
             --refspec "${{ github.event.pull_request.head.sha || github.sha }}" \
             --allowed-author "mehmet-karacan karacan.mehmet@hotmail.com" \
-            --allowed-author "Mehmet KARACAN karacan.mehmet@hotmail.com"
+            --allowed-author "Mehmet KARACAN karacan.mehmet@hotmail.com" \
+            "${committer_args[@]}"
 
       - name: Public source safety
         run: python scripts/check_public_tree.py --repo . --json-output reports/public-tree.json
