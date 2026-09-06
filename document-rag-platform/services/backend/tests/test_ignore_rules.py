@@ -161,6 +161,21 @@ def test_secret_policy_default_skips_sensitive(tmp_path):
     assert rules.is_ignored("src/main.py") is False
 
 
+def test_symlinked_ignore_file_cannot_inject_rules_from_outside_root(tmp_path):
+    root = tmp_path / "repo"
+    root.mkdir()
+    outside = tmp_path / "outside.rules"
+    outside.write_text("victim.py\n", encoding="utf-8")
+    try:
+        (root / ".gitignore").symlink_to(outside)
+    except OSError:
+        pytest.skip("symlink creation not permitted in this environment")
+
+    rules = build_ignore_rules(root_path=str(root), system_ignore=[])
+
+    assert rules.is_ignored("victim.py") is False
+
+
 # --- Sensitive-path detection -----------------------------------------------
 @pytest.mark.parametrize(
     "path",

@@ -175,7 +175,7 @@ def test_directory_scan_rejects_symlink_into_a_different_allowed_alias(
     monkeypatch.setattr(
         settings,
         "CODE_ALLOWED_ROOTS",
-        f"first={first},second={second}",
+        f"{first},{second}",
     )
 
     resp = client.post(
@@ -189,6 +189,15 @@ def test_directory_scan_rejects_symlink_into_a_different_allowed_alias(
 
     assert resp.status_code == 403
     assert "escapes" in resp.json()["detail"]
+
+
+def test_directory_path_accepts_an_explicit_alias_mapping(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    target = root / "project"
+    target.mkdir(parents=True)
+    monkeypatch.setattr(settings, "CODE_ALLOWED_ROOTS", f"source={root}")
+
+    assert repo_mod.resolve_allowed_scan_path("source", "project") == str(target)
 
 
 def test_directory_scan_accepts_allowed_relative_path(client, tmp_path, monkeypatch):

@@ -19,7 +19,10 @@ from __future__ import annotations
 
 import os
 import re
+import stat
 from typing import List, Optional, Sequence
+
+MAX_IGNORE_FILE_BYTES = 1024 * 1024
 
 # --- Default system ignore list (AKTIF_GOREV.md §7.3) -----------------------
 DEFAULT_IGNORE_PATTERNS: tuple[str, ...] = (
@@ -202,12 +205,27 @@ class GitignoreMatcher:
     @classmethod
     def from_file(cls, filename: str, base: str = "", allow_negation: bool = True):
         patterns: List[str] = []
-        if filename and os.path.isfile(filename):
+        descriptor = -1
+        nofollow = getattr(os, "O_NOFOLLOW", None)
+        if filename and nofollow is not None:
             try:
-                with open(filename, "r", encoding="utf-8", errors="replace") as fh:
+                descriptor = os.open(filename, os.O_RDONLY | nofollow)
+                opened = os.fstat(descriptor)
+                if (
+                    not stat.S_ISREG(opened.st_mode)
+                    or opened.st_size > MAX_IGNORE_FILE_BYTES
+                ):
+                    return cls(patterns, base=base, allow_negation=allow_negation)
+                with os.fdopen(
+                    descriptor, "r", encoding="utf-8", errors="replace"
+                ) as fh:
+                    descriptor = -1
                     patterns = fh.read().splitlines()
             except OSError:
                 patterns = []
+            finally:
+                if descriptor >= 0:
+                    os.close(descriptor)
         return cls(patterns, base=base, allow_negation=allow_negation)
 
     def _strip_base(self, rel: str) -> str:
