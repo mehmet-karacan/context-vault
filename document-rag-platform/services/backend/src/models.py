@@ -1162,3 +1162,925 @@ class ClaimCitation(Base):
 
     claim = relationship("MessageClaim", back_populates="citation_links")
     citation = relationship("MessageCitation", back_populates="claim_links")
+
+
+class WorkItem(Base):
+    """Authoritative unit of mutable work in the PostgreSQL Work Graph."""
+
+    __tablename__ = "work_items"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('DRAFT','READY','CLAIMED','RUNNING','BLOCKED','VERIFYING',"
+            "'COMPLETED','FAILED','CANCELLED','RECOVERY_REQUIRED')",
+            name="ck_work_items_status",
+        ),
+        CheckConstraint(
+            "risk_class IN ('low','medium','high','critical')",
+            name="ck_work_items_risk_class",
+        ),
+        CheckConstraint("revision >= 0", name="ck_work_items_revision"),
+        CheckConstraint(
+            "next_fencing_token >= 0", name="ck_work_items_next_fencing_token"
+        ),
+        Index("ix_work_items_project_status", "project_id", "status"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    workspace_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    project_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    title = Column(Text, nullable=False)
+    objective = Column(Text, nullable=False)
+    scope_json = Column(JSONB, nullable=False, default=dict)
+    exclusions_json = Column(JSONB, nullable=False, default=list)
+    priority = Column(Integer, nullable=False, default=0)
+    risk_class = Column(String, nullable=False, default="low")
+    required_approvals = Column(JSONB, nullable=False, default=list)
+    expected_revision = Column(String, nullable=False)
+    expected_baseline_hash = Column(String(64), nullable=True)
+    status = Column(String, nullable=False, default="DRAFT")
+    created_by_principal_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("principals.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    owner_principal_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("principals.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    parent_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("work_items.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    acceptance_criteria = Column(JSONB, nullable=False, default=list)
+    evidence_requirements = Column(JSONB, nullable=False, default=list)
+    revision = Column(BigInteger, nullable=False, default=0)
+    next_fencing_token = Column(BigInteger, nullable=False, default=0)
+    active_fencing_token = Column(BigInteger, nullable=True)
+    active_attempt_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "work_attempts.id",
+            ondelete="RESTRICT",
+            use_alter=True,
+            name="fk_work_items_active_attempt",
+        ),
+        nullable=True,
+    )
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class WorkItemDependency(Base):
+    __tablename__ = "work_item_dependencies"
+    __table_args__ = (
+        CheckConstraint(
+            "work_item_id <> depends_on_work_item_id",
+            name="ck_work_item_dependencies_not_self",
+        ),
+    )
+
+    work_item_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("work_items.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    depends_on_work_item_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("work_items.id", ondelete="RESTRICT"),
+        primary_key=True,
+    )
+    dependency_type = Column(String, nullable=False, default="blocks")
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class WorkAttempt(Base):
+    __tablename__ = "work_attempts"
+    __table_args__ = (
+        UniqueConstraint(
+            "work_item_id", "attempt_no", name="uq_work_attempt_item_number"
+        ),
+        UniqueConstraint(
+            "work_item_id", "idempotency_key", name="uq_work_attempt_item_idempotency"
+        ),
+        UniqueConstraint(
+            "work_item_id",
+            "effect_idempotency_key",
+            name="uq_work_attempt_effect_idempotency",
+        ),
+        CheckConstraint("attempt_no > 0", name="ck_work_attempt_number_positive"),
+        CheckConstraint(
+            "status IN ('PREPARED','CLAIMED','RUNNING','BLOCKED','VERIFYING',"
+            "'COMPLETED','FAILED','CANCELLED','RECOVERY_REQUIRED')",
+            name="ck_work_attempts_status",
+        ),
+        CheckConstraint(
+            "effect_started_at IS NULL OR effect_idempotency_key IS NOT NULL",
+            name="ck_work_attempt_effect_intent",
+        ),
+        CheckConstraint(
+            "rollback_started_at IS NULL OR "
+            "(rollback_idempotency_key IS NOT NULL AND rollback_request_hash IS NOT NULL)",
+            name="ck_work_attempt_rollback_intent",
+        ),
+        UniqueConstraint(
+            "work_item_id",
+            "rollback_idempotency_key",
+            name="uq_work_attempt_rollback_idempotency",
+        ),
+        Index("ix_work_attempts_item_status", "work_item_id", "status"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    work_item_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("work_items.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    attempt_no = Column(Integer, nullable=False)
+    executor_id = Column(String, nullable=False)
+    adapter_id = Column(String, nullable=True)
+    model_id = Column(String, nullable=True)
+    provider_id = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="PREPARED")
+    started_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    input_context_manifest_hash = Column(String(64), nullable=True)
+    expected_revision = Column(String, nullable=False)
+    drift_token = Column(String(64), nullable=False)
+    idempotency_key = Column(String, nullable=False)
+    claim_request_hash = Column(String(64), nullable=False)
+    effect_idempotency_key = Column(String, nullable=True)
+    effect_started_at = Column(DateTime(timezone=True), nullable=True)
+    rollback_idempotency_key = Column(String, nullable=True)
+    rollback_request_hash = Column(String(64), nullable=True)
+    rollback_started_at = Column(DateTime(timezone=True), nullable=True)
+    outcome_json = Column(JSONB, nullable=False, default=dict)
+    terminal_reason = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class WorkClaim(Base):
+    __tablename__ = "work_claims"
+    __table_args__ = (
+        UniqueConstraint(
+            "work_item_id", "fencing_token", name="uq_work_claim_item_fencing"
+        ),
+        UniqueConstraint("attempt_id", name="uq_work_claim_attempt"),
+        CheckConstraint("fencing_token > 0", name="ck_work_claim_fencing_positive"),
+        CheckConstraint(
+            "status IN ('active','released','reconciled')",
+            name="ck_work_claims_status",
+        ),
+        CheckConstraint(
+            "expires_at > acquired_at", name="ck_work_claim_expiry_after_acquired"
+        ),
+        CheckConstraint(
+            "heartbeat_at >= acquired_at AND heartbeat_at <= expires_at",
+            name="ck_work_claim_heartbeat_window",
+        ),
+        Index("ix_work_claims_expiry", "status", "expires_at"),
+        Index(
+            "uq_work_claim_one_active",
+            "work_item_id",
+            unique=True,
+            postgresql_where=sa_text("status = 'active'"),
+        ),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    work_item_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("work_items.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    attempt_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("work_attempts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    resource_scope = Column(JSONB, nullable=False)
+    scope_hash = Column(String(64), nullable=False)
+    claimant_id = Column(String, nullable=False)
+    acquired_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    heartbeat_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    fencing_token = Column(BigInteger, nullable=False)
+    status = Column(String, nullable=False, default="active")
+    released_reason = Column(String, nullable=True)
+    reconciled_reason = Column(String, nullable=True)
+    released_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class WorkEvent(Base):
+    """Append-only state transition and observation ledger."""
+
+    __tablename__ = "work_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "work_item_id", "event_sequence", name="uq_work_event_item_sequence"
+        ),
+        CheckConstraint("event_sequence > 0", name="ck_work_event_sequence_positive"),
+        CheckConstraint(
+            "actor_type IN ('human','policy','service','cli','model')",
+            name="ck_work_event_actor_type",
+        ),
+        Index("ix_work_events_item_created", "work_item_id", "created_at"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    work_item_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("work_items.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    attempt_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("work_attempts.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    event_sequence = Column(BigInteger, nullable=False)
+    event_type = Column(String, nullable=False)
+    actor_type = Column(String, nullable=False)
+    actor_id = Column(String, nullable=False)
+    reason = Column(Text, nullable=False)
+    correlation_id = Column(UUID(as_uuid=True), nullable=False)
+    causation_id = Column(UUID(as_uuid=True), nullable=True)
+    previous_state = Column(String, nullable=True)
+    new_state = Column(String, nullable=True)
+    payload_schema_version = Column(String, nullable=False)
+    payload_hash = Column(String(64), nullable=False)
+    payload_json = Column(JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class WorkApproval(Base):
+    __tablename__ = "work_approvals"
+    __table_args__ = (
+        CheckConstraint(
+            "actor_type IN ('human','policy')", name="ck_work_approval_actor_type"
+        ),
+        CheckConstraint(
+            "decision IN ('approved','rejected','revoked')",
+            name="ck_work_approval_decision",
+        ),
+        CheckConstraint(
+            "expires_at IS NULL OR expires_at > granted_at",
+            name="ck_work_approval_expiry",
+        ),
+        UniqueConstraint(
+            "work_item_id",
+            "approval_type",
+            "scope_hash",
+            "actor_id",
+            name="uq_work_approval_actor_scope",
+        ),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    work_item_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("work_items.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    attempt_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("work_attempts.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    approval_type = Column(String, nullable=False)
+    scope_hash = Column(String(64), nullable=False)
+    decision = Column(String, nullable=False)
+    actor_type = Column(String, nullable=False)
+    actor_id = Column(String, nullable=False)
+    reason = Column(Text, nullable=False)
+    evidence_refs = Column(JSONB, nullable=False, default=list)
+    granted_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class WorkReceipt(Base):
+    __tablename__ = "work_receipts"
+    __table_args__ = (
+        CheckConstraint(
+            "receipt_type IN ('prepare','apply','verify','close','rollback')",
+            name="ck_work_receipts_type",
+        ),
+        CheckConstraint(
+            "length(request_hash) = 64", name="ck_work_receipt_request_hash"
+        ),
+        CheckConstraint(
+            "(receipt_type = 'apply' AND parent_receipt_id IS NULL) OR "
+            "(receipt_type IN ('verify','close','rollback') AND parent_receipt_id IS NOT NULL) OR "
+            "receipt_type = 'prepare'",
+            name="ck_work_receipt_parent_chain",
+        ),
+        CheckConstraint(
+            "is_terminal = (receipt_type = 'close')",
+            name="ck_work_receipt_terminal_close",
+        ),
+        CheckConstraint(
+            "parent_receipt_id IS NULL OR parent_receipt_id <> id",
+            name="ck_work_receipt_parent_not_self",
+        ),
+        CheckConstraint("ended_at >= started_at", name="ck_work_receipt_time_order"),
+        CheckConstraint(
+            "signer_type IN ('human','policy','service','cli')",
+            name="ck_work_receipt_signer_type",
+        ),
+        UniqueConstraint(
+            "work_item_id",
+            "receipt_type",
+            "idempotency_key",
+            name="uq_work_receipt_item_type_idempotency",
+        ),
+        Index(
+            "uq_work_receipt_one_terminal",
+            "work_item_id",
+            unique=True,
+            postgresql_where=sa_text("is_terminal"),
+        ),
+        Index("ix_work_receipts_attempt", "attempt_id", "created_at"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    work_item_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("work_items.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    attempt_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("work_attempts.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    claim_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("work_claims.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    parent_receipt_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("work_receipts.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    receipt_type = Column(String, nullable=False)
+    idempotency_key = Column(String, nullable=False)
+    request_hash = Column(String(64), nullable=False)
+    command = Column(Text, nullable=False)
+    tool = Column(String, nullable=False)
+    action = Column(String, nullable=False)
+    started_at = Column(DateTime(timezone=True), nullable=False)
+    ended_at = Column(DateTime(timezone=True), nullable=False)
+    exit_status = Column(Integer, nullable=False)
+    input_artifact_hash = Column(String(64), nullable=True)
+    output_artifact_hash = Column(String(64), nullable=True)
+    before_revision = Column(String, nullable=False)
+    after_revision = Column(String, nullable=False)
+    test_evidence_refs = Column(JSONB, nullable=False, default=list)
+    acceptance_evidence = Column(JSONB, nullable=False, default=list)
+    rollback_result = Column(JSONB, nullable=True)
+    signer_type = Column(String, nullable=False)
+    signer_id = Column(String, nullable=False)
+    attestation = Column(JSONB, nullable=False, default=dict)
+    is_terminal = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class ArtifactRef(Base):
+    __tablename__ = "artifact_refs"
+    __table_args__ = (
+        CheckConstraint(
+            "classification IN ('public','internal','confidential','restricted')",
+            name="ck_artifact_ref_classification",
+        ),
+        UniqueConstraint("uri", "sha256", name="uq_artifact_ref_uri_hash"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    work_item_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("work_items.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    attempt_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("work_attempts.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    receipt_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("work_receipts.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    artifact_type = Column(String, nullable=False)
+    uri = Column(Text, nullable=False)
+    sha256 = Column(String(64), nullable=False)
+    classification = Column(String, nullable=False, default="internal")
+    metadata_json = Column(JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class DecisionRecord(Base):
+    __tablename__ = "decision_records"
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id", "decision_key", name="uq_decision_record_workspace_key"
+        ),
+        CheckConstraint(
+            "status IN ('PROPOSED','APPROVED','SUPERSEDED','REVOKED')",
+            name="ck_decision_record_status",
+        ),
+        CheckConstraint(
+            "approved_by_type IS NULL OR approved_by_type IN ('human','policy')",
+            name="ck_decision_record_approver",
+        ),
+        CheckConstraint(
+            "status <> 'APPROVED' OR approved_by_type IN ('human','policy')",
+            name="ck_decision_record_approved_actor",
+        ),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    workspace_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    project_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    decision_key = Column(String, nullable=False)
+    title = Column(Text, nullable=False)
+    statement = Column(Text, nullable=False)
+    rationale = Column(Text, nullable=False)
+    status = Column(String, nullable=False, default="PROPOSED")
+    source_artifact_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("artifact_refs.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    supersedes_decision_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("decision_records.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    owner_principal_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("principals.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    approved_by_type = Column(String, nullable=True)
+    approved_by_id = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class KnowledgeItem(Base):
+    __tablename__ = "knowledge_items"
+    __table_args__ = (
+        Index(
+            "uq_knowledge_item_scope_key",
+            "workspace_id",
+            sa_text(
+                "coalesce(project_id, '00000000-0000-0000-0000-000000000000'::uuid)"
+            ),
+            "stable_key",
+            unique=True,
+        ),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    workspace_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    project_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    stable_key = Column(Text, nullable=False)
+    scope = Column(Text, nullable=False)
+    classification = Column(String, nullable=False)
+    owner_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("principals.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    active_revision_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "knowledge_revisions.id",
+            ondelete="SET NULL",
+            use_alter=True,
+            name="fk_knowledge_items_active_revision",
+        ),
+        nullable=True,
+    )
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class KnowledgeRevision(Base):
+    __tablename__ = "knowledge_revisions"
+    __table_args__ = (
+        UniqueConstraint(
+            "knowledge_item_id", "version", name="uq_knowledge_revision_version"
+        ),
+        UniqueConstraint(
+            "knowledge_item_id", "content_hash", name="uq_knowledge_revision_hash"
+        ),
+        CheckConstraint("version > 0", name="ck_knowledge_revision_version"),
+        CheckConstraint(
+            "status IN ('PROPOSED','REVIEWED','APPROVED','SUPERSEDED','REVOKED','EXPIRED')",
+            name="ck_knowledge_revision_status",
+        ),
+        CheckConstraint(
+            "confidence >= 0 AND confidence <= 1",
+            name="ck_knowledge_revision_confidence",
+        ),
+        CheckConstraint(
+            "valid_to IS NULL OR valid_to > valid_from",
+            name="ck_knowledge_revision_validity",
+        ),
+        CheckConstraint(
+            "proposed_by_type IN ('human','policy','model','service')",
+            name="ck_knowledge_revision_proposer",
+        ),
+        CheckConstraint(
+            "reviewed_by_type IS NULL OR reviewed_by_type IN ('human','policy')",
+            name="ck_knowledge_revision_reviewer",
+        ),
+        CheckConstraint(
+            "approved_by_type IS NULL OR approved_by_type IN ('human','policy')",
+            name="ck_knowledge_revision_approver",
+        ),
+        CheckConstraint(
+            "(reviewed_by_type IS NULL) = (reviewed_by_id IS NULL)",
+            name="ck_knowledge_revision_reviewer_pair",
+        ),
+        CheckConstraint(
+            "(approved_by_type IS NULL) = (approved_by_id IS NULL)",
+            name="ck_knowledge_revision_approver_pair",
+        ),
+        CheckConstraint(
+            "(terminal_by_type IS NULL) = (terminal_by_id IS NULL)",
+            name="ck_knowledge_revision_terminal_pair",
+        ),
+        CheckConstraint(
+            "CASE status "
+            "WHEN 'PROPOSED' THEN reviewed_by_type IS NULL AND approved_by_type IS NULL "
+            "WHEN 'REVIEWED' THEN reviewed_by_type IN ('human','policy') "
+            "AND approved_by_type IS NULL "
+            "ELSE reviewed_by_type IN ('human','policy') "
+            "AND approved_by_type IN ('human','policy') END",
+            name="ck_knowledge_revision_authority_audit",
+        ),
+        CheckConstraint(
+            "terminal_by_type IS NULL OR terminal_by_type IN ('human','policy')",
+            name="ck_knowledge_revision_terminal_actor",
+        ),
+        CheckConstraint(
+            "(status IN ('SUPERSEDED','REVOKED','EXPIRED')) = "
+            "(terminal_by_type IS NOT NULL AND terminal_by_id IS NOT NULL "
+            "AND terminal_at IS NOT NULL)",
+            name="ck_knowledge_revision_terminal_audit",
+        ),
+        Index(
+            "ix_knowledge_revision_item_status_validity",
+            "knowledge_item_id",
+            "status",
+            "valid_from",
+            "valid_to",
+        ),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    knowledge_item_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("knowledge_items.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    version = Column(Integer, nullable=False)
+    status = Column(String, nullable=False, default="PROPOSED")
+    content = Column(Text, nullable=False)
+    content_hash = Column(String(64), nullable=False)
+    source_refs = Column(JSONB, nullable=False, default=list)
+    evidence_refs = Column(JSONB, nullable=False, default=list)
+    owner_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("principals.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    scope = Column(Text, nullable=False)
+    classification = Column(String, nullable=False)
+    confidence = Column(Float, nullable=False)
+    valid_from = Column(DateTime(timezone=True), nullable=False)
+    valid_to = Column(DateTime(timezone=True), nullable=True)
+    supersedes_revision_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("knowledge_revisions.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    proposed_by_type = Column(String, nullable=False)
+    proposed_by_id = Column(String, nullable=False)
+    reviewed_by_type = Column(String, nullable=True)
+    reviewed_by_id = Column(String, nullable=True)
+    approved_by_type = Column(String, nullable=True)
+    approved_by_id = Column(String, nullable=True)
+    terminal_by_type = Column(String, nullable=True)
+    terminal_by_id = Column(String, nullable=True)
+    terminal_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class KnowledgeConflict(Base):
+    __tablename__ = "knowledge_conflicts"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('OPEN','RESOLVED')", name="ck_knowledge_conflict_status"
+        ),
+        CheckConstraint(
+            "left_revision_id <> right_revision_id",
+            name="ck_knowledge_conflict_not_self",
+        ),
+        CheckConstraint(
+            "resolved_by_type IS NULL OR resolved_by_type IN ('human','policy')",
+            name="ck_knowledge_conflict_resolver",
+        ),
+        CheckConstraint(
+            "(status = 'RESOLVED') = "
+            "(resolution_revision_id IS NOT NULL AND resolved_by_type IS NOT NULL "
+            "AND resolved_by_id IS NOT NULL AND resolved_at IS NOT NULL)",
+            name="ck_knowledge_conflict_resolution_audit",
+        ),
+        Index(
+            "uq_knowledge_conflict_pair",
+            "knowledge_item_id",
+            sa_text("least(left_revision_id, right_revision_id)"),
+            sa_text("greatest(left_revision_id, right_revision_id)"),
+            unique=True,
+        ),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    knowledge_item_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("knowledge_items.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    left_revision_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("knowledge_revisions.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    right_revision_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("knowledge_revisions.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    status = Column(String, nullable=False, default="OPEN")
+    reason = Column(Text, nullable=False)
+    resolution_revision_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("knowledge_revisions.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    resolved_by_type = Column(String, nullable=True)
+    resolved_by_id = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class ContextSource(Base):
+    __tablename__ = "context_sources"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id", "source_id", "version", name="uq_context_source_version"
+        ),
+        CheckConstraint("version > 0", name="ck_context_source_version"),
+        CheckConstraint("token_cost >= 0", name="ck_context_source_token_cost"),
+        CheckConstraint(
+            "load_tier IN ('MUST_LOAD','SHOULD_LOAD_IF_RELEVANT',"
+            "'RETRIEVE_ON_DEMAND','NEVER_AUTO_LOAD')",
+            name="ck_context_source_load_tier",
+        ),
+        CheckConstraint(
+            "status IN ('ACTIVE','SUPERSEDED','STALE')",
+            name="ck_context_source_status",
+        ),
+        Index("ix_context_source_project_status", "project_id", "status"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    source_id = Column(Text, nullable=False)
+    version = Column(Integer, nullable=False)
+    content_hash = Column(String(64), nullable=False)
+    load_tier = Column(String, nullable=False)
+    classification = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="ACTIVE")
+    supersedes_source_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("context_sources.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    provider_policy = Column(JSONB, nullable=False, default=dict)
+    token_cost = Column(Integer, nullable=False)
+    metadata_json = Column(JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class ProviderRegistry(Base):
+    __tablename__ = "provider_registry"
+    __table_args__ = (
+        CheckConstraint(
+            "locality IN ('local','remote')", name="ck_provider_registry_locality"
+        ),
+        CheckConstraint(
+            "health_state IN ('healthy','degraded','unhealthy','disabled')",
+            name="ck_provider_registry_health",
+        ),
+        CheckConstraint("length(config_hash) = 64", name="ck_provider_config_hash"),
+    )
+
+    provider_id = Column(String, primary_key=True)
+    adapter_id = Column(String, nullable=False)
+    locality = Column(String, nullable=False)
+    network_required = Column(Boolean, nullable=False, default=False)
+    secret_ref = Column(Text, nullable=True)
+    health_state = Column(String, nullable=False)
+    circuit_open = Column(Boolean, nullable=False, default=False)
+    config_hash = Column(String(64), nullable=False)
+    version = Column(String, nullable=False)
+    metadata_json = Column(JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class ModelRegistry(Base):
+    __tablename__ = "model_registry"
+    __table_args__ = (
+        CheckConstraint("context_limit > 0", name="ck_model_context_limit"),
+        CheckConstraint("output_limit > 0", name="ck_model_output_limit"),
+        CheckConstraint(
+            "health_state IN ('healthy','degraded','unhealthy','disabled')",
+            name="ck_model_registry_health",
+        ),
+        CheckConstraint("length(config_hash) = 64", name="ck_model_config_hash"),
+    )
+
+    model_id = Column(String, primary_key=True)
+    provider_id = Column(
+        String,
+        ForeignKey("provider_registry.provider_id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    capabilities = Column(JSONB, nullable=False, default=list)
+    context_limit = Column(Integer, nullable=False)
+    output_limit = Column(Integer, nullable=False)
+    data_classifications = Column(JSONB, nullable=False, default=list)
+    embedding_profile = Column(JSONB, nullable=True)
+    benchmark = Column(JSONB, nullable=False, default=dict)
+    health_state = Column(String, nullable=False, default="healthy")
+    circuit_open = Column(Boolean, nullable=False, default=False)
+    accessible = Column(Boolean, nullable=False, default=True)
+    fallback_model_ids = Column(JSONB, nullable=False, default=list)
+    version = Column(String, nullable=False)
+    config_hash = Column(String(64), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class SkillRegistry(Base):
+    __tablename__ = "skill_registry"
+    __table_args__ = (
+        CheckConstraint("length(commit_sha) = 40", name="ck_skill_commit_sha"),
+        CheckConstraint("length(package_hash) = 64", name="ck_skill_package_hash"),
+        CheckConstraint(
+            "lower(version) NOT IN ('main','master','latest','head')",
+            name="ck_skill_immutable_version",
+        ),
+        CheckConstraint(
+            "trust_level IN ('untrusted','restricted','verified')",
+            name="ck_skill_trust_level",
+        ),
+    )
+
+    skill_id = Column(String, primary_key=True)
+    source_uri = Column(Text, nullable=False)
+    version = Column(String, nullable=False)
+    commit_sha = Column(String(40), nullable=False)
+    package_hash = Column(String(64), nullable=False)
+    publisher = Column(String, nullable=False)
+    owner = Column(String, nullable=False)
+    trust_level = Column(String, nullable=False)
+    required_tools = Column(JSONB, nullable=False, default=list)
+    required_permissions = Column(JSONB, nullable=False, default=list)
+    network_scope = Column(JSONB, nullable=False, default=list)
+    filesystem_scope = Column(JSONB, nullable=False, default=list)
+    supported_adapters = Column(JSONB, nullable=False, default=list)
+    receipt_refs = Column(JSONB, nullable=False, default=dict)
+    license_id = Column(String, nullable=True)
+    security_scan_receipt = Column(Text, nullable=False)
+    enabled_scope_type = Column(String, nullable=False)
+    enabled_scope_id = Column(String, nullable=True)
+    enabled = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class ContextManifest(Base):
+    __tablename__ = "context_manifests"
+    __table_args__ = (
+        UniqueConstraint("manifest_hash", name="uq_context_manifest_hash"),
+        UniqueConstraint("attempt_id", name="uq_context_manifest_attempt"),
+        CheckConstraint(
+            "token_budget > 0 AND reserved_output >= 0 AND safety_margin >= 0",
+            name="ck_context_manifest_budget",
+        ),
+        CheckConstraint(
+            "token_budget > reserved_output + safety_margin",
+            name="ck_context_manifest_available_budget",
+        ),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    attempt_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("work_attempts.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    manifest_hash = Column(String(64), nullable=False)
+    schema_version = Column(String, nullable=False)
+    provider_id = Column(
+        String,
+        ForeignKey("provider_registry.provider_id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    model_id = Column(
+        String,
+        ForeignKey("model_registry.model_id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    token_budget = Column(Integer, nullable=False)
+    reserved_output = Column(Integer, nullable=False)
+    safety_margin = Column(Integer, nullable=False)
+    core_json = Column(JSONB, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class CompiledContext(Base):
+    __tablename__ = "compiled_contexts"
+    __table_args__ = (
+        UniqueConstraint(
+            "context_manifest_id", "adapter_id", name="uq_compiled_context_adapter"
+        ),
+        CheckConstraint("token_cost >= 0", name="ck_compiled_context_token_cost"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    context_manifest_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("context_manifests.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    adapter_id = Column(String, nullable=False)
+    rendered_hash = Column(String(64), nullable=False)
+    rendered_artifact_ref = Column(
+        UUID(as_uuid=True),
+        ForeignKey("artifact_refs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    token_cost = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)

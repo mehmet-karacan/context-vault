@@ -16,7 +16,7 @@ def test_repository_migration_graph_has_expected_single_head():
     graph = verify_migrations.migration_graph(REPO_ROOT)
 
     assert graph["heads"] == [verify_migrations.EXPECTED_HEAD]
-    assert len(graph["revisions"]) == 6
+    assert len(graph["revisions"]) == 7
 
 
 def test_migration_graph_reports_multiple_heads(tmp_path):

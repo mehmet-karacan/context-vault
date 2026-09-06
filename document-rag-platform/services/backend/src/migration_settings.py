@@ -23,4 +23,4 @@ class MigrationSettings(BaseSettings):
 # Updated only by an intentional migration-lineage change. Runtime readiness
 # compares the database's exact Alembic revision with this value and never
 # mutates the schema to make a mismatch disappear.
-EXPECTED_ALEMBIC_HEAD = "cv3_00000006"
+EXPECTED_ALEMBIC_HEAD = "cv3_00000007"

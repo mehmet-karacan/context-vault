@@ -2,7 +2,8 @@
 
 ## Runtime checks
 
-1. Confirm migration head is `cv3_00000006` and run
+1. Confirm migration head is `cv3_00000007` (structured-answer persistence was
+   introduced by `cv3_00000006`) and run
    `scripts/verify_migrations.py --strict` against the intended database.
 2. Confirm `OBJECT_STORAGE_ENCRYPTION_KEY` resolves to exactly 32 bytes.
 3. Keep `PROVIDER_REQUEST_RETENTION=none` unless an approved policy explicitly

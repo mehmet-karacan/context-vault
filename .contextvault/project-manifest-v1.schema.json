@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://context-vault.local/schemas/project-manifest-v1.schema.json",
+  "title": "Context Vault project manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project_id", "human"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "project_id": {"type": "string", "format": "uuid"},
+    "human": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "context_sources",
+        "ignored_paths",
+        "token_budget",
+        "provider_data_policy",
+        "validation_commands",
+        "approval_policy"
+      ],
+      "properties": {
+        "repository": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["root"],
+          "properties": {
+            "root": {"type": "string", "minLength": 1},
+            "remote": {"type": ["string", "null"], "minLength": 1}
+          }
+        },
+        "context_sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "load_tier"],
+            "properties": {
+              "path": {"type": "string", "minLength": 1},
+              "load_tier": {
+                "enum": [
+                  "MUST_LOAD",
+                  "SHOULD_LOAD_IF_RELEVANT",
+                  "RETRIEVE_ON_DEMAND",
+                  "NEVER_AUTO_LOAD"
+                ]
+              }
+            }
+          }
+        },
+        "ignored_paths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "token_budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["context_window", "reserved_output", "safety_margin"],
+          "properties": {
+            "context_window": {"type": "integer", "minimum": 1},
+            "reserved_output": {"type": "integer", "minimum": 0},
+            "safety_margin": {"type": "integer", "minimum": 0}
+          }
+        },
+        "provider_data_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "remote_allowed_classifications",
+            "local_allowed_classifications"
+          ],
+          "properties": {
+            "remote_allowed_classifications": {"$ref": "#/$defs/classifications"},
+            "local_allowed_classifications": {"$ref": "#/$defs/classifications"}
+          }
+        },
+        "validation_commands": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "approval_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["owner", "approvers", "human_required_for"],
+          "properties": {
+            "owner": {"type": "string", "minLength": 1},
+            "approvers": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1}
+            },
+            "human_required_for": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
+    "generated": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["generator", "generator_version", "source_hash", "payload"],
+      "properties": {
+        "generator": {"type": "string", "minLength": 1},
+        "generator_version": {"type": "string", "minLength": 1},
+        "source_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "payload": {}
+      }
+    }
+  },
+  "$defs": {
+    "classifications": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"]
+      }
+    }
+  }
+}

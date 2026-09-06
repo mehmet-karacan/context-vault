@@ -1497,7 +1497,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--target-minio-access-key-env")
     parser.add_argument("--target-minio-secret-key-env")
     parser.add_argument("--target-minio-bucket-env")
-    parser.add_argument("--expected-head", default="cv3_00000006")
+    parser.add_argument("--expected-head", default="cv3_00000007")
     parser.add_argument("--expected-manifest-sha256")
     parser.add_argument("--json-output", type=Path, required=True)
     args = parser.parse_args(argv)

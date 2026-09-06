@@ -18,6 +18,7 @@ kod, test veya receipt kaynağını gösterir.
 | [ADR-010](ADR-010-typed-scoped-retrieval-context-bundle.md) | Accepted | Mehmet KARACAN | ADR-004 untyped/legacy-vector transition | `cv3_00000005`, A7 retrieval receipt |
 | [ADR-011](ADR-011-structured-answer-citation-provenance.md) | Accepted | Mehmet KARACAN | Free-text answer/candidate-wide citation persistence | `cv3_00000006`, A8 answer receipt |
 | [ADR-012](ADR-012-scoped-web-product-contract.md) | Accepted locally | Mehmet KARACAN | Handwritten web contracts and implicit project scope | A10 product/browser/durability gates |
+| [ADR-013](ADR-013-postgresql-work-graph-context-authority.md) | Accepted locally | Mehmet KARACAN | Markdown/transcript/Git/vector operational authority | `cv3_00000007`, A12 protocol tests |
 
 Last inventory verification: 2026-09-02. `scripts/generate_verified_status.py`
 checks that every `ADR-*.md` file is represented here.

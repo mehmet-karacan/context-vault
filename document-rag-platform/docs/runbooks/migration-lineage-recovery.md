@@ -1,6 +1,12 @@
 # Migration, Recovery and Lineage Reset
 
-Last verified SHA/date: `7d36fc74143d7504113ba6ac3adeaf9d736537bc`, `2026-09-06` (fresh `cv3_00000006` Compose migration and doctor head query); restore source SHA `bde49aca525f7ccc40b21c039af003413621223c`.
+Last verified date: `2026-09-06`. The A12 candidate was verified from a blank
+database through `cv3_00000007`, including a `cv3_00000006` →
+`cv3_00000007` sentinel-preservation upgrade and a reversible
+`cv3_00000007` → `cv3_00000006` schema downgrade. The last independently
+verified restore source SHA remains
+`bde49aca525f7ccc40b21c039af003413621223c`; bind the A12 implementation SHA in
+the canonical task receipt before release validation.
 
 ## Prerequisites
 Valid backup+restore receipt, exact DB identity, maintenance window and `MIGRATION_RUNBOOK.md` decision record.
@@ -12,7 +18,7 @@ Valid backup+restore receipt, exact DB identity, maintenance window and `MIGRATI
 `docker compose run --rm migration`; rerun the verifier against the restored fresh target before cutover.
 
 ## Expected output
-One repository head and DB head `cv3_00000006`; invariants zero.
+One repository head and DB head `cv3_00000007`; invariants zero.
 
 ## Stop conditions
 Divergent history, dirty/unbacked DB, multiple heads, unknown revision or nonzero invariant.

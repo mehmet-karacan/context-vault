@@ -26,7 +26,7 @@ from urllib.parse import unquote, urlsplit
 
 
 TOOL_VERSION = "1.1.0"
-DEFAULT_EXPECTED_HEAD = "cv3_00000006"
+DEFAULT_EXPECTED_HEAD = "cv3_00000007"
 REQUIRED_DEPENDENCIES = ("postgres", "redis", "minio")
 OPTIONAL_LONG_RUNNING_SERVICES = ("backend", "worker")
 MAX_COMMAND_OUTPUT_BYTES = 1024 * 1024

@@ -2978,14 +2978,14 @@ DRAFT
 
 Bağlayıcı kurallar:
 
-- [ ] `RUNNING` için geçerli claim/lease ve fencing token gerekir.
-- [ ] Etki claim'den önce başlayamaz.
-- [ ] Expected revision drift etmişse attempt `BLOCKED/RECOVERY_REQUIRED` olur.
-- [ ] `COMPLETED` için terminal receipt ve acceptance evidence gerekir.
-- [ ] Lease süresi dolması otomatik “tamamlandı” değildir; reconciler gerçek etkiyi kontrol eder.
-- [ ] Retry yeni attempt'tir; aynı idempotency key duplicate etki yaratmaz.
-- [ ] Model/CLI kendi approval'ını veremez.
-- [ ] Root security/authority/source-of-truth/global DoD değişikliği insan onayı ister.
+- [x] `RUNNING` için geçerli claim/lease ve fencing token gerekir.
+- [x] Etki claim'den önce başlayamaz.
+- [x] Expected revision drift etmişse attempt `BLOCKED/RECOVERY_REQUIRED` olur.
+- [x] `COMPLETED` için terminal receipt ve acceptance evidence gerekir.
+- [x] Lease süresi dolması otomatik “tamamlandı” değildir; reconciler gerçek etkiyi kontrol eder.
+- [x] Retry yeni attempt'tir; aynı idempotency key duplicate etki yaratmaz.
+- [x] Model/CLI kendi approval'ını veremez.
+- [x] Root security/authority/source-of-truth/global DoD değişikliği insan onayı ister.
 
 ### 19.6 Prepare/apply/close komut protokolü
 
@@ -3010,12 +3010,12 @@ cv provider test
 cv skill verify
 ```
 
-- [ ] `prepare` DB/repo/dış sistemi değiştirmez.
-- [ ] `apply` scope dışına çıkamaz; adapter typed capability ile sınırlandırılır.
-- [ ] Mutating tool call'ların sonucu receipt'e bağlanır.
-- [ ] CLI kesilirse claim/reconcile akışı çalışır.
-- [ ] Dry-run ile gerçek apply çıktısı farkı açıklanabilir.
-- [ ] Her command JSON ve insan-okunur çıktı üretebilir.
+- [x] `prepare` DB/repo/dış sistemi değiştirmez.
+- [x] `apply` scope dışına çıkamaz; adapter typed capability ile sınırlandırılır.
+- [x] Mutating tool call'ların sonucu receipt'e bağlanır.
+- [x] CLI kesilirse claim/reconcile akışı çalışır.
+- [x] Dry-run ile gerçek apply çıktısı farkı açıklanabilir.
+- [x] Her command JSON ve insan-okunur çıktı üretebilir.
 
 ### 19.7 Proje kimliği ve proje bağlam dosyaları
 
@@ -3050,10 +3050,10 @@ PROJECT_CONTEXT.md
 - owner ve approval policy;
 - schema version.
 
-- [ ] Dosyalar validator ve schema taşır.
-- [ ] Bir CLI projeye girdiğinde önce bu manifest ile projeyi tanır.
-- [ ] Generated bölümler elle düzenlenmez; human ve generated source ayrıdır.
-- [ ] `.zekam/` entegrasyonu gerekiyorsa bu kaynaklardan üretilen compatibility projection olur; canonical truth olmaz.
+- [x] Dosyalar validator ve schema taşır.
+- [x] Bir CLI projeye girdiğinde önce bu manifest ile projeyi tanır.
+- [x] Generated bölümler elle düzenlenmez; human ve generated source ayrıdır.
+- [x] `.zekam/` entegrasyonu gerekiyorsa bu kaynaklardan üretilen compatibility projection olur; canonical truth olmaz.
 
 ### 19.8 ContextCompiler
 
@@ -3069,15 +3069,15 @@ Compiler girdileri:
 
 Compiler davranışı:
 
-- [ ] `MUST_LOAD`, `SHOULD_LOAD_IF_RELEVANT`, `RETRIEVE_ON_DEMAND`, `NEVER_AUTO_LOAD` uygular.
-- [ ] Full vault preload yapmaz.
-- [ ] Her included item source id, version, hash, reason ve token cost taşır.
-- [ ] Duplicate/superseded/stale bilgi deterministik elenir.
-- [ ] Aktif görev ve security policy token baskısında düşürülemez.
-- [ ] Context window, reserved output ve safety margin dikkate alınır.
-- [ ] Compiled context immutable manifest/hash ile attempt'e bağlanır.
-- [ ] Farklı CLI'lar aynı manifest için semantik olarak aynı core context'i alır; yalnız adapter formatı değişir.
-- [ ] Sensitive item provider policy'ye göre exclude/local-only olabilir.
+- [x] `MUST_LOAD`, `SHOULD_LOAD_IF_RELEVANT`, `RETRIEVE_ON_DEMAND`, `NEVER_AUTO_LOAD` uygular.
+- [x] Full vault preload yapmaz.
+- [x] Her included item source id, version, hash, reason ve token cost taşır.
+- [x] Duplicate/superseded/stale bilgi deterministik elenir.
+- [x] Aktif görev ve security policy token baskısında düşürülemez.
+- [x] Context window, reserved output ve safety margin dikkate alınır.
+- [x] Compiled context immutable manifest/hash ile attempt'e bağlanır.
+- [x] Farklı CLI'lar aynı manifest için semantik olarak aynı core context'i alır; yalnız adapter formatı değişir.
+- [x] Sensitive item provider policy'ye göre exclude/local-only olabilir.
 
 ### 19.9 Knowledge yaşam döngüsü
 
@@ -3085,13 +3085,13 @@ Compiler davranışı:
 PROPOSED → REVIEWED → APPROVED → SUPERSEDED | REVOKED | EXPIRED
 ```
 
-- [ ] Chat/transcript/model cevabı otomatik approved knowledge olmaz.
-- [ ] Model extraction yalnız `PROPOSED` kayıt oluşturabilir.
-- [ ] İnsan veya yetkili policy approval gerekir.
-- [ ] Her knowledge revision source/evidence, owner, scope, confidence, validity interval ve supersedes taşır.
-- [ ] Çelişkili bilgi overwrite edilmez; conflict kaydı açılır.
-- [ ] Hassas bilgi data classification ve provider policy ile korunur.
-- [ ] Obsidian/Markdown görünümü approved knowledge'ın projection'ıdır; elle değişiklik import/promotion akışından geçer.
+- [x] Chat/transcript/model cevabı otomatik approved knowledge olmaz.
+- [x] Model extraction yalnız `PROPOSED` kayıt oluşturabilir.
+- [x] İnsan veya yetkili policy approval gerekir.
+- [x] Her knowledge revision source/evidence, owner, scope, confidence, validity interval ve supersedes taşır.
+- [x] Çelişkili bilgi overwrite edilmez; conflict kaydı açılır.
+- [x] Hassas bilgi data classification ve provider policy ile korunur.
+- [x] Obsidian/Markdown görünümü approved knowledge'ın projection'ıdır; elle değişiklik import/promotion akışından geçer.
 
 ### 19.10 Provider ve model registry
 
@@ -3108,11 +3108,11 @@ Her provider/model kaydı:
 - version/config hash;
 - fallback policy.
 
-- [ ] Kurum içi OpenAI-compatible embedding ve yerel BGE aynı portu uygular.
-- [ ] Kullanıcının erişemediği model kimliği route edilemez; exact model id doğrulanır.
-- [ ] Fallback farklı vector profile'ı sessiz kullanmaz.
-- [ ] Routing yalnız isim değil capability + data policy + health + benchmark'a göre yapılır.
-- [ ] Provider config secret'sız registry metadata ve secret store referansı olarak ayrılır.
+- [x] Kurum içi OpenAI-compatible embedding ve yerel BGE aynı portu uygular.
+- [x] Kullanıcının erişemediği model kimliği route edilemez; exact model id doğrulanır.
+- [x] Fallback farklı vector profile'ı sessiz kullanmaz.
+- [x] Routing yalnız isim değil capability + data policy + health + benchmark'a göre yapılır.
+- [x] Provider config secret'sız registry metadata ve secret store referansı olarak ayrılır.
 
 ### 19.11 Skill registry ve güven modeli
 
@@ -3129,11 +3129,11 @@ Her skill için:
 - license/security scan;
 - enabled scope: global/project/work item.
 
-- [ ] Skill yüklemek kodu kör çalıştırmak değildir; önce inspect/verify/policy.
-- [ ] Mutable `main/latest` pin'i production skill kaynağı olamaz.
-- [ ] Skill, root authority veya security policy'yi değiştiremez.
-- [ ] CLI'ya özel skill core registry'den bağımsız kopyalanmaz; adapter projection üretilir.
-- [ ] Scientific/agent skill setleri dahil dış kaynaklar aynı admission sürecinden geçer.
+- [x] Skill yüklemek kodu kör çalıştırmak değildir; önce inspect/verify/policy.
+- [x] Mutable `main/latest` pin'i production skill kaynağı olamaz.
+- [x] Skill, root authority veya security policy'yi değiştiremez.
+- [x] CLI'ya özel skill core registry'den bağımsız kopyalanmaz; adapter projection üretilir.
+- [x] Scientific/agent skill setleri dahil dış kaynaklar aynı admission sürecinden geçer.
 
 ### 19.12 Çoklu CLI adapter'ları
 
@@ -3152,9 +3152,9 @@ Her adapter:
 - model/CLI kimliğini attempt metadata'sında tutar;
 - aynı work item üzerinde fencing token'a uyar.
 
-- [ ] Adapter conformance test suite olacak.
-- [ ] Bir adapter yokken core çalışmaya devam edecek.
-- [ ] CLI transcript'i opsiyonel debug artifact'tir; canonical memory değildir.
+- [x] Adapter conformance test suite olacak.
+- [x] Bir adapter yokken core çalışmaya devam edecek.
+- [x] CLI transcript'i opsiyonel debug artifact'tir; canonical memory değildir.
 
 ### 19.13 Handoff ve süreklilik
 
@@ -3170,35 +3170,70 @@ Terminal veya ara handoff şu structured özeti üretir:
 - gerekli context manifest hash'i;
 - private artifact referansları.
 
-- [ ] Yeni ajan/CLI handoff'u doğrulamadan apply yapamaz.
-- [ ] “Son konuşmada şöyle demiştik” yerine decision/receipt referansı kullanılır.
-- [ ] Handoff stale ise compiler uyarır ve yeni prepare ister.
+- [x] Yeni ajan/CLI handoff'u doğrulamadan apply yapamaz.
+- [x] “Son konuşmada şöyle demiştik” yerine decision/receipt referansı kullanılır.
+- [x] Handoff stale ise compiler uyarır ve yeni prepare ister.
 
 ### 19.14 Context Vault güvenilirlik testleri
 
-- [ ] Aynı work item'a iki CLI claim olur; yalnız fencing token sahibi etki yaratır.
-- [ ] Claim sonrası repo/DB drift eder; apply engellenir.
-- [ ] CLI process ölür; stale lease reconcile edilir, iş sahte tamamlanmaz.
-- [ ] Aynı idempotency key ile iki apply; tek etki ve iki gözlem/tek canonical receipt.
-- [ ] Full-vault preload teşebbüsü budget/policy tarafından engellenir.
-- [ ] `NEVER_AUTO_LOAD` içeriği remote provider manifestine girmez.
-- [ ] Superseded knowledge compile edilmez.
-- [ ] Model kendi cevabını approved knowledge yapamaz.
-- [ ] Üç CLI adapter'ı aynı core context manifestini korur.
-- [ ] Provider fallback yanlış embedding profile'a geçmez.
-- [ ] Skill hash değişir; execution admission fail eder.
-- [ ] Receipt olmadan work item completed olamaz.
+- [x] Aynı work item'a iki CLI claim olur; yalnız fencing token sahibi etki yaratır.
+- [x] Claim sonrası repo/DB drift eder; apply engellenir.
+- [x] CLI process ölür; stale lease reconcile edilir, iş sahte tamamlanmaz.
+- [x] Aynı idempotency key ile iki apply; tek etki ve iki gözlem/tek canonical receipt.
+- [x] Full-vault preload teşebbüsü budget/policy tarafından engellenir.
+- [x] `NEVER_AUTO_LOAD` içeriği remote provider manifestine girmez.
+- [x] Superseded knowledge compile edilmez.
+- [x] Model kendi cevabını approved knowledge yapamaz.
+- [x] Üç CLI adapter'ı aynı core context manifestini korur.
+- [x] Provider fallback yanlış embedding profile'a geçmez.
+- [x] Skill hash değişir; execution admission fail eder.
+- [x] Receipt olmadan work item completed olamaz.
 
 ### 19.15 Kabul kriterleri
 
-- [ ] Operasyonel iş otoritesi PostgreSQL Work Graph'tır.
-- [ ] Prepare/apply/claim/receipt protokolü gerçek bir mutasyon akışında kanıtlanmıştır.
-- [ ] Her proje standart context manifestiyle tanınabilir.
-- [ ] ContextCompiler load tier ve token budget ile bounded context üretir.
-- [ ] Knowledge promotion insan kontrollü ve versioned'dır.
-- [ ] Provider/model/skill kayıtları exact version/hash/data policy taşır.
-- [ ] OpenCode/Claude/Codex adapter'ları conformance testinden geçer.
-- [ ] Obsidian/Markdown/transcript/Git history operasyonel authority olarak kullanılmaz.
+- [x] Operasyonel iş otoritesi PostgreSQL Work Graph'tır.
+- [x] Prepare/apply/claim/receipt protokolü gerçek bir mutasyon akışında kanıtlanmıştır.
+- [x] Her proje standart context manifestiyle tanınabilir.
+- [x] ContextCompiler load tier ve token budget ile bounded context üretir.
+- [x] Knowledge promotion insan kontrollü ve versioned'dır.
+- [x] Provider/model/skill kayıtları exact version/hash/data policy taşır.
+- [x] OpenCode/Claude/Codex adapter'ları conformance testinden geçer.
+- [x] Obsidian/Markdown/transcript/Git history operasyonel authority olarak kullanılmaz.
+
+### 19.16 2026-09-06 doğrulanmış A12 uygulama kanıtı
+
+- Başlangıç uygulama SHA'sı:
+  `30ea23e2750fb3c5f96ab2012b509da6c688aad4`; geliştirme branch'i
+  `fix/context-vault-v3-hardening`. Remote push/PR/merge/release yapılmadı.
+- Proje manifesti `.contextvault/project.yaml` ve şemasıyla doğrulandı;
+  canonical manifest SHA-256 değeri
+  `461c4b41d0e2474d449dcd3cfdc7ef8dc73f8044b75b80bb20f4d2f87c09f7e3`.
+  `./scripts/cv.py --json doctor --start .` doğru project/root kimliğini buldu;
+  uzun ömürlü DB yapılandırılmadığı için durumu dürüstçe `degraded` bildirdi.
+- Nihai worktree üzerinde non-integration regresyonu **1472 PASS, 9 SKIP,
+  35 DESELECTED**; A12 odaklı paket **210 PASS**; migration/doctor/backup
+  regresyonu **40 PASS** verdi. Bilinen tek uyarı Starlette/httpx deprecation
+  uyarısıdır.
+- Ayrı, boş `pgvector/pgvector:pg16` konteynerinde Alembic zinciri
+  `cv3_00000001` → `cv3_00000007` uygulandı; Work Graph ve Context Vault
+  persistence entegrasyonu **13 PASS**, `alembic check` temiz ve DB head
+  `cv3_00000007` oldu. Kapsayıcı kapatılıp silindi; mevcut kullanıcı DB'si,
+  MinIO artifact'i veya embedding/index verisi değiştirilmedi.
+- Ayrı migration recovery koşusunda v6 sentinel proje, v6→v7 upgrade ve
+  v7→v6 downgrade boyunca korundu; yeniden upgrade head'i
+  `cv3_00000007` oldu.
+- Ruff, scoped format, focused mypy ve `git diff --check` kapıları geçti.
+- Bağımsız persistence/composition incelemesi önce 10 P1/P2 buldu. Approval
+  authority, DB kaynaklı context composition, exact attempt/model/provider/
+  claim binding, rollback intent-before-effect, exact claim replay, DB knowledge
+  lifecycle, skill receipt/policy authority, transaction atomikliği, exact JSON
+  typing ve proje sahipliği düzeltildikten sonra stabil byte'larda yeniden
+  çalıştı: **APPROVE, 10/10 CLOSED, yeni P0/P1/P2 yok**; bağımsız taze DB
+  koşusu **196 focused PASS + 13 integration PASS** verdi.
+- Kullanıcının talebiyle model registry/conformance yolu MacBook'taki yerel
+  BGE hattını esas alır; OpenCode binary çalıştırılmadı. OpenCode/Claude/Codex
+  için kanıt adapter conformance seviyesindedir; core authority CLI'dan
+  bağımsızdır.
 
 ---
 

@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "source_base_sha": "30ea23e2750fb3c5f96ab2012b509da6c688aad4",
+  "implementation_commit": null,
+  "branch": "fix/context-vault-v3-hardening",
+  "project_manifest_sha256": "461c4b41d0e2474d449dcd3cfdc7ef8dc73f8044b75b80bb20f4d2f87c09f7e3",
+  "migration_head": "cv3_00000007",
+  "remote_mutation_performed": false,
+  "user_data_mutated": false
+}
