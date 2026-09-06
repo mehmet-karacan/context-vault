@@ -313,6 +313,77 @@ def test_image_subject_allows_untracked_ci_evidence_but_not_tracked_drift(
         )
 
 
+def test_image_subject_accepts_trivy_070_cyclonedx_image_binding(
+    tmp_path: Path,
+) -> None:
+    repo, head = _repo(tmp_path)
+    digest = "sha256:" + "c" * 64
+    image_ref = "candidate:trivy-070"
+    sbom = repo / "evidence/sbom-trivy.json"
+    scan = repo / "evidence/scan-trivy.json"
+    output = repo / "evidence/subject-trivy.json"
+    _write(
+        sbom,
+        {
+            "bomFormat": "CycloneDX",
+            "metadata": {
+                "component": {
+                    "bom-ref": "generated-uuid",
+                    "type": "container",
+                    "name": image_ref,
+                    "properties": [
+                        {
+                            "name": "aquasecurity:trivy:ImageID",
+                            "value": digest,
+                        },
+                        {
+                            "name": "aquasecurity:trivy:Reference",
+                            "value": image_ref,
+                        },
+                    ],
+                }
+            },
+            "components": [{"name": "openssl"}],
+        },
+    )
+    _write(
+        scan,
+        {
+            "ArtifactName": image_ref,
+            "Metadata": {"ImageID": digest},
+            "Results": [],
+        },
+    )
+
+    def run(command, **kwargs):
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            json.dumps(
+                [
+                    {
+                        "Id": digest,
+                        "Config": {
+                            "Labels": {"org.opencontainers.image.revision": head}
+                        },
+                    }
+                ]
+            ),
+            "",
+        )
+
+    subject = gate.create_image_subject(
+        repo=repo,
+        image_ref=image_ref,
+        sbom_path=sbom,
+        scan_path=scan,
+        output=output,
+        run=run,
+    )
+
+    assert subject["image_digest"] == digest
+
+
 def _image_evidence(repo: Path, head: str) -> tuple[Path, Path, Path, Path]:
     image_digest = "sha256:" + "b" * 64
     subject = repo / "evidence/subject.json"

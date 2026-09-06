@@ -352,6 +352,17 @@ def _validate_sbom_binding(
     metadata = sbom.get("metadata")
     component = metadata.get("component") if isinstance(metadata, dict) else None
     bom_ref = component.get("bom-ref") if isinstance(component, dict) else None
+    properties = component.get("properties") if isinstance(component, dict) else None
+    property_values = {
+        str(item.get("name")): item.get("value")
+        for item in properties or []
+        if isinstance(item, dict)
+    }
+    digest_bound_in_reference = isinstance(bom_ref, str) and image_digest in bom_ref
+    digest_bound_in_trivy_properties = (
+        property_values.get("aquasecurity:trivy:ImageID") == image_digest
+        and property_values.get("aquasecurity:trivy:Reference") == image_ref
+    )
     if (
         sbom.get("bomFormat") != "CycloneDX"
         or not isinstance(sbom.get("components"), list)
@@ -359,8 +370,7 @@ def _validate_sbom_binding(
         or not isinstance(component, dict)
         or component.get("type") != "container"
         or component.get("name") != image_ref
-        or not isinstance(bom_ref, str)
-        or image_digest not in bom_ref
+        or not (digest_bound_in_reference or digest_bound_in_trivy_properties)
     ):
         raise GateError("image SBOM is not bound to the exact image ref and digest")
 
