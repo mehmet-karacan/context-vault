@@ -5,11 +5,11 @@
     {
       "id": "A11-RISK-001",
       "severity": "P1",
-      "status": "OPEN",
+      "status": "CLOSED",
       "owner": "Context Vault repository owner",
-      "summary": "Remote main currently has no verified required-check ruleset receipt.",
-      "mitigation": "Create and independently verify the required-check ruleset, then bind its authenticated receipt to the exact release candidate SHA.",
-      "release_effect": "Blocks release-candidate PASS; it does not block local verification work."
+      "summary": "Main required-check ruleset and direct-push enforcement are independently verified.",
+      "mitigation": "Ruleset 22369487 is active; authenticated exact-candidate status is verified and direct-push probe 34009527143 was rejected with GH013.",
+      "release_effect": "Resolved for candidate 2c552c443c843b31b24c6ea3baa9457d4c901909."
     },
     {
       "id": "A11-RISK-002",
@@ -37,6 +37,15 @@
       "summary": "API, ingestion and outbox SLO targets are not yet bound to a measured first baseline and alert delivery receipt.",
       "mitigation": "Capture the content-free baseline, activate the policy with its receipt hash, and verify an actionable test alert reaches the declared on-call escalation target.",
       "release_effect": "Blocks release-candidate PASS; provisional numeric targets are not operational evidence."
+    },
+    {
+      "id": "A9-RISK-005",
+      "severity": "P2",
+      "status": "OPEN",
+      "owner": "Context Vault retrieval owner",
+      "summary": "The last human-sealed historical local benchmark observed one answerable_claims_empty repair and Recall@5/MRR of 0.833333.",
+      "mitigation": "Track the observation without weakening absolute safety gates; compare it with the fresh exact-candidate benchmark before choosing retrieval tuning work.",
+      "release_effect": "Non-blocking P2 quality observation. The fresh exact-candidate benchmark and regression budget remain separate mandatory release gates."
     }
   ]
 }

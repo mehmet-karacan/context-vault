@@ -383,6 +383,9 @@ Kayıp migration lineage'ı körlemesine `stamp` veya downgrade etmeden çözmek
 
 #### Yol A — Exact migration dosyaları kurtarılabiliyorsa
 
+Durum: `NOT_APPLICABLE`; exact `0004/0005` bulunamadığı kanıtlandığı için Yol B
+seçildi. Aşağıdaki koşullu maddeler uygulanmış gibi işaretlenmez.
+
 - [x] Yerel reflog, worktree, stash, eski clone, CI artifact, backup, editör geçmişi ve ulaşılabilir Git object'leri salt-okunur taranacak.
 - [ ] Bulunan dosyalar revision id, down_revision, içerik hash'i ve çalıştırıldığı dönemin şema diff'iyle doğrulanacak.
 - [ ] Dosyalar “tahmini” değil exact olduğuna dair kanıt olmadan Yol A kabul edilmeyecek.
@@ -391,6 +394,10 @@ Kayıp migration lineage'ı körlemesine `stamp` veya downgrade etmeden çözmek
 - [ ] Sonra yalnız additive/forward reconciliation revision'ı oluşturulacak.
 
 #### Yol B — Exact migration dosyaları kurtarılamıyorsa
+
+Durum: `SELECTED`. Eski kaynak DB sonradan bulunursa salt-okunur cutover/retention
+maddeleri yeniden admission ister; bu çalışma sırasında kaynak bulunmadığı için
+o iki koşullu madde `NOT_APPLICABLE_SOURCE_UNAVAILABLE` kaldı.
 
 - [x] `0004/0005` için boş/no-op sahte dosya oluşturulmayacak.
 - [x] Canlı DB üzerinde `alembic stamp`, manuel `DELETE FROM alembic_version` veya kör downgrade yapılmayacak.
@@ -421,6 +428,12 @@ Kayıp migration lineage'ı körlemesine `stamp` veya downgrade etmeden çözmek
 ### 8.5 Veri bütünlüğü onarımı
 
 Yedek/restore kanıtından sonra:
+
+Eski runtime'a ait iki cross-version chunk, extension'sız belge ve orphan
+`rag-migrate` gözlemleri kaynak bulunamadığı için
+`NOT_APPLICABLE_SOURCE_UNAVAILABLE`; bunlar onarılmış gibi işaretlenmez. Yeni V3
+hedefin karşılık gelen invariant ve deterministic profile kontrolleri §8.9 ve
+exact CI migration receipt'leriyle ayrıca PASS'tir.
 
 - [ ] İki cross-version chunk tek tek kaynağıyla sınıflandırılacak.
 - [ ] Doğru version'a güvenli taşıma veya kontrollü yeniden ingestion yapılacak.
@@ -663,6 +676,8 @@ Bir ajanın veya geliştiricinin hangi dosyanın gerçek, hangi dizinin placehol
 - [x] `ttroot-g3.crt` için sahiplik/provenance/politika kararı alınacak.
 - [x] Kuruma özel CA ise public tree'den çıkarılacak; deployment sırasında secret/mount/build-arg ile inject edilecek.
 - [ ] Public ve dağıtılabilir bir CA ise bile kaynak, lisans, checksum ve neden gerektiği belgelenmeden repoda tutulmayacak.
+- Koşullu public/distributable CA dalı `NOT_APPLICABLE`: tracked public tree'de
+  CRT/PEM/`ttroot-g3` yoktur; seçilen yol external secret injection'dır.
 - [x] Corporate endpoint varsayılanları `.env.example` ve `config.py` içinden çıkarılacak; `*.example.invalid` benzeri nötr örnek kullanılacak.
 - [x] Kurum içi deployment değerleri public repodan ayrı overlay'de tutulacak.
 - [x] Tüm Git geçmişi secret/certificate/private endpoint açısından taranacak.
@@ -3355,8 +3370,8 @@ Aşağıdakiler olmadan release/tag/merge kararı verilemez:
 - [x] Final candidate SHA ve `NO_GO_EXTERNAL_GATES` release receipt bu dosyaya işlendi.
 - [ ] Tamamlanan aktif görev `done/active-tasks/` altına immutable olarak taşınır.
 - [ ] Root `AKTIF_GOREV.md` yalnız yeni açık ve onaylı görev varsa değiştirilir; boşuna yeni kapsam üretilmez.
-- [ ] `verified-state.json` release SHA'sını ve evidence manifestini gösterir.
-- [ ] Açık P2/gelecek işler ayrı backlog'a taşınır; tamamlanmış gibi işaretlenmez.
+- [x] `verified-state.json` release SHA'sını ve evidence manifestini gösterir.
+- [x] Açık P2/gelecek işler ayrı backlog'a taşınır; tamamlanmış gibi işaretlenmez.
 
 ### 20.8 2026-09-06 exact remote ve bağımsız kapanış kaydı
 
