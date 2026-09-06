@@ -36,7 +36,7 @@ local-eval = [
 
 [dependency-groups]
 dev = [
-  "cyclonedx-bom>=7.1.0,<8",
+  "cyclonedx-bom>=7.3.1,<8",
   "jsonschema[format-nongpl]==4.26.0",
   "mypy==1.9.0",
   "pip-audit>=2.9.0,<3",
