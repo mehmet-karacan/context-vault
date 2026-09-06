@@ -24,15 +24,26 @@ jobs:
 
       - name: Commit sahiplik ve vocab denetimi
         env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           IS_MAIN_REF: ${{ github.ref == 'refs/heads/main' }}
         run: |
+          refspec="$HEAD_SHA"
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            refspec="$BASE_SHA..$HEAD_SHA"
+          elif [[ "$EVENT_NAME" == "push" && "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]]; then
+            refspec="$BEFORE_SHA..$HEAD_SHA"
+          fi
+
           committer_args=()
           if [[ "$IS_MAIN_REF" == "true" ]]; then
             committer_args+=(--allowed-committer "GitHub noreply@github.com")
           fi
           python scripts/check_commit_ownership.py \
             --repo "$GITHUB_WORKSPACE" \
-            --refspec "${{ github.event.pull_request.head.sha || github.sha }}" \
+            --refspec "$refspec" \
             --allowed-author "mehmet-karacan karacan.mehmet@hotmail.com" \
             --allowed-author "Mehmet KARACAN karacan.mehmet@hotmail.com" \
             "${committer_args[@]}"
