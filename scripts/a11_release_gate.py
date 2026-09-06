@@ -387,7 +387,10 @@ def create_image_subject(
     run: Run = subprocess.run,
 ) -> dict[str, Any]:
     head = _head(repo)
-    if _git(repo, "status", "--porcelain=v1"):
+    # CI evidence generators legitimately create untracked reports before this
+    # gate runs. Source cleanliness means that no tracked candidate byte changed;
+    # untracked evidence is bound by its own digest below.
+    if _git(repo, "status", "--porcelain=v1", "--untracked-files=no"):
         raise GateError("image subject requires a clean candidate checkout")
     try:
         completed = run(
@@ -427,7 +430,9 @@ def create_image_subject(
     lockfile = repo / "document-rag-platform/services/backend/uv.lock"
     dockerfile_sha = sha256(dockerfile)
     lockfile_sha = sha256(lockfile)
-    if _head(repo) != head or _git(repo, "status", "--porcelain=v1"):
+    if _head(repo) != head or _git(
+        repo, "status", "--porcelain=v1", "--untracked-files=no"
+    ):
         raise GateError("candidate checkout changed during image subject creation")
     subject = {
         "schema_version": "1.0",

@@ -242,6 +242,77 @@ def test_image_subject_requires_oci_revision_equal_to_head(tmp_path: Path) -> No
     assert oct(output.stat().st_mode & 0o777) == "0o600"
 
 
+def test_image_subject_allows_untracked_ci_evidence_but_not_tracked_drift(
+    tmp_path: Path,
+) -> None:
+    repo, head = _repo(tmp_path)
+    digest = "sha256:" + "b" * 64
+    sbom = repo / "evidence/sbom.json"
+    scan = repo / "evidence/scan.json"
+    output = repo / "evidence/subject.json"
+    _write(
+        sbom,
+        {
+            "bomFormat": "CycloneDX",
+            "metadata": {
+                "component": {
+                    "type": "container",
+                    "name": "candidate:test",
+                    "bom-ref": f"pkg:oci/candidate@{digest}",
+                }
+            },
+            "components": [{"name": "openssl"}],
+        },
+    )
+    _write(
+        scan,
+        {
+            "ArtifactName": "candidate:test",
+            "Metadata": {"ImageID": digest},
+            "Results": [],
+        },
+    )
+    (repo / "ci-transient.txt").write_text("generated evidence\n", encoding="utf-8")
+
+    def run(command, **kwargs):
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            json.dumps(
+                [
+                    {
+                        "Id": digest,
+                        "Config": {
+                            "Labels": {"org.opencontainers.image.revision": head}
+                        },
+                    }
+                ]
+            ),
+            "",
+        )
+
+    gate.create_image_subject(
+        repo=repo,
+        image_ref="candidate:test",
+        sbom_path=sbom,
+        scan_path=scan,
+        output=output,
+        run=run,
+    )
+
+    dockerfile = repo / "document-rag-platform/services/backend/Dockerfile"
+    dockerfile.write_text("FROM changed\n", encoding="utf-8")
+    with pytest.raises(gate.GateError, match="clean candidate checkout"):
+        gate.create_image_subject(
+            repo=repo,
+            image_ref="candidate:test",
+            sbom_path=sbom,
+            scan_path=scan,
+            output=output,
+            run=run,
+        )
+
+
 def _image_evidence(repo: Path, head: str) -> tuple[Path, Path, Path, Path]:
     image_digest = "sha256:" + "b" * 64
     subject = repo / "evidence/subject.json"
