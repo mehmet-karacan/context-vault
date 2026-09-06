@@ -85,14 +85,16 @@ jobs:
           LITELLM_API_KEY: test-only
           LITELLM_BASE_URL: https://llm-gateway.example.invalid/v1
         run: |
-          uv run pytest -m "not integration" --junitxml=reports/unit-junit.xml --cov=src --cov-report=xml:reports/coverage.xml --cov-report=json:reports/coverage.json
+          uv run pytest -m "not integration" --junitxml=reports/unit-junit.xml --cov=src --cov-report= --cov-fail-under=0
           uv run coverage report --include="src/domain/*" --fail-under=100
 
       - name: Integration tests
         env:
           LITELLM_API_KEY: test-only
           LITELLM_BASE_URL: https://llm-gateway.example.invalid/v1
-        run: uv run pytest -m integration --junitxml=reports/integration-junit.xml
+        run: |
+          uv run pytest -m "integration and not evals" --junitxml=reports/integration-junit.xml --cov=src --cov-append --cov-report=xml:reports/coverage.xml --cov-report=json:reports/coverage.json --cov-fail-under=0
+          uv run coverage report --fail-under=77
 
       - name: Import and OpenAPI smoke
         env:

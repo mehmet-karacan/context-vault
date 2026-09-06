@@ -10,6 +10,7 @@ import redis
 from sqlalchemy import create_engine, text
 
 from src.infrastructure.storage.minio_storage import MinioObjectStorage
+from src.migration_settings import EXPECTED_ALEMBIC_HEAD
 
 
 @pytest.mark.integration
@@ -21,7 +22,7 @@ def test_fresh_postgres_redis_minio_are_real_and_writable():
             connection.execute(
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
-            == "cv3_00000006"
+            == EXPECTED_ALEMBIC_HEAD
         )
         assert (
             connection.execute(

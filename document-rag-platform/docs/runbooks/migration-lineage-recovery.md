@@ -1,7 +1,9 @@
 # Migration, Recovery and Lineage Reset
 
-Last verified date: `2026-09-06`. The A12 candidate was verified from a blank
-database through `cv3_00000007`, including a `cv3_00000006` →
+Last verified SHA/date:
+`8ac1c4f3f37310e1598ba623717529dba98676e4`, `2026-09-06`. The A12 candidate
+was verified from a blank database through `cv3_00000007`, including a
+`cv3_00000006` →
 `cv3_00000007` sentinel-preservation upgrade and a reversible
 `cv3_00000007` → `cv3_00000006` schema downgrade. The last independently
 verified restore source SHA remains

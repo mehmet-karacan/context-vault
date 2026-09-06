@@ -366,6 +366,19 @@ def test_qwen_exact_identity_determinism_observer_and_safe_report(tmp_path):
     assert "answer" not in json.dumps(report)
 
 
+def test_injected_qwen_runtime_does_not_require_optional_torch(tmp_path, monkeypatch):
+    module = _module()
+    monkeypatch.setitem(sys.modules, "torch", None)
+    client, model, _tokenizer = _qwen(
+        module,
+        _qwen_snapshot(tmp_path),
+        ["offline answer"],
+    )
+
+    assert client.complete("system", "user") == "offline answer"
+    assert len(model.kwargs) == 1
+
+
 def test_qwen_requires_capture_ack_before_actual_generate_and_redacts_observer(
     tmp_path,
 ):

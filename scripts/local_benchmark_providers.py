@@ -16,6 +16,7 @@ import json
 import math
 import os
 import re
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
@@ -763,8 +764,15 @@ class LocalQwenClient:
         text = ""
         generated_count = 0
         try:
-            import torch
+            try:
+                import torch
 
+                inference_context = torch.inference_mode()
+            except ImportError:
+                # Injected test/custom runtimes do not require the optional
+                # torch package. The default model loader has already failed
+                # closed if torch was required to construct the real model.
+                inference_context = nullcontext()
             generate_kwargs = dict(encoded)
             pad_token_id = getattr(self._tokenizer, "pad_token_id", None)
             if pad_token_id is None:
@@ -777,7 +785,7 @@ class LocalQwenClient:
                     "use_cache": True,
                 }
             )
-            with torch.inference_mode():
+            with inference_context:
                 outputs = self._model.generate(**generate_kwargs)
             generated = outputs[0][prompt_tokens:]
             generated_count = len(generated)

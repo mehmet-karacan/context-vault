@@ -19,7 +19,9 @@ WORKDIR /app
 
 # Keep compilers and uv out of the runtime image. The numeric identity makes
 # the non-root contract stable even when the image is run without /etc/passwd.
-RUN apk add --no-cache ca-certificates git libmagic \
+# The base digest is immutable and the vulnerable transitive libuuid package is
+# upgraded to the exact fixed Alpine revision during the runtime build.
+RUN apk add --no-cache ca-certificates git libmagic libuuid=2.42.3-r1 \
     && addgroup -S -g 10001 app \
     && adduser -S -D -H -u 10001 -G app app
 
