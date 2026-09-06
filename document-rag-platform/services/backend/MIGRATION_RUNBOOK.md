@@ -23,7 +23,16 @@ with the V3 graph.
 
 ## Configuration
 
-Alembic reads only these variables through `MigrationSettings`:
+The deployment supplies two distinct URLs:
+
+```text
+DATABASE_MIGRATION_URL  migration owner; one-shot only
+DATABASE_RUNTIME_URL    backend, worker and scheduler only
+```
+
+Compose maps `DATABASE_MIGRATION_URL` to `DATABASE_URL` only inside the
+migration one-shot. Alembic reads only these variables through
+`MigrationSettings`:
 
 ```text
 DATABASE_URL                   required
@@ -32,8 +41,9 @@ MIGRATION_LOCK_TIMEOUT_MS      default: 5000
 MIGRATION_STATEMENT_TIMEOUT_MS default: 300000
 ```
 
-Do not print or persist `DATABASE_URL`. Public receipts contain only an opaque
-environment reference and hashes.
+Do not print or persist either URL. Public receipts contain only an opaque
+environment reference, non-secret role names and hashes. Runtime services must
+never receive the migration-owner URL.
 
 ## Admission before any migration
 
@@ -49,6 +59,14 @@ lineage; this is not permission to overwrite a legacy source found later.
 
 ## Blank database upgrade
 
+For a brand-new empty PostgreSQL volume, the image evaluates
+`infra/docker/postgres/10-runtime-role.sql`. It creates a distinct login role
+with `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOINHERIT`,
+`NOREPLICATION` and `NOBYPASSRLS`, and revokes schema creation. This initializer
+does not rerun for an existing cluster. Never erase a volume to force it to run;
+provision the role through an approved database-administration procedure
+instead.
+
 From `document-rag-platform/services/backend/`, with `DATABASE_URL` supplied by
 the deployment secret mechanism:
 
@@ -60,6 +78,25 @@ python -m alembic upgrade head
 ```
 
 Expected head/current: `cv3_00000004`. The second upgrade must be a no-op.
+
+Immediately after `upgrade head`, the Compose migration one-shot runs
+`infra/docker/postgres/apply_runtime_grants.py` with the migration-owner URL.
+It applies current table/sequence/function grants, installs owner-scoped
+default privileges for future migration objects, and fails unless the runtime
+role remains unable to create temporary objects, create in the application
+schema, or own the database/schema. Require exactly `runtime database grants:
+PASS` before starting runtime services.
+
+The isolated regression drill uses a unique disposable container and volume:
+
+```sh
+A11_RUN_DISPOSABLE_DB_TEST=1 .venv/bin/pytest -q \
+  tests/test_deployment_contract.py -m integration
+```
+
+It must prove DML and function access on both existing and later-created
+objects, and SQLSTATE `42501` for table/schema/role DDL. It is not authorization
+to run against a retained database.
 
 Then run from the repository root:
 

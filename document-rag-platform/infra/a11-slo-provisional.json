@@ -1,0 +1,18 @@
+{
+  "authority": "provisional_local_only",
+  "canonical_policy_sha256": "639d0e1b3063208bc99aa8a8d3852f69a0d93c5b755c12497b9e5fd534ef7e32",
+  "schema": "context-vault-slo-provisional-policy/v1",
+  "thresholds": {
+    "api_availability_ratio": 0.999,
+    "api_p95_latency_ms": 2000,
+    "backup_age_seconds": 21600,
+    "benchmark_regression_ratio": 0.2,
+    "ingestion_p95_seconds": 900,
+    "ingestion_success_ratio": 0.99,
+    "invalid_citation_count": 0,
+    "outbox_oldest_age_seconds": 300,
+    "permission_leakage_count": 0,
+    "restore_drill_success_ratio": 1,
+    "restore_drill_age_seconds": 2592000
+  }
+}

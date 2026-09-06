@@ -60,9 +60,49 @@ python scripts/backup_restore.py --backup --retention-days 30 \
 
 Expected: non-empty custom dump; versioning enabled; every current object has a
 `CVENC1` envelope; inventory/payload hashes and retention are bound by the receipt.
-This is a current-state restore point. Run it automatically at the approved RPO
-interval (example: cron `17 */6 * * *` under a dedicated backup identity); alert if
-the last successful receipt is older than the RPO. Never embed secrets in cron.
+This is a current-state restore point.
+
+## Automatic schedule contract
+
+`scripts/backup_scheduler.py` is the only supported local scheduler wrapper. It
+calls `backup_restore.py` directly without a shell and adds these gates:
+
+- the configured 40-character revision must equal a clean repository `HEAD`;
+- a private external backup root must already exist, be owned by the executor and
+  have mode `0700`;
+- one global non-blocking lock prevents overlapping backup effects;
+- one UTC interval slot plus source revision identifies a run, and replay of a
+  valid completed slot returns `SKIPPED` without invoking the backup again;
+- an incomplete/tampered prior slot fails closed and requires operator diagnosis;
+- the separately written child receipt and private manifest SHA-256 are verified;
+- retention is bound as `retention_not_before_utc`; the scheduler never deletes a
+  backup automatically. Expired-data deletion remains a separate approved effect.
+
+The service manager must inject the six named environment values from an approved
+secret provider. Never put their values in a plist, crontab, unit command line or
+repository file. First run a no-credential/no-backup plan:
+
+```sh
+python scripts/backup_scheduler.py --dry-run \
+  --repo /absolute/clean/context-vault \
+  --backup-root /approved/private/external/context-vault \
+  --expected-revision <40-character-deployed-sha> \
+  --interval-seconds 21600 --retention-days 30 \
+  --postgres-container <exact-postgres-container> \
+  --database-url-env DATABASE_MIGRATION_URL \
+  --minio-endpoint-env MINIO_ENDPOINT \
+  --minio-access-key-env MINIO_ROOT_USER \
+  --minio-secret-key-env MINIO_ROOT_PASSWORD \
+  --minio-bucket-env MINIO_BUCKET \
+  --encryption-key-env OBJECT_STORAGE_ENCRYPTION_KEY \
+  --json-output /new/private/path/scheduler-plan.json
+```
+
+After the dry-run receipt is reviewed, remove only `--dry-run`; keep every other
+argument byte-for-byte fixed in the six-hour launchd/systemd job. Expected success
+is `PASS`; a same-slot replay is `SKIPPED`. `FAIL`, `OVERLAP_ACTIVE`, stale success
+older than the approved RPO, or a missing terminal receipt must alert the owner.
+No production scheduler execution is claimed by this runbook.
 
 ## Restore-point selection and exact restore command
 

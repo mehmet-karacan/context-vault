@@ -82,6 +82,14 @@
       "runbook": "document-rag-platform/docs/runbooks/a11-backup-restore.md"
     },
     {
+      "name": "restore_drill_success_percent",
+      "comparator": "at_least",
+      "threshold": 100,
+      "owner": "Context Vault operations owner",
+      "escalation": "Stop release promotion and diagnose the failed fresh-target restore before retrying.",
+      "runbook": "document-rag-platform/docs/runbooks/a11-backup-restore.md"
+    },
+    {
       "name": "real_benchmark_regression_percent",
       "comparator": "at_most",
       "threshold": 20,

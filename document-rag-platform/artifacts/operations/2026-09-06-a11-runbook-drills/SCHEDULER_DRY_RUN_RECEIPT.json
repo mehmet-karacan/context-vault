@@ -1,0 +1,23 @@
+{
+  "backup_completed_at_utc": null,
+  "backup_invoked": false,
+  "backup_manifest_sha256": null,
+  "child_receipt_sha256": null,
+  "credential_values_retained": false,
+  "encrypted_envelope_count": null,
+  "idempotent_replay": false,
+  "interval_seconds": 21600,
+  "object_count": null,
+  "overlap_detected": false,
+  "raw_paths_retained": false,
+  "receipt_type": "automatic-backup-schedule",
+  "release_gate_eligible": false,
+  "repository_revision": "b6d368c4ba75afee5630251e5c0f3649d1c9c920",
+  "retention_days": 30,
+  "retention_not_before_utc": null,
+  "schedule_slot_utc": "2026-09-05T18:00:00Z",
+  "schema_version": "1.0",
+  "source_mutated": false,
+  "status": "DRY_RUN",
+  "tool_version": "1.0.0"
+}

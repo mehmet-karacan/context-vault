@@ -8,6 +8,13 @@ backup→restore drill ran at exact source SHA
 `bde49aca525f7ccc40b21c039af003413621223c`. No production or user-data mutation
 is claimed.
 
+The automatic-backup scheduler and executable runbook commands were tested on
+committed base `b6d368c4ba75afee5630251e5c0f3649d1c9c920`; their exact uncommitted
+source hashes, dry-run receipt and disposable cleanup receipt are in
+[`2026-09-06-a11-runbook-drills`](../../artifacts/operations/2026-09-06-a11-runbook-drills/README.md).
+The scheduler was run only with `--dry-run`; production scheduling and alert
+delivery are not claimed.
+
 | Required §18.7 subject | Runbook |
 |---|---|
 | Installation / first boot | [installation-first-boot](installation-first-boot.md) |

@@ -8,9 +8,13 @@ x-app-environment: &app-environment
   API_KEY_PEPPER: ${API_KEY_PEPPER:?set a high-entropy API key pepper}
   CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:?set the permitted browser origins}
   DATABASE_URL: ${DATABASE_RUNTIME_URL:?set the least-privilege runtime database URL}
+  EXPECTED_DATABASE_ROLE: ${POSTGRES_RUNTIME_USER:?set the expected runtime database role}
   REDIS_URL: ${REDIS_URL:?set an authenticated Redis URL}
   RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
   RATE_LIMIT_BACKEND: redis
+  METRICS_EXPORT_MODE: ${METRICS_EXPORT_MODE:-disabled}
+  METRICS_STATSD_HOST: ${METRICS_STATSD_HOST:-}
+  METRICS_STATSD_PORT: ${METRICS_STATSD_PORT:-8125}
   MINIO_ENDPOINT: http://minio:9000
   MINIO_ACCESS_KEY: ${MINIO_APP_ACCESS_KEY:?set a MinIO application access key}
   MINIO_SECRET_KEY: ${MINIO_APP_SECRET_KEY:?set a MinIO application secret key}
@@ -47,6 +51,13 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:?set the application database name}
       POSTGRES_USER: ${POSTGRES_ADMIN_USER:?set the bootstrap database role}
       POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?set the bootstrap database credential}
+      POSTGRES_RUNTIME_USER: ${POSTGRES_RUNTIME_USER:?set a distinct runtime database role}
+      POSTGRES_RUNTIME_PASSWORD: ${POSTGRES_RUNTIME_PASSWORD:?set a distinct runtime database credential}
+      DATABASE_SCHEMA: ${DATABASE_SCHEMA:-public}
+    configs:
+      - source: postgres_runtime_role_init
+        target: /docker-entrypoint-initdb.d/10-runtime-role.sql
+        mode: 0444
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -138,12 +149,17 @@ services:
 
   migration:
     <<: *backend-image
-    command: ["python", "-m", "alembic", "upgrade", "head"]
+    command: ["/bin/sh", "-ec", "python -m alembic upgrade head && exec python /opt/context-vault/apply_runtime_grants.py"]
     environment:
       DATABASE_URL: ${DATABASE_MIGRATION_URL:?set the migration-owner database URL}
       DATABASE_SCHEMA: ${DATABASE_SCHEMA:-public}
+      POSTGRES_RUNTIME_USER: ${POSTGRES_RUNTIME_USER:?set a distinct runtime database role}
       MIGRATION_LOCK_TIMEOUT_MS: ${MIGRATION_LOCK_TIMEOUT_MS:-5000}
       MIGRATION_STATEMENT_TIMEOUT_MS: ${MIGRATION_STATEMENT_TIMEOUT_MS:-300000}
+    configs:
+      - source: postgres_runtime_grants
+        target: /opt/context-vault/apply_runtime_grants.py
+        mode: 0444
     depends_on:
       postgres:
         condition: service_healthy
@@ -191,6 +207,12 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
+
+configs:
+  postgres_runtime_role_init:
+    file: ./infra/docker/postgres/10-runtime-role.sql
+  postgres_runtime_grants:
+    file: ./infra/docker/postgres/apply_runtime_grants.py
 
 networks:
   backend:

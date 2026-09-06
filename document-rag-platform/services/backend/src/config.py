@@ -39,6 +39,15 @@ class Settings(BaseSettings):
     API_KEY_PEPPER: Optional[str] = None
     API_DEBUG: bool = False
     FEATURE_RETRIEVAL_DEBUG: bool = True
+    # Content-free process metrics are exported through a shared StatsD sink.
+    # Local/test defaults remain side-effect free; staging/production runtime
+    # validation requires an explicit sink.
+    METRICS_EXPORT_MODE: Literal["disabled", "statsd"] = "disabled"
+    METRICS_STATSD_HOST: Optional[str] = None
+    METRICS_STATSD_PORT: int = 8125
+    OPERATIONAL_BACKUP_RECEIPT_PATH: Optional[str] = None
+    OPERATIONAL_RESTORE_RECEIPT_PATH: Optional[str] = None
+    OPERATIONAL_OBJECT_SCAN_LIMIT: int = 10_000
     # Comma-separated allow-list of CORS origins. Defaults to DEV_CORS_ORIGINS
     # in development and to an empty (restrictive) list in production — never
     # "*" (AKTIF_GOREV.md §9.5: "CORS'u üretim için `*` bırakmama").
@@ -58,6 +67,9 @@ class Settings(BaseSettings):
     # missing we want a loud, immediate startup failure rather than
     # silently trying to reach a bogus localhost database.
     DATABASE_URL: str
+    # Runtime deployment identity asserted against PostgreSQL ``current_user``.
+    # Production must set this to the dedicated, least-privilege login role.
+    EXPECTED_DATABASE_ROLE: Optional[str] = None
 
     # --- LLM gateway (LiteLLM-compatible) ------------------------------
     LITELLM_BASE_URL: str = "https://llm-gateway.example.invalid/v1"

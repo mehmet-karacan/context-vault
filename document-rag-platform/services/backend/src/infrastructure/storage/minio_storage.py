@@ -190,8 +190,12 @@ class MinioObjectStorage:
 
     def list_keys(self, prefix: str = "") -> list[str]:
         """Return a deterministic key inventory for reconciliation tooling."""
+        return sorted(self.iter_keys(prefix=prefix))
+
+    def iter_keys(self, prefix: str = ""):
+        """Stream object keys for bounded observers without materializing a bucket."""
         self._ensure_bucket()
-        return sorted(
+        return (
             obj.object_name
             for obj in self._client.list_objects(
                 self._bucket, prefix=prefix, recursive=True

@@ -1,0 +1,31 @@
+{
+  "base_repository_revision": "b6d368c4ba75afee5630251e5c0f3649d1c9c920",
+  "files": {
+    "document-rag-platform/docs/runbooks/a11-backup-restore.md": "f59ed2d6586a5507980ad66c9f2a17637cb545919a17e88ffb6f7f617f1daa76",
+    "document-rag-platform/docs/runbooks/a11-operations-index.md": "f21adf91825e0852f3aaaceab6b2af49752f9777d8a0d837a833d110d8d8ba52",
+    "document-rag-platform/docs/runbooks/degraded-readiness.md": "4af196601a33c72ce000b4c09dcbee8cf2f7c6d67b18e9da91857168aad7b59c",
+    "document-rag-platform/docs/runbooks/object-gc-quarantine.md": "ed3f9b3fa3294a6e8f7db766faa812e2050f95865cd935e614f7a9c1b52e48eb",
+    "document-rag-platform/docs/runbooks/reindex-profile-change.md": "08e3ff274e463689bedbccf6cecdaf19e565c39e26b6db99f5574e6d420f0a76",
+    "document-rag-platform/docs/runbooks/release-rollback.md": "735b1005b40b46991863c6976edbabd07f76cf49afe7914bfa363337deb393a9",
+    "document-rag-platform/docs/runbooks/repository-ingestion-incident.md": "5a31dfcb7cccc4fb1a83a7005c79a85a5856e713738630519a681e1b3cdd67be",
+    "document-rag-platform/docs/runbooks/security-incident.md": "f3ceefe20d688e27bdac8a30973740bcd2cc489424d83052c26bbdb563b2fe9c",
+    "document-rag-platform/docs/runbooks/stuck-job-outbox-lease.md": "d8b1c1c2f7def8bec6d5234abff65fec5c3673ee59f8b842765487dd30eadc77",
+    "document-rag-platform/services/backend/src/application/ingestion_orchestrator.py": "d34df1961a29c92f7c13dacabb1c3d58024128b6fef0665278e62f28ba0fa29b",
+    "document-rag-platform/services/backend/src/db.py": "9f7a0f5de12596510073f2f146cde2cea6e77eaeaf1014f8dd5998935b2beaa9",
+    "document-rag-platform/services/backend/src/infrastructure/observability.py": "5b1b79f84f4fe103b0da618f67acda9386ad20f6deadf61782ac0e3ecfa130b4",
+    "document-rag-platform/services/backend/src/workers/celery_app.py": "4f7dc33614ad47555aeae3c4cae4d29b43b7e777c2df503f7ae592289685f065",
+    "document-rag-platform/services/backend/src/workers/ingestion_tasks.py": "af971aa68416b778ea5387cc4810d709b38088fcd7e8ee3bc1f56194c0d45717",
+    "document-rag-platform/services/backend/tests/integration/test_ingestion_control_plane.py": "25ffc493e5e46f6924f33c780b1219490a297fa38bfe1ac101a6c6e3e13515f8",
+    "document-rag-platform/services/backend/tests/integration/test_schema_invariants.py": "bc3f59b917c3f2cadace8b640a00013f3dafa7f62680d705f7095148c15a11e8",
+    "document-rag-platform/services/backend/tests/test_a11_release_gate.py": "8f2026a85fdf6c6c48c51122f89050e9f05f9e74bec9d0ae8caaeef7ad039f5c",
+    "document-rag-platform/services/backend/tests/test_backup_scheduler.py": "13b0d3299cf4a3dd1f843c906411d0a3f9b7fed1192fd7f9e5b48e7e2a9422e0",
+    "document-rag-platform/services/backend/tests/test_git_source.py": "d598c2f30435acd5595feafbf17108564ee08e76ceda951ad69429fbe8ecfea9",
+    "document-rag-platform/services/backend/tests/test_health.py": "3babb1a1c752b17f2088c726bcd1385ab8bf9abe4e37a1f077a4cf7455754ede",
+    "document-rag-platform/services/backend/tests/test_ingestion_tasks.py": "b237d8ba590c8db3b4dbf2ae85709fbd5989f39314e6f6b4003c57d239b36e62",
+    "document-rag-platform/services/backend/tests/test_observability.py": "555b8210bc11b98bda1a11ff6e5edec9fa7b4c6857ec672c69b82400f6a72469",
+    "document-rag-platform/services/backend/tests/test_redaction.py": "390b2c4efe2e5dd00b95fb1eeb72c44350d27286a1f2a55446c91d23b81a0451",
+    "scripts/backup_scheduler.py": "f9f9aea813b150a1964098c844b14b93e3aea2f5b00fcc144b83a70e093cd346"
+  },
+  "manifest_kind": "uncommitted-source-bytes-on-tested-base",
+  "schema_version": "1.0"
+}

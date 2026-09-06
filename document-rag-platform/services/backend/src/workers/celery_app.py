@@ -19,15 +19,24 @@ Celery's loader actually needs it (worker bootstrap / first task lookup),
 by which point this module has finished initializing.
 """
 
+import time
+
 from celery import Celery, signals
 
 from ..config import settings
 from ..infrastructure.observability import (
     begin_shutdown,
+    configure_metrics_export,
     metrics,
     reset_shutdown,
     set_observability_context,
+    validate_metrics_export_config,
 )
+
+# Celery signal receiver exceptions are collected rather than guaranteed to
+# abort startup. Validate synchronously at module bootstrap, but configure the
+# process-local sink later in worker/prefork lifecycle hooks.
+validate_metrics_export_config(settings, service="worker")
 
 celery_app = Celery(
     "context_vault",
@@ -61,6 +70,14 @@ celery_app.conf.update(
         "sweep-orphan-ingestion-staging": {
             "task": "ingestion.sweep_orphan_staging",
             "schedule": 300.0,
+        },
+        "observe-ingestion-operational-metrics": {
+            "task": "ingestion.observe_operational_metrics",
+            "schedule": 60.0,
+        },
+        "observe-orphan-object-metrics": {
+            "task": "ingestion.observe_orphan_metrics",
+            "schedule": 900.0,
         },
     },
 )
@@ -98,11 +115,26 @@ celery_app.conf.update(
 app = celery_app
 
 
+@signals.before_task_publish.connect
+def _stamp_queue_age(headers: object = None, **_: object) -> None:
+    """Attach only a bounded epoch needed for content-free oldest-age metrics."""
+    if isinstance(headers, dict):
+        headers["cv_enqueued_at_epoch"] = int(time.time())
+
+
 @signals.worker_ready.connect
 def _open_worker_admission(**_: object) -> None:
     """Reset process-local shutdown state after a fresh worker boot."""
+    configure_metrics_export(settings, service="worker")
     set_observability_context(service="worker", environment=settings.APP_ENV)
     reset_shutdown()
+
+
+@signals.worker_process_init.connect
+def _open_worker_process_metrics(**_: object) -> None:
+    """Configure the sink inside every prefork task process."""
+    configure_metrics_export(settings, service="worker")
+    set_observability_context(service="worker", environment=settings.APP_ENV)
 
 
 @signals.worker_shutting_down.connect
@@ -116,3 +148,15 @@ def _record_ingestion_retry(sender: object = None, **_: object) -> None:
     """Count retries without task ids, arguments or exception messages."""
     if getattr(sender, "name", "") == "ingestion.process_ingestion_job":
         metrics.incr("job.retries")
+
+
+@signals.task_failure.connect
+def _record_terminal_ingestion_failure(
+    sender: object = None, exception: object = None, **_: object
+) -> None:
+    """Count only broker-terminal ingestion failures, never retry attempts."""
+    if (
+        getattr(sender, "name", "") == "ingestion.process_ingestion_job"
+        and type(exception).__name__ != "JobCancelled"
+    ):
+        metrics.incr("job.failures")

@@ -8,10 +8,11 @@ import os
 import socket
 import tempfile
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
+from itertools import islice
 from typing import Callable, List, Optional
 
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from ..application.ingestion_pipeline import chunk_source, parse_source
@@ -26,6 +27,8 @@ from ..infrastructure.observability import (
     continue_trace,
     current_traceparent,
     metrics,
+    record_maintenance_snapshot,
+    record_operational_receipt_ages,
     traced,
 )
 from ..infrastructure.security import redact_secrets
@@ -282,8 +285,10 @@ def _advance_stage(
     attempt: Optional[IngestionAttempt] = None,
 ) -> None:
     _validate_stage_transition(job.stage, stage)
+    now = clock.now()
+    elapsed = _stage_elapsed_seconds(job, now) if stage != STAGES[0] else None
     job.stage = stage
-    job.heartbeat_at = clock.now()
+    job.heartbeat_at = now
     if job.lease_owner:
         job.lease_expires_at = clock.now() + timedelta(seconds=DEFAULT_LEASE_SECONDS)
     if attempt is not None:
@@ -292,6 +297,29 @@ def _advance_stage(
     _emit_event(db, job, stage=stage, status="started", clock=clock)
     _emit_receipt(db, job, attempt, stage=stage, status="started", clock=clock)
     db.commit()
+    if elapsed is not None:
+        metrics.record_duration("job.stage", elapsed)
+
+
+def _stage_elapsed_seconds(job: IngestionJob, now: datetime) -> float | None:
+    if job.stage not in STAGES or job.heartbeat_at is None:
+        return None
+    try:
+        elapsed = (now - job.heartbeat_at).total_seconds()
+    except (AttributeError, TypeError):
+        return None
+    if not 0 <= elapsed <= 7 * 24 * 60 * 60:
+        return None
+    return elapsed
+
+
+def _record_stage_elapsed(job: IngestionJob, now: datetime) -> bool:
+    """Record one bounded aggregate stage duration without stage/job labels."""
+    elapsed = _stage_elapsed_seconds(job, now)
+    if elapsed is None:
+        return False
+    metrics.record_duration("job.stage", elapsed)
+    return True
 
 
 def _get_or_create_active_embedding_profile(
@@ -940,8 +968,10 @@ def run_ingestion_job(
         document.checksum = original_checksum
         document.size = len(original_bytes)
         document.mime_type = document.mime_type or "application/octet-stream"
+        finished_at = clock.now()
+        _record_stage_elapsed(job, finished_at)
         transition_job(job, JobStatus.COMPLETED)
-        job.finished_at = clock.now()
+        job.finished_at = finished_at
         job.lease_owner = None
         job.lease_expires_at = None
         _emit_event(db, job, stage="activating", status="completed", clock=clock)
@@ -986,6 +1016,7 @@ def run_ingestion_job(
         db.rollback()
         job = db.get(IngestionJob, job_id)  # re-fetch: rollback expired instances
         if job is not None:
+            _record_stage_elapsed(job, clock.now())
             if attempt is not None:
                 attempt = db.get(IngestionAttempt, attempt.id)
             cancelled = isinstance(exc, JobCancelled)
@@ -1129,7 +1160,6 @@ def reconcile_ingestion_leases() -> dict:
     db = SessionLocal()
     try:
         reconciled = reconcile_stale_leases(db)
-        metrics.set_gauge("lease.stale", reconciled)
         return {"reconciled": reconciled}
     finally:
         db.close()
@@ -1147,7 +1177,99 @@ def sweep_ingestion_staging() -> dict:
             grace_seconds=settings.STAGING_ORPHAN_GRACE_SECONDS,
             dry_run=False,
         )
-        metrics.set_gauge("orphan.objects", len(keys))
         return {"deleted": len(keys)}
     finally:
         db.close()
+
+
+@celery_app.task(name="ingestion.observe_operational_metrics")
+def observe_operational_metrics() -> dict:
+    """Read current stale leases and operational receipt ages."""
+    db = SessionLocal()
+    try:
+        now = SYSTEM_CLOCK.now()
+        stale = (
+            db.query(func.count(IngestionAttempt.id))
+            .filter(
+                IngestionAttempt.status.in_(("claimed", "running")),
+                IngestionAttempt.lease_expires_at < now,
+            )
+            .scalar()
+            or 0
+        )
+        if not record_maintenance_snapshot(stale_leases=stale):
+            raise RuntimeError("operational metric inventory exceeds bounds")
+        receipt_ages_observed = record_operational_receipt_ages(
+            backup_path=settings.OPERATIONAL_BACKUP_RECEIPT_PATH,
+            restore_path=settings.OPERATIONAL_RESTORE_RECEIPT_PATH,
+            now=now,
+        )
+        return {
+            "stale_leases": int(stale),
+            "receipt_ages_observed": receipt_ages_observed,
+        }
+    finally:
+        db.close()
+
+
+@celery_app.task(name="ingestion.observe_orphan_metrics")
+def observe_orphan_metrics() -> dict:
+    """Run a capped streaming object inventory on a low-frequency schedule."""
+    db = SessionLocal()
+    try:
+        orphan = _bounded_orphan_count(
+            db,
+            _build_storage(),
+            limit=settings.OPERATIONAL_OBJECT_SCAN_LIMIT,
+        )
+        if orphan is None:
+            metrics.clear_gauge("orphan.objects")
+            return {"orphan_objects": None, "inventory_complete": False}
+        metrics.set_gauge("orphan.objects", orphan)
+        return {"orphan_objects": orphan, "inventory_complete": True}
+    finally:
+        db.close()
+
+
+def _bounded_orphan_count(
+    db: Session,
+    storage,
+    *,
+    limit: int,
+    batch_size: int = 500,
+) -> int | None:
+    """Count current unregistered objects with a strict streaming scan cap."""
+    if (
+        not isinstance(limit, int)
+        or isinstance(limit, bool)
+        or not 1 <= limit <= 1_000_000
+        or not isinstance(batch_size, int)
+        or isinstance(batch_size, bool)
+        or not 1 <= batch_size <= 1000
+    ):
+        return None
+    source = (
+        storage.iter_keys() if hasattr(storage, "iter_keys") else storage.list_keys()
+    )
+    iterator = iter(source)
+    scanned = 0
+    orphan_count = 0
+    while True:
+        batch = list(islice(iterator, min(batch_size, limit + 1 - scanned)))
+        if not batch:
+            return orphan_count
+        scanned += len(batch)
+        if scanned > limit:
+            return None
+        registered = {
+            row[0]
+            for row in (
+                db.query(StorageObject.storage_key)
+                .filter(
+                    StorageObject.status != "deleted",
+                    StorageObject.storage_key.in_(batch),
+                )
+                .all()
+            )
+        }
+        orphan_count += sum(key not in registered for key in batch)

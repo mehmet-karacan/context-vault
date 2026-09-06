@@ -14,6 +14,7 @@ specifically so it's testable this way (see
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime, timezone
 
@@ -36,7 +37,11 @@ from src.workers.ingestion_tasks import (
     StageTransitionError,
     run_ingestion_job,
 )
-from src.infrastructure.observability import continue_trace, current_traceparent
+from src.infrastructure.observability import (
+    continue_trace,
+    current_traceparent,
+    metrics,
+)
 
 
 # --- Fake SQLAlchemy session -------------------------------------------------
@@ -240,6 +245,135 @@ def test_celery_entry_binds_and_resets_trace_when_session_setup_fails(monkeypatc
         with pytest.raises(RuntimeError, match="synthetic setup failure"):
             ingestion_tasks.process_ingestion_job.run("job-1", "key-1", parent)
         assert current_traceparent() == ambient
+
+
+def test_celery_publish_stamp_contains_only_bounded_epoch(monkeypatch):
+    from src.workers import celery_app as celery_module
+
+    monkeypatch.setattr(celery_module.time, "time", lambda: 1_788_649_200.9)
+    headers = {"task": "ingestion.process_ingestion_job", "argsrepr": "private"}
+    celery_module._stamp_queue_age(headers=headers)
+    assert headers["cv_enqueued_at_epoch"] == 1_788_649_200
+    assert set(headers) == {
+        "task",
+        "argsrepr",
+        "cv_enqueued_at_epoch",
+    }
+
+
+def test_job_failure_counter_records_only_terminal_celery_signal():
+    from src.workers import celery_app as celery_module
+
+    sender = type("Sender", (), {"name": "ingestion.process_ingestion_job"})()
+    before = metrics.snapshot()["counters"].get("job.failures", 0)
+    celery_module._record_ingestion_retry(sender=sender)
+    assert metrics.snapshot()["counters"].get("job.failures", 0) == before
+    celery_module._record_terminal_ingestion_failure(
+        sender=type("Other", (), {"name": "other.task"})()
+    )
+    assert metrics.snapshot()["counters"].get("job.failures", 0) == before
+    celery_module._record_terminal_ingestion_failure(
+        sender=sender,
+        exception=ingestion_tasks.JobCancelled("cancelled"),
+    )
+    assert metrics.snapshot()["counters"].get("job.failures", 0) == before
+    celery_module._record_terminal_ingestion_failure(sender=sender)
+    assert metrics.snapshot()["counters"]["job.failures"] == before + 1
+
+
+def test_operational_observer_records_current_inventory_without_raw_keys(monkeypatch):
+    class CountQuery:
+        def filter(self, *_criteria):
+            return self
+
+        def scalar(self):
+            return 2
+
+    class ObserverSession:
+        def query(self, _model):
+            return CountQuery()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(ingestion_tasks, "SessionLocal", ObserverSession)
+    result = ingestion_tasks.observe_operational_metrics.run()
+    assert result == {
+        "stale_leases": 2,
+        "receipt_ages_observed": False,
+    }
+    snapshot = metrics.snapshot()
+    assert snapshot["gauges"]["lease.stale"] == 2
+    assert "private-key" not in json.dumps(snapshot)
+
+
+def test_orphan_metric_task_reports_complete_or_unknown(monkeypatch):
+    class ObserverSession:
+        def close(self):
+            pass
+
+    monkeypatch.setattr(ingestion_tasks, "SessionLocal", ObserverSession)
+    monkeypatch.setattr(ingestion_tasks, "_build_storage", lambda: object())
+    monkeypatch.setattr(
+        ingestion_tasks,
+        "_bounded_orphan_count",
+        lambda _db, _storage, *, limit: 3,
+    )
+    assert ingestion_tasks.observe_orphan_metrics.run() == {
+        "orphan_objects": 3,
+        "inventory_complete": True,
+    }
+    assert metrics.snapshot()["gauges"]["orphan.objects"] == 3
+
+    monkeypatch.setattr(
+        ingestion_tasks,
+        "_bounded_orphan_count",
+        lambda _db, _storage, *, limit: None,
+    )
+    assert ingestion_tasks.observe_orphan_metrics.run() == {
+        "orphan_objects": None,
+        "inventory_complete": False,
+    }
+    assert "orphan.objects" not in metrics.snapshot()["gauges"]
+
+
+def test_orphan_observer_is_streaming_bounded_and_truthful() -> None:
+    class KeyQuery:
+        def filter(self, *_criteria):
+            return self
+
+        def all(self):
+            return [("registered",)]
+
+    class KeySession:
+        def query(self, _column):
+            return KeyQuery()
+
+    class Storage:
+        def __init__(self, keys):
+            self.keys = keys
+
+        def iter_keys(self):
+            yield from self.keys
+
+    assert (
+        ingestion_tasks._bounded_orphan_count(
+            KeySession(),
+            Storage(["registered", "orphan-a", "orphan-b"]),
+            limit=10,
+            batch_size=2,
+        )
+        == 2
+    )
+    assert (
+        ingestion_tasks._bounded_orphan_count(
+            KeySession(),
+            Storage([f"key-{index}" for index in range(6)]),
+            limit=5,
+            batch_size=2,
+        )
+        is None
+    )
 
 
 # --- Tests: happy path --------------------------------------------------------
@@ -488,6 +622,23 @@ def test_unknown_stage_is_rejected():
 
     with pytest.raises(StageTransitionError):
         ingestion_tasks._advance_stage(db, job, "not-a-real-stage")
+
+
+def test_stage_duration_metric_is_bounded_and_has_no_job_or_stage_label():
+    job = IngestionJob(
+        stage="parsing",
+        heartbeat_at=datetime(2026, 9, 6, 10, 0, tzinfo=timezone.utc),
+    )
+    before = metrics.snapshot()["durations"].get("job.stage", {}).get("count", 0)
+    assert ingestion_tasks._record_stage_elapsed(
+        job, datetime(2026, 9, 6, 10, 0, 12, tzinfo=timezone.utc)
+    )
+    after = metrics.snapshot()
+    assert after["durations"]["job.stage"]["count"] == before + 1
+    assert "parsing" not in str(after)
+    assert not ingestion_tasks._record_stage_elapsed(
+        job, datetime(2026, 9, 5, 10, 0, tzinfo=timezone.utc)
+    )
 
 
 # --- Tests: retryability (Aşama 2.5) ------------------------------------------

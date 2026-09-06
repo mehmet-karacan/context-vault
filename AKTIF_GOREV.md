@@ -2672,52 +2672,52 @@ Sistemin yalnız geliştirici makinesinde “up” görünmesi değil; güvenli 
 
 ### 18.2 Deployment/compose ayrımı
 
-- [ ] `compose.yaml` güvenli ortak taban olur.
-- [ ] `compose.dev.yaml`: source bind mount, local debug ve geliştirici kolaylıkları.
-- [ ] `compose.ci.yaml`: ephemeral, deterministic, no external secret/provider.
-- [ ] Production örneği source bind mount içermez.
-- [ ] Host portları local varsayılanda `127.0.0.1`'e bind edilir.
-- [ ] Redis auth/persistence/eviction politikası açıkça belirlenir.
-- [ ] MinIO root credential yalnız bootstrap içindir; uygulama sınırlı service account kullanır.
-- [ ] DB user migration ve runtime için mümkünse ayrılır; least privilege uygulanır.
-- [ ] Network'ler frontend/backend/data/egress ihtiyacına göre ayrılır.
-- [ ] Migration one-shot service başarıyla bitmeden backend ready olmaz.
-- [ ] Orphan container/volume tespiti `doctor` komutunda bulunur.
+- [x] `compose.yaml` güvenli ortak taban olur.
+- [x] `compose.dev.yaml`: source bind mount, local debug ve geliştirici kolaylıkları.
+- [x] `compose.ci.yaml`: ephemeral, deterministic, no external secret/provider.
+- [x] Production örneği source bind mount içermez.
+- [x] Host portları local varsayılanda `127.0.0.1`'e bind edilir.
+- [x] Redis auth/persistence/eviction politikası açıkça belirlenir.
+- [x] MinIO root credential yalnız bootstrap içindir; uygulama sınırlı service account kullanır.
+- [x] DB user migration ve runtime için mümkünse ayrılır; least privilege uygulanır.
+- [x] Network'ler frontend/backend/data/egress ihtiyacına göre ayrılır.
+- [x] Migration one-shot service başarıyla bitmeden backend ready olmaz.
+- [x] Orphan container/volume tespiti `doctor` komutunda bulunur.
 
 ### 18.3 Container hardening
 
-- [ ] Multi-stage build.
-- [ ] Non-root user.
-- [ ] Minimal base ve digest pin.
-- [ ] Lockfile/hash ile install.
-- [ ] Gereksiz build tool/runtime secret image'da kalmaz.
-- [ ] CA bundle image içine public source'tan gömülmez; deployment mount/secret ile gelir.
-- [ ] Healthcheck ve graceful shutdown.
-- [ ] Read-only root filesystem ve tmpfs gereksinimleri test edilir.
-- [ ] Resource request/limit veya compose limitleri belgelenir.
+- [x] Multi-stage build.
+- [x] Non-root user.
+- [x] Minimal base ve digest pin.
+- [x] Lockfile/hash ile install.
+- [x] Gereksiz build tool/runtime secret image'da kalmaz.
+- [x] CA bundle image içine public source'tan gömülmez; deployment mount/secret ile gelir.
+- [x] Healthcheck ve graceful shutdown.
+- [x] Read-only root filesystem ve tmpfs gereksinimleri test edilir.
+- [x] Resource request/limit veya compose limitleri belgelenir.
 - [ ] Image SBOM, signature/provenance ve vulnerability scan artifact'i üretilir.
 
 ### 18.4 Health/readiness
 
-- [ ] Liveness yalnız process/event loop sağlığını ölçer.
-- [ ] Readiness; migration head, DB, Redis, object storage, queue ve zorunlu provider bağımlılıklarını kontrol eder.
-- [ ] Zorunlu dependency veya schema uyumsuzsa HTTP 503 döner.
-- [ ] Opsiyonel provider bozuksa capability-specific degraded durumu üretir; tüm sistemin hazır olduğu yalanını söylemez.
-- [ ] Health endpoint anonim kullanıcıya host/credential/model gibi hassas detay vermez.
-- [ ] Startup ve shutdown job/lease güvenli kapanışını uygular.
+- [x] Liveness yalnız process/event loop sağlığını ölçer.
+- [x] Readiness; migration head, DB, Redis, object storage, queue ve zorunlu provider bağımlılıklarını kontrol eder.
+- [x] Zorunlu dependency veya schema uyumsuzsa HTTP 503 döner.
+- [x] Opsiyonel provider bozuksa capability-specific degraded durumu üretir; tüm sistemin hazır olduğu yalanını söylemez.
+- [x] Health endpoint anonim kullanıcıya host/credential/model gibi hassas detay vermez.
+- [x] Startup ve shutdown job/lease güvenli kapanışını uygular.
 
 ### 18.5 Structured log, trace ve metric
 
-- [ ] JSON structured log; timestamp UTC, level, service, environment, request_id, trace_id, principal hash, workspace/project hash, operation/work item/attempt/job id, error code.
-- [ ] Raw prompt, full context, belge içeriği, token, credential ve PII varsayılan loglanmaz.
-- [ ] OpenTelemetry veya eşdeğer açık standarda uygun trace:
+- [x] JSON structured log; timestamp UTC, level, service, environment, request_id, trace_id, principal hash, workspace/project hash, operation/work item/attempt/job id, error code.
+- [x] Raw prompt, full context, belge içeriği, token, credential ve PII varsayılan loglanmaz.
+- [x] OpenTelemetry veya eşdeğer açık standarda uygun trace:
   - HTTP request;
   - outbox dispatch;
   - ingestion stages;
   - provider call;
   - retrieval stages;
   - answer/citation validation.
-- [ ] Metric'ler:
+- [x] Metric'ler:
   - queue depth/age;
   - job stage duration/failure/retry;
   - orphan/stale lease/outbox backlog;
@@ -2726,7 +2726,7 @@ Sistemin yalnız geliştirici makinesinde “up” görünmesi değil; güvenli 
   - citation invalid/unsupported claim;
   - DB pool/index/slow query;
   - backup age/restore drill age.
-- [ ] High-cardinality raw ids metric label yapılmaz.
+- [x] High-cardinality raw ids metric label yapılmaz.
 
 ### 18.6 SLO ve alarm
 
@@ -2740,25 +2740,25 @@ Sistemin yalnız geliştirici makinesinde “up” görünmesi değil; güvenli 
 - restore drill başarısı;
 - real benchmark regression.
 
-- [ ] Her alarm actionable runbook'a bağlanır.
+- [x] Her alarm actionable runbook'a bağlanır.
 - [ ] Alert yalnız dashboard değildir; owner/escalation ve receipt üretir.
-- [ ] Error budget aşımında yeni feature yerine reliability işi önceliklenir.
+- [x] Error budget aşımında yeni feature yerine reliability işi önceliklenir.
 
 ### 18.7 Runbook'lar
 
 Mevcut runbook'lar gerçek komutlarla yeniden doğrulanacak; en az:
 
-- [ ] installation/first boot;
-- [ ] migration/recovery/lineage reset;
-- [ ] backup/restore ve object reconciliation;
-- [ ] reindex/embedding profile change;
-- [ ] provider/CA/key rotation;
-- [ ] stuck job/outbox/stale lease;
-- [ ] object GC/quarantine;
-- [ ] repository ingestion incident/SSRF;
-- [ ] degraded readiness/provider outage;
-- [ ] security incident ve public secret exposure;
-- [ ] release/rollback.
+- [x] installation/first boot;
+- [x] migration/recovery/lineage reset;
+- [x] backup/restore ve object reconciliation;
+- [x] reindex/embedding profile change;
+- [x] provider/CA/key rotation;
+- [x] stuck job/outbox/stale lease;
+- [x] object GC/quarantine;
+- [x] repository ingestion incident/SSRF;
+- [x] degraded readiness/provider outage;
+- [x] security incident ve public secret exposure;
+- [x] release/rollback.
 
 Her runbook:
 
@@ -2773,14 +2773,14 @@ Her runbook:
 
 ### 18.8 Backup ve disaster recovery
 
-- [ ] Otomatik DB backup + object versioning/inventory politikası.
-- [ ] Encryption ve key erişimi.
-- [ ] Retention ve restore point seçimi.
-- [ ] En az bir temiz ortam restore drill'i.
-- [ ] DB–object referans reconciliation.
-- [ ] RPO/RTO ölçümü ve gerçek değerleri.
-- [ ] Restore edilen sistemde migration, auth, retrieval ve citation smoke.
-- [ ] Backup var demek yeterli değildir; restore receipt zorunlu.
+- [x] Otomatik DB backup + object versioning/inventory politikası.
+- [x] Encryption ve key erişimi.
+- [x] Retention ve restore point seçimi.
+- [x] En az bir temiz ortam restore drill'i.
+- [x] DB–object referans reconciliation.
+- [x] RPO/RTO ölçümü ve gerçek değerleri.
+- [x] Restore edilen sistemde migration, auth, retrieval ve citation smoke.
+- [x] Backup var demek yeterli değildir; restore receipt zorunlu.
 
 ### 18.9 Release candidate kapısı
 
@@ -2798,12 +2798,57 @@ Her runbook:
 
 ### 18.10 Kabul kriterleri
 
-- [ ] Production benzeri deployment default credential, source mount ve public CA içermez.
-- [ ] Not-ready sistem 503 verir.
-- [ ] Trace ile bir upload'tan citation'a kadar zincir takip edilebilir.
-- [ ] Hassas içerik log/metric/artifact'te bulunmaz.
+- [x] Production benzeri deployment default credential, source mount ve public CA içermez.
+- [x] Not-ready sistem 503 verir.
+- [x] Trace ile bir upload'tan citation'a kadar zincir takip edilebilir.
+- [x] Hassas içerik log/metric/artifact'te bulunmaz.
 - [ ] Restore drill ve rollback kanıtı vardır.
 - [ ] Release candidate exact SHA üzerinde tüm zorunlu kapılardan geçmiştir.
+
+### 18.11 2026-09-06 doğrulanmış yerel altyapı kanıtı
+
+- Başlangıç/base commit: `b6d368c4ba75afee5630251e5c0f3649d1c9c920`;
+  bu bölümdeki son değişiklikler commit edilmeden test edildiği için henüz release
+  candidate SHA değildir.
+- Ayrı migration-owner/runtime PostgreSQL rolleri gerçek, benzersiz disposable
+  PostgreSQL 16/pgvector ortamında doğrulandı. Runtime DML ve sonraki migration
+  grant'leri çalıştı; role membership ile relation/domain/collation ownership,
+  `CREATE/ALTER/DROP/TEMP TABLE`, schema ve role DDL girişimleri fail-closed
+  reddedildi. Focused disposable test sonucu: `1 passed, 25 deselected`; test
+  container/volume'ları `0/0` kalacak şekilde temizlendi.
+- Production Compose özel CA'yı image içine kopyalamaz; external read-only secret
+  ve fail-closed PEM guard kullanır. Celery scheduler gerçek provider credential'ı
+  devralmaz. Verili kullanıcı DB'sine veya object store'una bu doğrulamada
+  yazılmadı.
+- W3C trace zinciri için son bağımsız sonuç `APPROVE`, P0/P1/P2 `0/0/0`; focused
+  trace/worker paketi `57 passed`, geniş non-integration paketinin önceki bağı
+  `1201 passed, 9 skipped, 21 deselected` idi.
+- Otomatik backup wrapper'ı exact clean SHA, schedule slot idempotency, exclusive
+  lock, private root, retention ve child receipt bağlarını fail-closed uygular.
+  Temiz hedef restore drill'i DB/object `1/1`, missing/orphan `0/0`, migration/auth/
+  retrieval/citation smoke PASS, RPO `16.184s`, RTO `0.794s` verdi; kaynak veri
+  değişmedi ve disposable kaynaklar temizlendi. Kanıt:
+  `artifacts/operations/2026-09-06-a11-hardened-backup-dr/` ve
+  `artifacts/operations/2026-09-06-a11-runbook-drills/`.
+- Runtime metrikleri backend ve prefork worker process'lerinden label-free StatsD
+  sink'e gider; gauge value/known/observed-at aynı datagramdadır ve runbook TTL
+  sözleşmesi false-fresh alarmı engeller. Queue/outbox/job/provider/DB index-pool-
+  slow-query/lease/orphan/backup/restore kapsamı içerik ve raw id taşımadan
+  test edildi. SLO policy canonical SHA-256:
+  `639d0e1b3063208bc99aa8a8d3852f69a0d93c5b755c12497b9e5fd534ef7e32`.
+  Sentetik rehearsal `PASS/ALERT` verdi; `production_baseline=false` ve
+  `remote_delivery=false` kalır.
+- Son birleşik yerel non-integration regresyonu: `1262 passed, 9 skipped,
+  22 deselected`; yalnız mevcut Starlette/httpx deprecation warning'i. A11
+  observability bağımsız re-review sonucu `APPROVE`, açık P0/P1/P2 `0/0/0`.
+- Public-safe tarayıcı tüm tracked tree'yi kapsayacak biçimde sertleştirildi;
+  current+untracked-candidate simülasyonu `677/677 PASS`, findings `[]`.
+- Bilinçli açık bırakılan release kapıları: exact final candidate image üzerinde
+  SBOM/signature/vulnerability artifact'i; production StatsD collector ve gerçek
+  alert delivery/owner seal; remote required checks/ruleset; exact clean-clone
+  release-candidate paketi ve gerçek rollback. Bunlar olmadan §18.9, son iki
+  §18.10 kriteri veya release kararı tamamlandı sayılmaz; push/merge/release
+  yapılmadı.
 
 ---
 

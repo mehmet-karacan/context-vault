@@ -26,6 +26,7 @@ from .db import init_db
 from .infrastructure.observability import (
     RequestContextMiddleware,
     begin_shutdown,
+    configure_metrics_export,
     configure_logging,
     reset_shutdown,
     set_observability_context,
@@ -85,6 +86,7 @@ def create_app(cfg: Optional[Settings] = None) -> FastAPI:
     """
     app_cfg = cfg or settings
     validate_runtime_security(app_cfg)
+    configure_metrics_export(app_cfg, service="backend")
     set_observability_context(service="backend", environment=app_cfg.APP_ENV)
 
     @asynccontextmanager

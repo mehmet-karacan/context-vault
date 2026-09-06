@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Callable, Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..domain.clock import Clock, SYSTEM_CLOCK
@@ -24,6 +25,7 @@ from ..infrastructure.observability import (
     continue_trace,
     current_traceparent,
     metrics,
+    record_outbox_snapshot,
     traced,
 )
 from ..models import (
@@ -182,8 +184,21 @@ class OutboxDispatcher:
             .limit(limit)
             .all()
         )
-        metrics.set_gauge("outbox.backlog", len(events))
-        return sum(1 for event in events if self.dispatch_one(event.id))
+        published = sum(1 for event in events if self.dispatch_one(event.id))
+        backlog_count, oldest_created_at = (
+            self.db.query(
+                func.count(OutboxEvent.id),
+                func.min(OutboxEvent.created_at),
+            )
+            .filter(OutboxEvent.status != "published")
+            .one()
+        )
+        record_outbox_snapshot(
+            backlog=backlog_count,
+            oldest_created_at=oldest_created_at,
+            now=self.clock.now(),
+        )
+        return published
 
 
 class IngestionOrchestrator:

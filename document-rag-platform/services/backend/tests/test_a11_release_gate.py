@@ -549,5 +549,6 @@ def test_repository_contract_pins_image_identity_tools_and_complete_slo_set() ->
         "invalid_citation_count",
         "backup_age_seconds",
         "restore_drill_age_seconds",
+        "restore_drill_success_percent",
         "real_benchmark_regression_percent",
     }

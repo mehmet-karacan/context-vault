@@ -28,17 +28,23 @@ only identifiers/counters/latencies, never content.
 from __future__ import annotations
 
 import contextvars
+import decimal
 import functools
 import hashlib
 import json
 import logging
+import math
 import os
 import re
+import socket
+import stat
 import threading
 import time
 import uuid
 from collections import defaultdict, deque
 from contextlib import contextmanager
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable, Deque, Dict, Iterator, Optional, TypeVar
 
 from src.domain.clock import utc_now
@@ -329,6 +335,7 @@ ALLOWED_COUNTERS = frozenset(
         "orphan.objects",
         "lease.stale",
         "outbox.backlog",
+        "outbox.oldest_age",
         "outbox.published",
         "outbox.failures",
         "retrieval.candidates",
@@ -336,10 +343,12 @@ ALLOWED_COUNTERS = frozenset(
         "provider.calls",
         "provider.errors",
         "provider.tokens",
-        "provider.cost_units",
+        "provider.cost_micro_usd",
         "citation.invalid",
         "citation.unsupported_claim",
         "db.pool.checked_out",
+        "db.index.scans_total",
+        "db.index.unused_count",
         "db.slow_queries",
         "backup.age_seconds",
         "restore_drill.age_seconds",
@@ -382,6 +391,36 @@ ALLOWED_DURATIONS = frozenset(
 )
 
 
+class StatsDMetricsSink:
+    """Minimal label-free StatsD sink shared by backend and worker processes."""
+
+    def __init__(self, host: str, port: int, *, service: str) -> None:
+        self._destination = (host, port)
+        self._prefix = f"context_vault.{service}"
+
+    def emit(self, kind: str, name: str, value: float) -> None:
+        metric_type = {"counter": "c", "gauge": "g", "duration": "ms"}[kind]
+        wire_value = value * 1000 if kind == "duration" else value
+        payload = f"{self._prefix}.{name}:{wire_value:g}|{metric_type}".encode("ascii")
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as client:
+            client.sendto(payload, self._destination)
+
+    def emit_gauge(self, name: str, value: float | None) -> None:
+        """Emit value, validity and observation time in one UDP datagram."""
+        observed = int(time.time())
+        lines = []
+        if value is not None:
+            lines.append(f"{self._prefix}.{name}:{value:g}|g")
+        lines.extend(
+            (
+                f"{self._prefix}.{name}.known:{1 if value is not None else 0}|g",
+                f"{self._prefix}.{name}.observed_at_epoch:{observed}|g",
+            )
+        )
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as client:
+            client.sendto("\n".join(lines).encode("ascii"), self._destination)
+
+
 class MetricsCollector:
     """Thread-safe in-memory counters for Aşama 9.4 operational metrics
     (embedding calls / retries / cache-hits, job stage durations)."""
@@ -393,24 +432,61 @@ class MetricsCollector:
         )
         self._gauges: Dict[str, float] = {}
         self._lock = threading.Lock()
+        self._sink: StatsDMetricsSink | None = None
+
+    def configure_sink(self, sink: StatsDMetricsSink | None) -> None:
+        with self._lock:
+            self._sink = sink
+
+    def _emit(self, kind: str, name: str, value: float) -> None:
+        with self._lock:
+            sink = self._sink
+        if sink is not None:
+            try:
+                sink.emit(kind, name, value)
+            except (OSError, OverflowError, ValueError):
+                # Metric transport cannot change application results. Missing
+                # production telemetry is detected by the external sink.
+                pass
+
+    def _emit_gauge(self, name: str, value: float | None) -> None:
+        with self._lock:
+            sink = self._sink
+        if sink is not None:
+            try:
+                sink.emit_gauge(name, value)
+            except (OSError, OverflowError, ValueError):
+                pass
 
     def incr(self, name: str, value: int = 1) -> None:
         if name not in ALLOWED_COUNTERS:
             raise ValueError(f"metric name is not allow-listed: {name}")
         with self._lock:
             self._counters[name] += value
+        self._emit("counter", name, float(value))
 
     def record_duration(self, name: str, seconds: float) -> None:
         if name not in ALLOWED_DURATIONS:
             raise ValueError(f"metric name is not allow-listed: {name}")
         with self._lock:
             self._durations[name].append(seconds)
+        self._emit("duration", name, float(seconds))
 
     def set_gauge(self, name: str, value: float) -> None:
         if name not in ALLOWED_COUNTERS:
             raise ValueError(f"metric name is not allow-listed: {name}")
         with self._lock:
             self._gauges[name] = float(value)
+        self._emit_gauge(name, float(value))
+
+    def clear_gauge(self, name: str) -> None:
+        if name not in ALLOWED_COUNTERS:
+            raise ValueError(f"metric name is not allow-listed: {name}")
+        with self._lock:
+            self._gauges.pop(name, None)
+        # Classic StatsD treats a negative gauge value as a decrement. Publish
+        # validity+freshness atomically so consumers suppress stale values.
+        self._emit_gauge(name, None)
 
     def record_embedding(
         self, *, calls: int = 0, retries: int = 0, cache_hits: int = 0
@@ -433,6 +509,13 @@ class MetricsCollector:
                     "mean_ms": round((sum(values) / len(values)) * 1000, 3)
                     if values
                     else 0.0,
+                    "p95_ms": round(
+                        sorted(values)[max(0, math.ceil(0.95 * len(values)) - 1)]
+                        * 1000,
+                        3,
+                    )
+                    if values
+                    else 0.0,
                 }
                 for name, values in self._durations.items()
             }
@@ -442,12 +525,443 @@ class MetricsCollector:
 metrics = MetricsCollector()
 
 
+def validate_metrics_export_config(
+    configuration: Any, *, service: str
+) -> tuple[str, str | None, int]:
+    """Validate exporter admission without mutating process-global state."""
+    environment = str(configuration.APP_ENV).strip().lower()
+    mode = str(configuration.METRICS_EXPORT_MODE).strip().lower()
+    if environment in {"production", "staging"} and mode != "statsd":
+        raise ValueError("production/staging requires StatsD metrics export")
+    if mode == "disabled":
+        return mode, None, int(configuration.METRICS_STATSD_PORT)
+    host = configuration.METRICS_STATSD_HOST
+    port = configuration.METRICS_STATSD_PORT
+    if (
+        mode != "statsd"
+        or not isinstance(host, str)
+        or not 1 <= len(host) <= 253
+        or re.fullmatch(r"[A-Za-z0-9.-]+", host) is None
+        or not isinstance(port, int)
+        or isinstance(port, bool)
+        or not 1 <= port <= 65535
+        or service not in {"backend", "worker"}
+    ):
+        raise ValueError("StatsD metrics export configuration is invalid")
+    return mode, host, port
+
+
+def configure_metrics_export(configuration: Any, *, service: str) -> None:
+    """Configure a content-free sink; non-local runtimes fail closed."""
+    mode, host, port = validate_metrics_export_config(configuration, service=service)
+    if mode == "disabled":
+        metrics.configure_sink(None)
+        return
+    assert host is not None
+    metrics.configure_sink(StatsDMetricsSink(host, port, service=service))
+
+
+_MAX_PROVIDER_TOKENS = 1_000_000_000
+_MAX_PROVIDER_COST_USD = decimal.Decimal("1000000")
+_MICRO_USD_PER_USD = decimal.Decimal("1000000")
+_MAX_QUEUE_MESSAGE_BYTES = 256 * 1024
+_MAX_QUEUE_DEPTH = 1_000_000_000
+
+
+def _bounded_number(value: Any, *, maximum: float) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float, decimal.Decimal)):
+        return None
+    try:
+        converted = float(value)
+    except (OverflowError, ValueError):
+        return None
+    if not math.isfinite(converted) or converted < 0 or converted > maximum:
+        return None
+    return converted
+
+
+def _provider_cost_usd(response: Any, usage: Any) -> decimal.Decimal | None:
+    """Read only known aggregate cost fields; never inspect prompts or choices."""
+    try:
+        hidden = getattr(response, "_hidden_params", None)
+        model_extra = getattr(response, "model_extra", None)
+        direct_cost = getattr(response, "response_cost", None)
+        usage_cost = getattr(usage, "cost", None) if usage is not None else None
+    except Exception:
+        return None
+    candidates = (
+        direct_cost,
+        hidden.get("response_cost") if isinstance(hidden, dict) else None,
+        model_extra.get("response_cost") if isinstance(model_extra, dict) else None,
+        usage_cost,
+    )
+    zero = None
+    for candidate in candidates:
+        if isinstance(candidate, bool) or not isinstance(
+            candidate, (int, float, str, decimal.Decimal)
+        ):
+            continue
+        try:
+            amount = decimal.Decimal(str(candidate))
+        except decimal.InvalidOperation:
+            continue
+        if amount.is_finite() and 0 <= amount <= _MAX_PROVIDER_COST_USD:
+            if amount > 0:
+                return amount
+            zero = amount
+    return zero
+
+
 def record_provider_usage(response: Any) -> None:
     """Record aggregate provider usage without model, prompt or response data."""
-    usage = getattr(response, "usage", None)
-    total_tokens = getattr(usage, "total_tokens", 0) if usage is not None else 0
-    if isinstance(total_tokens, int) and total_tokens > 0:
+    try:
+        usage = getattr(response, "usage", None)
+        total_tokens = getattr(usage, "total_tokens", 0) if usage is not None else 0
+    except Exception:
+        return
+    if (
+        isinstance(total_tokens, int)
+        and not isinstance(total_tokens, bool)
+        and 0 < total_tokens <= _MAX_PROVIDER_TOKENS
+    ):
         metrics.incr("provider.tokens", total_tokens)
+    cost = _provider_cost_usd(response, usage)
+    if cost is not None:
+        units = int(
+            (cost * _MICRO_USD_PER_USD).quantize(
+                decimal.Decimal("1"), rounding=decimal.ROUND_HALF_UP
+            )
+        )
+        if units:
+            metrics.incr("provider.cost_micro_usd", units)
+
+
+def record_queue_snapshot(
+    *, depth: Any, oldest_message: Any, now_epoch: float | None = None
+) -> bool:
+    """Record bounded Redis/Celery queue aggregates without retaining payloads.
+
+    Queue age is available only for messages produced with the bounded
+    ``cv_enqueued_at_epoch`` header. Legacy or malformed messages still
+    contribute to depth, but do not create a fabricated age sample.
+    """
+    normalized_depth = _bounded_number(depth, maximum=_MAX_QUEUE_DEPTH)
+    if normalized_depth is None or not normalized_depth.is_integer():
+        metrics.clear_gauge("queue.depth")
+        metrics.clear_gauge("queue.oldest_age")
+        return False
+    metrics.set_gauge("queue.depth", normalized_depth)
+    if normalized_depth == 0:
+        metrics.set_gauge("queue.oldest_age", 0)
+        return True
+    if oldest_message is None:
+        metrics.clear_gauge("queue.oldest_age")
+        return False
+    if isinstance(oldest_message, bytes):
+        raw = oldest_message
+    elif isinstance(oldest_message, str):
+        raw = oldest_message.encode("utf-8")
+    else:
+        metrics.clear_gauge("queue.oldest_age")
+        return False
+    if len(raw) > _MAX_QUEUE_MESSAGE_BYTES:
+        metrics.clear_gauge("queue.oldest_age")
+        return False
+    try:
+        envelope = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        metrics.clear_gauge("queue.oldest_age")
+        return False
+    headers = envelope.get("headers") if isinstance(envelope, dict) else None
+    enqueued = (
+        headers.get("cv_enqueued_at_epoch") if isinstance(headers, dict) else None
+    )
+    normalized_enqueued = _bounded_number(enqueued, maximum=4_102_444_800)
+    current = time.time() if now_epoch is None else now_epoch
+    normalized_now = _bounded_number(current, maximum=4_102_444_800)
+    if normalized_enqueued is None or normalized_now is None:
+        metrics.clear_gauge("queue.oldest_age")
+        return False
+    if normalized_enqueued > normalized_now:
+        metrics.clear_gauge("queue.oldest_age")
+        return False
+    metrics.set_gauge(
+        "queue.oldest_age", max(0.0, normalized_now - normalized_enqueued)
+    )
+    return True
+
+
+def record_age_gauge(name: str, *, completed_at: Any, now: Any) -> bool:
+    """Record a bounded UTC age from an already validated operational receipt."""
+    if name not in {"backup.age_seconds", "restore_drill.age_seconds"}:
+        raise ValueError("operational age metric is not allow-listed")
+    try:
+        seconds = (now - completed_at).total_seconds()
+    except (AttributeError, TypeError):
+        metrics.clear_gauge(name)
+        return False
+    normalized = _bounded_number(seconds, maximum=10 * 365 * 24 * 60 * 60)
+    if normalized is None:
+        metrics.clear_gauge(name)
+        return False
+    metrics.set_gauge(name, normalized)
+    return True
+
+
+def _bounded_receipt(path_value: Any) -> dict[str, Any] | None:
+    if not isinstance(path_value, str) or not path_value:
+        return None
+    path = Path(path_value)
+    if not path.is_absolute():
+        return None
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+    except OSError:
+        return None
+    try:
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or not 0 < before.st_size <= 1024 * 1024
+            or before.st_mode & 0o022
+        ):
+            return None
+        raw = os.read(descriptor, 1024 * 1024 + 1)
+        after = os.fstat(descriptor)
+        if len(raw) != before.st_size or (
+            before.st_dev,
+            before.st_ino,
+            before.st_size,
+            before.st_mtime_ns,
+        ) != (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+        ):
+            return None
+    finally:
+        os.close(descriptor)
+
+    def reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError
+            result[key] = value
+        return result
+
+    try:
+        payload = json.loads(raw, object_pairs_hook=reject_duplicates)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _receipt_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.endswith("Z") or len(value) > 40:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(parsed):
+        return None
+    return parsed.astimezone(timezone.utc)
+
+
+def record_operational_receipt_ages(
+    *, backup_path: Any, restore_path: Any, now: datetime | None = None
+) -> bool:
+    """Project verified receipt ages to runtime gauges without retaining paths."""
+    backup = _bounded_receipt(backup_path)
+    restore = _bounded_receipt(restore_path)
+    backup_contract = {
+        "receipt_type": "backup-complete",
+        "status": "PASS",
+        "release_gate_eligible": True,
+        "source_mutated": False,
+        "credential_values_retained": False,
+        "raw_object_names_retained_in_receipt": False,
+    }
+    restore_contract = {
+        "receipt_type": "fresh-target-restore-drill",
+        "status": "PASS",
+        "release_gate_eligible": True,
+        "fresh_target_verified": True,
+        "source_mutated": False,
+        "credential_values_retained": False,
+        "raw_object_names_retained": False,
+    }
+    observed_at = now or utc_now()
+    backup_at = _receipt_timestamp(backup.get("completed_at_utc")) if backup else None
+    restore_at = (
+        _receipt_timestamp(restore.get("restore_finished_at_utc")) if restore else None
+    )
+    admitted = (
+        backup is not None
+        and restore is not None
+        and all(backup.get(key) == value for key, value in backup_contract.items())
+        and all(restore.get(key) == value for key, value in restore_contract.items())
+        and backup_at is not None
+        and restore_at is not None
+    )
+    if not admitted:
+        metrics.clear_gauge("backup.age_seconds")
+        metrics.clear_gauge("restore_drill.age_seconds")
+        return False
+    backup_ok = record_age_gauge(
+        "backup.age_seconds", completed_at=backup_at, now=observed_at
+    )
+    restore_ok = record_age_gauge(
+        "restore_drill.age_seconds", completed_at=restore_at, now=observed_at
+    )
+    return backup_ok and restore_ok
+
+
+def record_outbox_snapshot(*, backlog: Any, oldest_created_at: Any, now: Any) -> bool:
+    """Record exact non-published outbox count and age without event labels."""
+    normalized_backlog = _bounded_number(backlog, maximum=_MAX_QUEUE_DEPTH)
+    if normalized_backlog is None or not normalized_backlog.is_integer():
+        metrics.clear_gauge("outbox.backlog")
+        metrics.clear_gauge("outbox.oldest_age")
+        return False
+    metrics.set_gauge("outbox.backlog", normalized_backlog)
+    if normalized_backlog == 0:
+        metrics.set_gauge("outbox.oldest_age", 0)
+        return True
+    try:
+        age = (now - oldest_created_at).total_seconds()
+    except (AttributeError, TypeError):
+        metrics.clear_gauge("outbox.oldest_age")
+        return False
+    normalized_age = _bounded_number(age, maximum=10 * 365 * 24 * 60 * 60)
+    if normalized_age is None:
+        metrics.clear_gauge("outbox.oldest_age")
+        return False
+    metrics.set_gauge("outbox.oldest_age", normalized_age)
+    return True
+
+
+def record_db_index_snapshot(*, scans_total: Any, unused_count: Any) -> bool:
+    """Record aggregate pg_stat_user_indexes values without relation labels."""
+    scans = _bounded_number(scans_total, maximum=1_000_000_000_000_000)
+    unused = _bounded_number(unused_count, maximum=1_000_000)
+    if (
+        scans is None
+        or unused is None
+        or not scans.is_integer()
+        or not unused.is_integer()
+    ):
+        metrics.clear_gauge("db.index.scans_total")
+        metrics.clear_gauge("db.index.unused_count")
+        return False
+    metrics.set_gauge("db.index.scans_total", scans)
+    metrics.set_gauge("db.index.unused_count", unused)
+    return True
+
+
+def record_maintenance_snapshot(
+    *, stale_leases: Any, orphan_objects: Any = None
+) -> bool:
+    """Record current bounded inventory counts, never cleanup action totals."""
+    stale = _bounded_number(stale_leases, maximum=1_000_000_000)
+    if stale is None or not stale.is_integer():
+        metrics.clear_gauge("lease.stale")
+        return False
+    metrics.set_gauge("lease.stale", stale)
+    if orphan_objects is None:
+        return True
+    orphan = _bounded_number(orphan_objects, maximum=1_000_000_000)
+    if orphan is None or not orphan.is_integer():
+        metrics.clear_gauge("orphan.objects")
+        return False
+    metrics.set_gauge("orphan.objects", orphan)
+    return True
+
+
+def install_sqlalchemy_metrics(
+    db_engine: Any, *, slow_query_seconds: float = 0.5
+) -> None:
+    """Attach bounded process-local DB duration, slow-query and pool metrics."""
+    threshold = _bounded_number(slow_query_seconds, maximum=60.0)
+    if threshold is None or threshold <= 0:
+        raise ValueError("slow query threshold must be between 0 and 60 seconds")
+    if getattr(db_engine, "_context_vault_metrics_installed", False):
+        return
+
+    from sqlalchemy import event
+
+    def record_pool() -> None:
+        checked_out = getattr(db_engine.pool, "checkedout", None)
+        if callable(checked_out):
+            try:
+                observed = checked_out()
+            except Exception:
+                return
+            value = _bounded_number(observed, maximum=1_000_000)
+            if value is not None:
+                metrics.set_gauge("db.pool.checked_out", value)
+
+    def record_pool_checkin(_connection: Any, _record: Any) -> None:
+        checked_out = getattr(db_engine.pool, "checkedout", None)
+        if callable(checked_out):
+            try:
+                observed = checked_out()
+            except Exception:
+                return
+            value = _bounded_number(observed, maximum=1_000_000)
+            if value is not None:
+                metrics.set_gauge("db.pool.checked_out", max(0.0, value - 1))
+
+    def before_cursor_execute(
+        _conn: Any,
+        _cursor: Any,
+        _statement: Any,
+        _parameters: Any,
+        context: Any,
+        _executemany: Any,
+    ) -> None:
+        context._context_vault_query_started = time.perf_counter()
+
+    def finish(context: Any) -> None:
+        started = getattr(context, "_context_vault_query_started", None)
+        if not isinstance(started, (int, float)):
+            return
+        try:
+            del context._context_vault_query_started
+        except AttributeError:
+            pass
+        elapsed = max(0.0, time.perf_counter() - float(started))
+        metrics.record_duration("db.query", elapsed)
+        if elapsed >= threshold:
+            metrics.incr("db.slow_queries")
+        record_pool()
+
+    def after_cursor_execute(
+        _conn: Any,
+        _cursor: Any,
+        _statement: Any,
+        _parameters: Any,
+        context: Any,
+        _executemany: Any,
+    ) -> None:
+        finish(context)
+
+    def handle_error(exception_context: Any) -> None:
+        context = getattr(exception_context, "execution_context", None)
+        if context is not None:
+            finish(context)
+
+    event.listen(db_engine, "before_cursor_execute", before_cursor_execute)
+    event.listen(db_engine, "after_cursor_execute", after_cursor_execute)
+    event.listen(db_engine, "handle_error", handle_error)
+    event.listen(db_engine.pool, "checkout", lambda *_args: record_pool())
+    event.listen(db_engine.pool, "checkin", record_pool_checkin)
+    db_engine._context_vault_metrics_installed = True
 
 
 _shutdown_started = threading.Event()
@@ -485,8 +999,6 @@ def trace_operation(operation: str) -> Iterator[None]:
         metrics.incr("trace.errors")
         if operation.startswith("provider."):
             metrics.incr("provider.errors")
-        elif operation == "ingestion.process":
-            metrics.incr("job.failures")
         elif operation == "outbox.dispatch":
             metrics.incr("outbox.failures")
         log_structured(
@@ -659,7 +1171,7 @@ def build_default_readiness_checks(
     from sqlalchemy.pool import NullPool
 
     from ..config import settings
-    from ..db import engine
+    from ..db import database_identity_is_admitted, engine
     from ..migration_settings import EXPECTED_ALEMBIC_HEAD
     from .storage.minio_storage import _split_endpoint
 
@@ -673,12 +1185,24 @@ def build_default_readiness_checks(
     def db_check() -> bool:
         started = time.perf_counter()
         with probe_engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
+            admitted = database_identity_is_admitted(conn, cfg)
+            index_scans, unused_indexes = conn.execute(
+                text(
+                    """
+                    SELECT COALESCE(SUM(idx_scan), 0),
+                           COUNT(*) FILTER (WHERE idx_scan = 0)
+                    FROM pg_stat_user_indexes
+                    """
+                )
+            ).one()
         metrics.record_duration("db.query", time.perf_counter() - started)
         checked_out = getattr(engine.pool, "checkedout", None)
         if callable(checked_out):
             metrics.set_gauge("db.pool.checked_out", checked_out())
-        return True
+        return admitted and record_db_index_snapshot(
+            scans_total=index_scans,
+            unused_count=unused_indexes,
+        )
 
     def migration_check() -> bool:
         started = time.perf_counter()
@@ -733,7 +1257,13 @@ def build_default_readiness_checks(
                     cfg.REDIS_URL, socket_connect_timeout=2, socket_timeout=2
                 )
                 try:
-                    metrics.set_gauge("queue.depth", queue.llen("celery"))
+                    depth = queue.llen("celery")
+                    oldest = queue.lindex("celery", -1) if depth else None
+                    if not record_queue_snapshot(
+                        depth=depth,
+                        oldest_message=oldest,
+                    ):
+                        return False
                 finally:
                     queue.close()
                 return bool(connection.connected)
