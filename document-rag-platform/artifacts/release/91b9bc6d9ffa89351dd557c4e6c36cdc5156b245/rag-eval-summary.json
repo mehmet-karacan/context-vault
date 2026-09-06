@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "candidate_sha": "91b9bc6d9ffa89351dd557c4e6c36cdc5156b245",
+  "status": "PASS_OFFLINE_REAL_BENCHMARK_NOT_ADMITTED",
+  "contract_smoke": "PASS",
+  "offline_e2e": "PASS",
+  "offline_e2e_tests": 55,
+  "local_embedding": {
+    "provider": "local-sentence-transformers",
+    "model": "BAAI/bge-m3@5617a9f61b028005a4858fdac845db406aefb181",
+    "bundle_sha256": "d87c47601ade6251c7e0c236d4b863b797bfd280f94ac09be9cc7fbeede74668",
+    "device": "mps",
+    "dimension": 1024,
+    "normalized": true,
+    "remote_provider_invoked": false,
+    "result": "PASS"
+  },
+  "local_generation": {
+    "provider": "local-transformers",
+    "model": "Qwen/Qwen2.5-1.5B-Instruct@989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+    "bundle_sha256": "5a6a6259762fed70e38ae346763b105a7b05aa981e5ab078c8e5b033f87f0c87",
+    "device": "mps",
+    "grounded_guard": "PASS",
+    "no_answer_guard": "PASS",
+    "remote_provider_invoked": false,
+    "result": "PASS"
+  },
+  "real_benchmark": {
+    "preflight": "HUMAN_APPROVAL_REQUIRED",
+    "provider_invoked": false,
+    "current_runner_bundle_sha256": "85ba5d80db07510ae5952ee6c0c2d1616f25158d022a9d3dc16f0b3ee35f9155",
+    "reason": "the prior human approval is cryptographically bound to a different source closure; the model/CLI is prohibited from issuing its own replacement approval"
+  }
+}

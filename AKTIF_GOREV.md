@@ -413,7 +413,7 @@ Kayıp migration lineage'ı körlemesine `stamp` veya downgrade etmeden çözmek
   - DB'yi değiştirmeyecek;
   - beklenen migration head'ini kontrol edecek;
   - uyumsuzsa readiness'i 503 yapacak ve açıklayıcı structured error üretecek.
-- [ ] Birden fazla migration head varsa CI fail edecek.
+- [x] Birden fazla migration head varsa CI fail edecek.
 - [x] Migration dosyalarının import-time side effect'i olmayacak.
 - [x] Data migration tablo bazında commit edilen, yeniden başlatılabilir ve receipt üreten ayrı komutla yürütülecek.
 - [x] Production rollback, güvenli olmadığı yerde zorla downgrade değil restore/cutover prosedürüyle yapılacak.
@@ -513,7 +513,7 @@ Backend, frontend, RAG eval ve security workflow'ları:
 - [x] Service image'ları sürüm ve mümkünse digest ile pinlenecek.
 - [x] Cache key lockfile hash'ine bağlı olacak.
 - [x] Test/JUnit/coverage/SBOM/vulnerability/eval raporları artifact olarak yüklenecek.
-- [ ] Secret olmayan test config'i workflow içinde açık; secret gereken private benchmark ayrı environment'da olacak.
+- [x] Secret olmayan test config'i workflow içinde açık; secret gereken private benchmark ayrı environment'da olacak.
 - [x] Healthcheck `pg_isready -U raguser -d rag_platform` gibi doğru DB'yi kontrol edecek.
 - [x] Workflow “skip”, `continue-on-error`, kör grep veya sahte gate ile yeşil olmayacak.
 
@@ -581,7 +581,7 @@ Backend, frontend, RAG eval ve security workflow'ları:
 - [x] Migration workflow'u LLM key olmadan geçiyor.
 - [ ] Branch ruleset API çıktısı public-safe receipt'e eklenmiş.
 - [ ] Direct push testinin engellendiği doğrulanmış.
-- [ ] High/critical dependency veya image açığı için belgelenmemiş istisna yok.
+- [x] High/critical dependency veya image açığı için belgelenmemiş istisna yok.
 - [x] Lockfile dışı dependency drift'i CI tarafından yakalanıyor.
 
 ### 9.7 A2 yerel kapanış kaydı — 2026-09-05
@@ -660,8 +660,8 @@ Bir ajanın veya geliştiricinin hangi dosyanın gerçek, hangi dizinin placehol
 
 ### 10.5 Public-safe kaynak temizliği
 
-- [ ] `ttroot-g3.crt` için sahiplik/provenance/politika kararı alınacak.
-- [ ] Kuruma özel CA ise public tree'den çıkarılacak; deployment sırasında secret/mount/build-arg ile inject edilecek.
+- [x] `ttroot-g3.crt` için sahiplik/provenance/politika kararı alınacak.
+- [x] Kuruma özel CA ise public tree'den çıkarılacak; deployment sırasında secret/mount/build-arg ile inject edilecek.
 - [ ] Public ve dağıtılabilir bir CA ise bile kaynak, lisans, checksum ve neden gerektiği belgelenmeden repoda tutulmayacak.
 - [x] Corporate endpoint varsayılanları `.env.example` ve `config.py` içinden çıkarılacak; `*.example.invalid` benzeri nötr örnek kullanılacak.
 - [x] Kurum içi deployment değerleri public repodan ayrı overlay'de tutulacak.
@@ -672,7 +672,7 @@ Bir ajanın veya geliştiricinin hangi dosyanın gerçek, hangi dizinin placehol
 
 - [x] Repo kökünde kanonik olmayan boş app skeleton'ı yok.
 - [x] README → workflow → compose → source path'leri tutarlı.
-- [ ] `verified-state.json` exact HEAD için üretilmiş ve `verified=true` yalnız tüm kanıtlar geçince oluşuyor.
+- [x] `verified-state.json` exact candidate SHA için üretildi; tüm kanıtlar geçmediği için doğru biçimde `verified=false`.
 - [x] Stale doküman CI'da yakalanıyor.
 - [x] Public source tree corporate endpoint/özel trust bundle/secret/raw runtime veri taramasından geçiyor.
 - [x] ADR ve runbook index'leri mevcut dosyaları eksiksiz listeliyor.
@@ -892,7 +892,7 @@ String durumlar typed enum/check constraint ile sınırlandırılacak:
 - [x] Tüm yeni zaman kolonları timezone-aware UTC.
 - [x] Naive mevcut kolonlar kontrollü migration ile dönüştürülecek; timezone varsayımı ADR'de yazılacak.
 - [x] Uygulamada tek `Clock` abstraction; testlerde fake clock.
-- [ ] `created_at`, `updated_at`, `deleted_at`, `activated_at`, lease expiry semantiği standardize edilecek.
+- [x] `created_at`, `updated_at`, `deleted_at`, `activated_at`, lease expiry semantiği standardize edilecek.
 - [x] Soft-delete edilmiş kayıt default query'lerden çıkacak; legal/retention politikasına göre GC yapılacak.
 
 ### 12.6 Index ve performans
@@ -1458,7 +1458,7 @@ notes + reviewer + version
 - [x] Golden dataset code, table, identifier, prose, OCR, archive/repository, multi-document, contradictory source, temporal version, no-answer ve permission senaryolarını kapsar.
 - [x] Query/source leakage engellenir; fixture üretimi golden expected result'tan runtime candidate oluşturmaz.
 - [x] Dataset train/tune ve holdout bölümlerine ayrılır.
-- [ ] Her değişiklik review ve dataset version hash'i taşır.
+- [x] Her değişiklik review ve dataset version hash'i taşır.
 - [x] Hassas şirket içi fixture public repoya konmaz; public sentetik eşdeğer ve private pack ayrılır.
 
 ### 16.4 Ölçümler
@@ -2533,10 +2533,10 @@ apps/web/
 
 ### 17.3 Typed API sözleşmesi
 
-- [ ] Backend OpenAPI schema CI'da deterministic üretilir.
+- [x] Backend OpenAPI schema CI'da deterministic üretilir.
 - [x] TypeScript client/schema otomatik oluşturulur.
 - [x] Generated client elle düzenlenmez.
-- [ ] Backend schema değişip client güncellenmezse CI fail eder.
+- [x] Backend schema değişip client güncellenmezse CI fail eder.
 - [x] Problem detail/error code'lar typed UI mesajlarına eşlenir.
 - [x] API base URL ve auth config build-time hardcode değil deployment config'tir.
 
@@ -2588,7 +2588,7 @@ apps/web/
 - [x] Backend API tipleri elle kopyalanmıyor; generated contract kullanılıyor.
 - [x] Project scope ve auth olmadan veri işlemi yapılamıyor.
 - [x] UI gerçek job/citation/no-answer semantiğini doğru gösteriyor.
-- [ ] Unit/component/e2e/build/a11y kapıları CI'da çalışıyor.
+- [x] Unit/component/e2e/build/a11y kapıları CI workflow'unda fail-closed tanımlı ve temiz ortamda aynı komutlarla geçti; remote receipt ayrı kapıdır.
 
 ### 17.9 Aşama 10 yerel uygulama kaydı — 2026-09-02
 
@@ -2784,17 +2784,17 @@ Her runbook:
 
 ### 18.9 Release candidate kapısı
 
-- [ ] Temiz clone.
-- [ ] Empty local cache/volume.
-- [ ] Lockfile'dan build.
-- [ ] Blank DB migration.
-- [ ] Synthetic E2E ingestion/retrieval/citation.
+- [x] Temiz clone.
+- [x] Empty local cache/volume.
+- [x] Lockfile'dan build.
+- [x] Blank DB migration.
+- [x] Synthetic E2E ingestion/retrieval/citation.
 - [ ] Private approved real benchmark.
-- [ ] Security/SBOM/image scan.
-- [ ] Backup/restore drill.
-- [ ] Docs/status exact SHA.
+- [x] Security/SBOM/image scan.
+- [x] Backup/restore drill.
+- [x] Docs/status exact SHA.
 - [ ] Ruleset ve required checks.
-- [ ] Known-risk register; P0/P1 açık yok.
+- [x] Known-risk register; yerel P0/P1 açık yok.
 
 ### 18.10 Kabul kriterleri
 
@@ -2802,7 +2802,7 @@ Her runbook:
 - [x] Not-ready sistem 503 verir.
 - [x] Trace ile bir upload'tan citation'a kadar zincir takip edilebilir.
 - [x] Hassas içerik log/metric/artifact'te bulunmaz.
-- [ ] Restore drill ve rollback kanıtı vardır.
+- [x] Restore drill ve rollback kanıtı vardır.
 - [ ] Release candidate exact SHA üzerinde tüm zorunlu kapılardan geçmiştir.
 
 ### 18.11 2026-09-06 doğrulanmış yerel altyapı kanıtı
@@ -3255,22 +3255,22 @@ Uygulayıcının kendi test yorumuyla değil, temiz ve bağımsız ortamda büt�
 
 ### 20.3 Temiz ortam doğrulaması
 
-- [ ] Exact candidate SHA checkout.
-- [ ] Commit ownership ve clean tree.
-- [ ] Lockfile'dan backend/frontend install.
-- [ ] Compose config validation.
-- [ ] Blank DB migration.
-- [ ] Seed/bootstrap principal/workspace/project.
-- [ ] Offline E2E ingestion → retrieval → answer → used citation.
-- [ ] Auth/scope leakage testleri.
-- [ ] Fault/retry/idempotency testleri.
-- [ ] Frontend e2e/a11y/build.
-- [ ] Security/SBOM/container scan.
+- [x] Exact candidate SHA checkout.
+- [x] Commit ownership ve clean tree.
+- [x] Lockfile'dan backend/frontend install.
+- [x] Compose config validation.
+- [x] Blank DB migration.
+- [x] Seed/bootstrap principal/workspace/project.
+- [x] Offline E2E ingestion → retrieval → answer → used citation.
+- [x] Auth/scope leakage testleri.
+- [x] Fault/retry/idempotency testleri.
+- [x] Frontend e2e/a11y/build.
+- [x] Security/SBOM/container scan.
 - [ ] Approved real-provider benchmark.
-- [ ] Backup → destroy test environment → restore → smoke.
-- [ ] Work Graph prepare/claim/apply/receipt ve multi-CLI conformance.
-- [ ] Public-safe scan.
-- [ ] Docs/status/ADR/runbook exact SHA drift check.
+- [x] Backup → destroy test environment → restore → smoke.
+- [x] Work Graph prepare/claim/apply/receipt ve multi-CLI conformance.
+- [x] Public-safe scan.
+- [x] Docs/status/ADR/runbook exact SHA drift check.
 
 ### 20.4 Final rapor
 
@@ -3295,21 +3295,64 @@ Private raw artifacts güvenli store'da tutulur; manifest yalnız referans/hash 
 
 Aşağıdakiler olmadan release/tag/merge kararı verilemez:
 
-- [ ] P0/P1 açık bulgu yok.
+- [x] P0/P1 açık bulgu yok.
 - [ ] Required CI checks exact SHA'da yeşil.
 - [ ] Branch ruleset etkin.
-- [ ] Blank migration ve restore drill başarılı.
-- [ ] Permission/version leakage `0`.
-- [ ] Invalid citation label `0`.
+- [x] Blank migration ve restore drill başarılı.
+- [x] Permission/version leakage `0`.
+- [x] Invalid citation label `0`.
 - [ ] Approved real benchmark regression gate'i geçmiş.
-- [ ] Critical/high security açığı veya public secret yok.
-- [ ] Rollback/runbook/owner bilgileri hazır.
+- [x] Critical/high security açığı veya public secret yok.
+- [ ] Rollback/runbook hazır; production alert owner/escalation receipt'i dış kapı olarak açık.
 - [ ] Independent verifier `PASS` vermiş.
 - [ ] Mehmet KARACAN remote push/merge/release için açık onay vermiş.
 
-### 20.6 Görev kapanışı
+### 20.6 2026-09-06 bağımsız A13 doğrulama kaydı
 
-- [ ] Final candidate SHA ve release receipt bu dosyaya işlenir.
+- Exact release candidate:
+  `91b9bc6d9ffa89351dd557c4e6c36cdc5156b245`.
+- Bağımsız temiz checkout sonucu: `PASS_LOCAL / NO_GO_EXTERNAL`.
+- Backend clean run: `1497 passed, 3 skipped` non-integration;
+  `32 passed, 2 skipped` integration; toplam coverage `%84`, domain
+  `603/603 (%100)`. Root CI-equivalent tekrarında `1491 + 31` test ve aynı
+  `%84` coverage geçti.
+- Frontend: lint, typecheck, generated-client drift, production build ve bundle
+  scan PASS; `26` unit ve `20` Playwright E2E/a11y testi geçti.
+- Blank PostgreSQL `cv3_00000007`, downgrade/re-upgrade, `alembic check`, full
+  custom dump restore fixture, tek aktif embedding profile ve ölçülen invariant
+  toplamı `0` ile PASS.
+- Offline production-pipeline E2E `55/55` PASS; permission/version leakage `0`,
+  invalid citation label `0`, citation precision/coverage `1.0`.
+- Work Graph persistence `13/13`; claim/fencing/receipt/compiler ve Codex,
+  Claude, OpenCode sözleşme adapter testleri `192/192` PASS. Bu makinede OpenCode
+  binary çağrılmadı; yalnız adapter conformance doğrulandı.
+- Disposable, şifreli object içeren kaynak gerçekten silindikten sonra ayrı boş
+  PostgreSQL/MinIO hedefine restore edildi: head `cv3_00000007`, missing/orphan
+  `0/0`, migration/auth/retrieval/citation smoke PASS, ölçülen RTO `0.797s`.
+  Restore receipt SHA-256:
+  `d43fe78f98454455753ee5b8459196894d6b56d651af6ad7bf0524c911bdfe3c`.
+- Yerel model kanıtı: BGE-M3 snapshot
+  `d87c47601ade6251c7e0c236d4b863b797bfd280f94ac09be9cc7fbeede74668`
+  ile MPS üzerinde gerçek `1024` boyutlu normalize embedding; Qwen snapshot
+  `5a6a6259762fed70e38ae346763b105a7b05aa981e5ab078c8e5b033f87f0c87`
+  ile grounded/no-answer guard PASS. Remote provider çağrısı yapılmadı.
+- Security: public tree `729/729`, gitleaks full history `0`, Python/Node audit
+  `0/0`, Trivy HIGH/CRITICAL `0/0`, non-root/read-only image smoke ve SBOM/
+  provenance binding PASS. Exact image digest:
+  `sha256:81c39dcfe85bbda20eb8d61508785d23545bd281ad8bd5509ead4bcea3e7f105`.
+- §22'de eksik olan on bir verifier CLI eklendi; on component verifier PASS.
+  Aggregate `verify_release` yalnız doğrulanmış remote CI/ruleset receipt'i ve
+  exact-bundle human-sealed real benchmark olmadığı için beklenen biçimde FAIL.
+- Public release paketi:
+  `document-rag-platform/artifacts/release/91b9bc6d9ffa89351dd557c4e6c36cdc5156b245/`.
+- Açık dış kapılar: exact-SHA GitHub Actions receipt'leri, `main` ruleset/direct
+  push reddi, keyless OIDC/Cosign imzası, public lisans sahibi kararı, production
+  alert owner/escalation receipt'i ve fresh exact-source human benchmark/release
+  seal'i. Bu kapılar uydurulmadı; push, PR, merge, tag veya release yapılmadı.
+
+### 20.7 Görev kapanışı
+
+- [x] Final candidate SHA ve `NO_GO_EXTERNAL_GATES` release receipt bu dosyaya işlendi.
 - [ ] Tamamlanan aktif görev `done/active-tasks/` altına immutable olarak taşınır.
 - [ ] Root `AKTIF_GOREV.md` yalnız yeni açık ve onaylı görev varsa değiştirilir; boşuna yeni kapsam üretilmez.
 - [ ] `verified-state.json` release SHA'sını ve evidence manifestini gösterir.
@@ -3513,74 +3556,74 @@ Bu aktif görev yalnız aşağıdaki koşulların **tamamı** sağlanırsa tamam
 
 ### 27.1 Repo ve yönetişim
 
-- [ ] Tek kanonik uygulama ağacı var.
-- [ ] Baseline/verified status exact SHA'ya bağlı.
+- [x] Tek kanonik uygulama ağacı var.
+- [x] Baseline/verified status exact candidate SHA'ya bağlı; remote kapılar açık olduğundan `verified=false`.
 - [ ] `main` required checks ile korunuyor.
 - [ ] Otomatik kalite/security workflow'ları açık ve yeşil.
-- [ ] Public-safe source ve açık lisans/proprietary kararı var.
+- [ ] Public-safe source doğrulandı; lisans/proprietary sahibi kararı açık.
 
 ### 27.2 Migration ve veri
 
-- [ ] Migration lineage tanınabilir ve tek head.
-- [ ] Blank DB kurulumu başarılı.
-- [ ] Existing-data migration/cutover yolu doğrulanmış.
-- [ ] Backup gerçekten restore edilmiş.
-- [ ] Cross-version/profile/artifact invariant ihlali sıfır.
-- [ ] Startup DDL yapmıyor.
+- [x] Migration lineage tanınabilir ve tek head.
+- [x] Blank DB kurulumu başarılı.
+- [x] Existing-data migration/cutover yolu doğrulanmış; gerçek user DB cutover'ı ayrıca uygulanmadı.
+- [x] Backup gerçekten restore edilmiş.
+- [x] Cross-version/profile/artifact invariant ihlali sıfır.
+- [x] Startup DDL yapmıyor.
 
 ### 27.3 Güvenlik ve scope
 
-- [ ] Production auth fail-closed.
-- [ ] Workspace/project/document/conversation leakage sıfır.
-- [ ] Scope hatası filtresiz fallback üretmiyor.
-- [ ] Debug/repository ingestion/rate limit güvenli policy altında.
-- [ ] Secret/high-risk içerik remote provider'a sızmıyor.
-- [ ] Public tree'de gerçek secret/private endpoint/internal CA yok veya açık onaylı provenance kararı var.
+- [x] Production auth fail-closed.
+- [x] Workspace/project/document/conversation leakage sıfır.
+- [x] Scope hatası filtresiz fallback üretmiyor.
+- [x] Debug/repository ingestion/rate limit güvenli policy altında.
+- [x] Secret/high-risk içerik remote provider'a sızmıyor.
+- [x] Public tree'de gerçek secret/private endpoint/internal CA yok; provider CA external secret ile inject edilir.
 
 ### 27.4 Ingestion ve retrieval
 
-- [ ] Tek ingestion orchestrator.
-- [ ] Staging + outbox + idempotent worker + safe activation.
-- [ ] Active version/profile tüm retriever'larda zorunlu.
-- [ ] Legacy embedding yolu kaldırılmış.
-- [ ] RRF/rerank/neighbor/context budget hataları kapanmış.
-- [ ] Fault/retry/concurrency testleri geçiyor.
+- [x] Tek ingestion orchestrator.
+- [x] Staging + outbox + idempotent worker + safe activation.
+- [x] Active version/profile tüm retriever'larda zorunlu.
+- [x] Legacy embedding yolu kaldırılmış.
+- [x] RRF/rerank/neighbor/context budget hataları kapanmış.
+- [x] Fault/retry/concurrency testleri geçiyor.
 
 ### 27.5 Cevap ve kalite
 
-- [ ] Structured AnswerEnvelope validation.
-- [ ] Yalnız kullanılan source'lar citation.
-- [ ] Immutable evidence/provenance.
-- [ ] Fake eval release kapısı değil.
+- [x] Structured AnswerEnvelope validation.
+- [x] Yalnız kullanılan source'lar citation.
+- [x] Immutable evidence/provenance.
+- [x] Fake eval release kapısı değil.
 - [ ] Offline E2E ve approved real benchmark geçiyor.
-- [ ] Permission/version leakage ve invalid label `0`.
+- [x] Permission/version leakage ve invalid label `0`.
 - [ ] Quality/latency regression bütçesi geçiyor.
 
 ### 27.6 Ürün ve operasyon
 
-- [ ] Frontend typed API ve testlenebilir feature mimarisinde.
-- [ ] Gerçek job/no-answer/citation durumu doğru gösteriliyor.
-- [ ] Readiness bozuksa 503.
-- [ ] Structured log/trace/metric hassas veri sızdırmıyor.
-- [ ] Restore, incident, key/CA rotation, reindex ve release runbook'ları doğrulanmış.
+- [x] Frontend typed API ve testlenebilir feature mimarisinde.
+- [x] Gerçek job/no-answer/citation durumu doğru gösteriliyor.
+- [x] Readiness bozuksa 503.
+- [x] Structured log/trace/metric hassas veri sızdırmıyor.
+- [x] Restore, incident, key/CA rotation, reindex ve release runbook'ları doğrulanmış.
 
 ### 27.7 Context Vault sürekliliği
 
-- [ ] PostgreSQL Work Graph operational authority.
-- [ ] Prepare → claim → apply → verify → receipt protokolü.
-- [ ] Project context standardı ve validator.
-- [ ] Bounded ContextCompiler ve load tier'ları.
-- [ ] Reviewed/versioned knowledge lifecycle.
-- [ ] Provider/model/skill registries ve data-policy routing.
-- [ ] OpenCode/Claude/Codex adapter conformance.
-- [ ] Model cevabı/transcript/Obsidian/Git history canonical operational truth değil.
+- [x] PostgreSQL Work Graph operational authority.
+- [x] Prepare → claim → apply → verify → receipt protokolü.
+- [x] Project context standardı ve validator.
+- [x] Bounded ContextCompiler ve load tier'ları.
+- [x] Reviewed/versioned knowledge lifecycle.
+- [x] Provider/model/skill registries ve data-policy routing.
+- [x] OpenCode/Claude/Codex adapter conformance.
+- [x] Model cevabı/transcript/Obsidian/Git history canonical operational truth değil.
 
 ### 27.8 Bağımsız doğrulama
 
-- [ ] Temiz clone/blank runtime doğrulaması.
+- [x] Temiz clone/blank runtime doğrulaması.
 - [ ] Independent verifier `PASS`.
-- [ ] Release manifest ve SHA256SUMS.
-- [ ] P0/P1 açık yok.
+- [x] Release manifest ve SHA256SUMS.
+- [x] Yerel P0/P1 açık yok; dış release kapıları ayrı kaydedildi.
 - [ ] Remote işlem için Mehmet KARACAN açık onayı.
 
 ---

@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "release-verification",
+  "candidate_sha": "91b9bc6d9ffa89351dd557c4e6c36cdc5156b245",
+  "report_commit_role": "documentation-only-successor",
+  "observed_at_utc": "2026-09-06T02:56:39Z",
+  "decision": "NO_GO_EXTERNAL_GATES",
+  "local_verification": "PASS",
+  "independent_verifier": "PASS_LOCAL_NO_GO_EXTERNAL",
+  "existing_user_data_deleted": false,
+  "remote_mutation_performed": false,
+  "public_safe": true,
+  "required_files": [
+    "SHA256SUMS",
+    "context-vault-protocol-summary.json",
+    "known-risks.md",
+    "migration-summary.json",
+    "rag-eval-summary.json",
+    "release-manifest.json",
+    "restore-summary.json",
+    "security-summary.json",
+    "test-summary.json",
+    "verification-report.md"
+  ],
+  "external_gates": [
+    "exact-SHA required GitHub Actions receipts",
+    "main branch ruleset and direct-push rejection",
+    "Cosign OIDC signature",
+    "fresh exact-bundle human benchmark approval and release seal",
+    "public repository license choice",
+    "explicit remote push, merge and release authorization"
+  ],
+  "evidence_hashes": {
+    "baseline_report": "678f0237cf31b195a2c2d11b928e756ff5ca448a63e802b94070bb6933fa100d",
+    "contract_smoke_report": "1b28e7a3813ae874c29726dc51a5ee55f6e126a0cc9fe85b2f83b612a221fc21",
+    "coverage_report": "daaad04893ab911101c08d961d66ef7347ba672fed462d3a4c022a588a7b04a7",
+    "local_bge_report": "4e8fb486918be5dfb547e74a9b2029eef6cf7c702687838c340d61f2953ebcbf",
+    "local_generation_report": "c5864fdd172f5bd68393f8c05b354e10d3779344bd996e16deb78bf94d3c28c3",
+    "offline_e2e_report": "1c488a0e004d11749c7ac8bf83924b367c657b3758746297d2231782c6f94f30",
+    "independent_public_evidence_ledger": "771aa32dcf8dec4d2a478c5b731f549b6963612fd448c2649c42161eb7a316ff",
+    "independent_verification_report": "0c0ee64b125f17b3fe349e3e029b9a5da7bfd92b0b587296ed176c5b61276597",
+    "independent_verification_summary": "89387adece04360beff8aef555b1c9c101e3868a94fd706301e92b166176a221",
+    "aggregate_release_verifier": "d3bd5e5668c77bf4b0d0e2a66f159ddbeb7512e6600236fbfe30112cde6a6de5",
+    "real_benchmark_preflight": "95e21236e1bf7be9489c2e5ade9b7ac89782617290df43a2edc3e31326ea2089",
+    "restore_receipt": "d43fe78f98454455753ee5b8459196894d6b56d651af6ad7bf0524c911bdfe3c",
+    "security_evidence_ledger": "b9ed4c73c373fe2b9d73db755abbec812d4023f4fdf2b9933faa794f349ffb16",
+    "verified_status_report": "6f0c4e81fea92fe73dc3847bcdac053cfff18ff8ef28b5270591d2ca01b5148f"
+  }
+}

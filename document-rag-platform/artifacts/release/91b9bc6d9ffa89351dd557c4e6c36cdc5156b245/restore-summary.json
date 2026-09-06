@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "candidate_sha": "91b9bc6d9ffa89351dd557c4e6c36cdc5156b245",
+  "status": "PASS",
+  "fresh_target_verified": true,
+  "source_was_disposable": true,
+  "source_destroyed_before_restore": true,
+  "existing_user_data_mutated": false,
+  "restored_migration_head": "cv3_00000007",
+  "database_references": 1,
+  "objects_restored": 1,
+  "missing_objects": 0,
+  "orphan_objects": 0,
+  "encrypted_object_decryption": "PASS",
+  "smoke": {
+    "migration": "PASS",
+    "auth": "PASS",
+    "retrieval": "PASS",
+    "citation": "PASS"
+  },
+  "measured_rto_seconds": 0.797,
+  "restore_receipt_sha256": "d43fe78f98454455753ee5b8459196894d6b56d651af6ad7bf0524c911bdfe3c"
+}

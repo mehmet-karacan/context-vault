@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "candidate_sha": "91b9bc6d9ffa89351dd557c4e6c36cdc5156b245",
+  "status": "PASS_LOCAL",
+  "backend": {
+    "independent_unit_non_integration_passed": 1497,
+    "independent_unit_non_integration_skipped": 3,
+    "independent_integration_passed": 32,
+    "independent_integration_skipped": 2,
+    "root_ci_equivalent_unit_non_integration_passed": 1491,
+    "root_ci_equivalent_unit_non_integration_skipped": 9,
+    "root_ci_equivalent_integration_passed": 31,
+    "root_ci_equivalent_integration_skipped": 3,
+    "combined_coverage_percent": 84,
+    "domain_covered_statements": 603,
+    "domain_total_statements": 603,
+    "ruff": "PASS",
+    "mypy_ratchet": "PASS"
+  },
+  "frontend": {
+    "unit_passed": 26,
+    "playwright_passed": 20,
+    "lint": "PASS",
+    "typecheck": "PASS",
+    "api_client_drift": "PASS",
+    "production_build": "PASS",
+    "bundle_scan": "PASS"
+  },
+  "offline_rag": {
+    "contract_smoke": "PASS",
+    "offline_e2e_passed": 55,
+    "permission_leakage": 0,
+    "invalid_citation_labels": 0
+  },
+  "note": "The independent clean run included live MinIO integration; the root CI-equivalent rerun used a PostgreSQL-only integration service. Both reached 84% combined coverage."
+}
