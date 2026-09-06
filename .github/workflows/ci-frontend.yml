@@ -58,6 +58,16 @@ jobs:
           npm run build
           npm run bundle-check
 
+      - name: Build production frontend image from the canonical Node version
+        run: |
+          NODE_VERSION="$(tr -d '[:space:]' < .nvmrc)"
+          test -n "$NODE_VERSION"
+          docker build \
+            --build-arg "NODE_VERSION=$NODE_VERSION" \
+            --tag "context-vault-frontend:${{ github.sha }}" \
+            .
+          test "$(docker image inspect "context-vault-frontend:${{ github.sha }}" --format '{{.Config.User}}')" = "node"
+
       - name: Browser smoke
         run: |
           npx playwright install --with-deps chromium

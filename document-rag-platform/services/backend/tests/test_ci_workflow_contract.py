@@ -11,6 +11,8 @@ REPO = Path(__file__).resolve().parents[4]
 BACKEND_WORKFLOW = REPO / ".github/workflows/ci-backend.yml"
 OWNERSHIP_WORKFLOW = REPO / ".github/workflows/commit-ownership.yml"
 SECURITY_WORKFLOW = REPO / ".github/workflows/ci-security.yml"
+FRONTEND_WORKFLOW = REPO / ".github/workflows/ci-frontend.yml"
+FRONTEND_DOCKERFILE = REPO / "document-rag-platform/apps/web/Dockerfile"
 
 
 def _workflow() -> dict:
@@ -76,3 +78,15 @@ def test_pr_ownership_checks_scan_the_exact_head_not_the_synthetic_merge() -> No
             '--refspec "${{ github.event.pull_request.head.sha || github.sha }}"'
             in commands
         )
+
+
+def test_frontend_image_and_ci_share_the_canonical_node_version() -> None:
+    workflow = FRONTEND_WORKFLOW.read_text(encoding="utf-8")
+    dockerfile = FRONTEND_DOCKERFILE.read_text(encoding="utf-8")
+
+    assert "node-version-file: document-rag-platform/apps/web/.nvmrc" in workflow
+    assert "NODE_VERSION=\"$(tr -d '[:space:]' < .nvmrc)\"" in workflow
+    assert '--build-arg "NODE_VERSION=$NODE_VERSION"' in workflow
+    assert "ARG NODE_VERSION" in dockerfile
+    assert "FROM node:${NODE_VERSION}-bookworm-slim@sha256:" in dockerfile
+    assert "USER node" in dockerfile
