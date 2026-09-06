@@ -36,8 +36,9 @@ jobs:
 
       - name: Commit ownership check
         run: |
-          python scripts/check_commit_ownership.py --all \
+          python scripts/check_commit_ownership.py \
             --repo "$GITHUB_WORKSPACE" \
+            --refspec "${{ github.event.pull_request.head.sha || github.sha }}" \
             --allowed-author "mehmet-karacan karacan.mehmet@hotmail.com" \
             --allowed-author "Mehmet KARACAN karacan.mehmet@hotmail.com"
 
