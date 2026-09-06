@@ -31,6 +31,11 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       DATABASE_URL: postgresql://raguser:test-only-password@localhost:5432/rag_platform
+      MINIO_ENDPOINT: localhost:9000
+      MINIO_ACCESS_KEY: cv3_ci
+      MINIO_SECRET_KEY: cv3-ci-test-only-12345
+      MINIO_BUCKET: rag-documents
+      OBJECT_STORAGE_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       UV_VERSION: 0.12.5
     defaults:
       run:
@@ -74,7 +79,7 @@ jobs:
 
       - name: Restored-schema compatibility fixture
         run: |
-          pg_dump --format=custom --schema-only "$DATABASE_URL" --file=reports/schema-fixture.dump
+          pg_dump --format=custom "$DATABASE_URL" --file=reports/schema-fixture.dump
           psql "postgresql://raguser:test-only-password@localhost:5432/postgres" -v ON_ERROR_STOP=1 -c "CREATE DATABASE rag_restore_fixture"
           pg_restore --dbname="postgresql://raguser:test-only-password@localhost:5432/rag_restore_fixture" --exit-on-error reports/schema-fixture.dump
           DATABASE_URL="postgresql://raguser:test-only-password@localhost:5432/rag_restore_fixture" uv run alembic upgrade head
