@@ -50,6 +50,12 @@ CI_WORKFLOW_PATHS = {
     "ci-rag-contract": ".github/workflows/ci-rag-eval.yml",
     "ci-security": ".github/workflows/ci-security.yml",
 }
+CI_WORKFLOW_DISPLAY_NAMES = {
+    "ci-backend": "ci-backend",
+    "ci-frontend": "ci-frontend",
+    "ci-rag-contract": "ci-rag-eval",
+    "ci-security": "ci-security",
+}
 REQUIRED_STATUS_CHECKS = {
     "backend",
     "frontend",
@@ -303,7 +309,7 @@ def inspect_remote_ci_receipt(
                 continue
             expected_workflow = {
                 "id": workflow_id,
-                "name": name,
+                "name": CI_WORKFLOW_DISPLAY_NAMES[name],
                 "path": CI_WORKFLOW_PATHS[name],
                 "state": "active",
             }

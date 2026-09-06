@@ -95,7 +95,7 @@ def _ci_api(module, payload: dict):
             run = workflows[int(endpoint.rsplit("/", 1)[1])]
             return {
                 "id": run["workflow_id"],
-                "name": run["workflow"],
+                "name": module.CI_WORKFLOW_DISPLAY_NAMES[run["workflow"]],
                 "path": module.CI_WORKFLOW_PATHS[run["workflow"]],
                 "state": "active",
             }
@@ -146,6 +146,24 @@ def test_remote_ci_receipt_requires_every_successful_automatic_run(
 
     payload = _valid_ci_receipt(module, head)
     _write_json(path, payload)
+    assert (
+        module.inspect_remote_ci_receipt(
+            path, head=head, github_get=_ci_api(module, payload)
+        )["valid"]
+        is True
+    )
+
+
+def test_remote_ci_receipt_accepts_distinct_workflow_display_name(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    head = "a" * 40
+    path = tmp_path / "ci.json"
+    payload = _valid_ci_receipt(module, head)
+    _write_json(path, payload)
+
+    assert module.CI_WORKFLOW_DISPLAY_NAMES["ci-rag-contract"] == "ci-rag-eval"
     assert (
         module.inspect_remote_ci_receipt(
             path, head=head, github_get=_ci_api(module, payload)
