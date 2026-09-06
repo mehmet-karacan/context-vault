@@ -9,10 +9,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 
 
 REPO = Path(__file__).resolve().parents[5]
 SCRIPT = REPO / "scripts/local_production_case_executor.py"
+BACKEND = REPO / "document-rag-platform/services/backend"
 
 
 def _module():
@@ -21,6 +24,17 @@ def _module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def test_executor_expected_head_matches_repository_alembic_graph():
+    module = _module()
+    config = Config(str(BACKEND / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND / "alembic"))
+
+    assert (
+        module.EXPECTED_ALEMBIC_HEAD
+        == ScriptDirectory.from_config(config).get_current_head()
+    )
 
 
 class _Runtime:

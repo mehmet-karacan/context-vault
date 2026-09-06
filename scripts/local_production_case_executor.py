@@ -24,7 +24,7 @@ from typing import Any, Callable, Mapping
 
 REPO = Path(__file__).resolve().parents[1]
 BACKEND = REPO / "document-rag-platform/services/backend"
-EXPECTED_ALEMBIC_HEAD = "cv3_00000006"
+EXPECTED_ALEMBIC_HEAD = "cv3_00000007"
 EMBEDDING_PROVIDER = "local-sentence-transformers"
 BGE_IDENTITY = "BAAI/bge-m3@5617a9f61b028005a4858fdac845db406aefb181"
 QWEN_IDENTITY = "Qwen/Qwen2.5-1.5B-Instruct@989aa7980e4cf806f80c7fef2b1adb7bc71aa306"
