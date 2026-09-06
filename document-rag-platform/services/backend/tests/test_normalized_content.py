@@ -7,7 +7,6 @@ output to be storable as JSON — Section 6).
 
 import json
 
-import pytest
 
 from src.domain.normalized_content import (
     UNIT_TYPES,

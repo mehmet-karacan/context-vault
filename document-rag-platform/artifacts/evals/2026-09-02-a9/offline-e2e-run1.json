@@ -1,0 +1,40 @@
+{
+  "dataset_sha256": "cb313befd19228e934fda53f3f57d92452e403daeec654b0a8773591b0395523",
+  "failures": 0,
+  "junit_sha256": "61be92fd0ce3c05b730105266f9fea29a1519382e9bab607cd1ebbe67f4b1ee0",
+  "metrics": {
+    "citation_coverage": 1.0,
+    "citation_precision": 1.0,
+    "fabricated_no_answer_responses": 0,
+    "invalid_citation_labels": 0,
+    "latency_ms": {
+      "p50": 1.0,
+      "p95": 235.4,
+      "p99": 256.16
+    },
+    "permission_version_leakage": 0,
+    "prompt_injection_success_rate": 0.0
+  },
+  "note": "deterministic providers; no golden-derived runtime candidates",
+  "observed_at_utc": "2026-09-02T18:16:48.769966+00:00",
+  "provider_calls": 0,
+  "provider_cost": 0,
+  "quality_claim": "offline-production-pipeline",
+  "regression_findings": [],
+  "release_gate_eligible": false,
+  "repository_revision": "60aed18a41dc98feb11f169cb63db1517e8ade68",
+  "result": "PASS",
+  "schema_version": "1.0",
+  "seed": 20260902,
+  "tests": 42,
+  "tier": "offline-e2e",
+  "tool_version": "1.0.0",
+  "verified_scenarios": [
+    "fresh PostgreSQL/pgvector, Redis and encrypted MinIO",
+    "production ingestion-to-used-citation path",
+    "idempotency, outbox, lease, crash and concurrency recovery",
+    "active-version/profile/workspace/project leakage",
+    "identifier/filter/RRF/context-budget adversarial cases",
+    "prompt injection, malformed citation and provider failure"
+  ]
+}

@@ -1,0 +1,165 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "verify",
+  "operation_id": "cv3-a10-partial-state-20260902-001",
+  "work_item_id": "CV3-A10-WEB-PRODUCT",
+  "attempt_id": "post-fix-local-001",
+  "actor": "codex-local-agent",
+  "tool_adapter": "local-cli-vitest-playwright",
+  "started_at": "2026-09-02T19:22:18Z",
+  "finished_at": "2026-09-02T19:27:34.996Z",
+  "time_scope": "Recorded verification window; exact suite timestamps appear in JUnit.",
+  "baseline_revision": "02a7227f6cbed2db5b1d5887012031dbc67977c1",
+  "result_revision": null,
+  "candidate_tree": "ec317b5862710a408ddffbab84797ee570f02f95",
+  "revision_note": "Pre-commit verification: candidate tracked tree plus SOURCE_MANIFEST.json identify bytes. A post-commit binding receipt will record the implementation commit.",
+  "scope_hash": "bbd386d3c4939eeb0267783695cb7d72ea71b99ccc076d9e20bc8fae8b4753a6",
+  "scope_hash_method": "sha256 of newline-terminated staged relative paths before adding evidence",
+  "context_manifest_hash": "238ef3956a91db2eddc975e5ddb832d80e6b5998a99c69c103da483fbac073b8",
+  "idempotency_key_hash": null,
+  "commands": [
+    {
+      "command": "npm run lint && npm run typecheck && npm run unit && npm run api-client-check && git diff --check",
+      "exit_code": 0
+    },
+    {
+      "command": "npm run build && npm run bundle-check && npm run e2e-smoke",
+      "exit_code": 0
+    },
+    {
+      "command": "CV3_BROWSER_LIVE=1 PLAYWRIGHT_JUNIT_OUTPUT_FILE=reports/live-e2e-junit.xml npx playwright test live.spec.ts",
+      "exit_code": 0
+    },
+    {
+      "command": "python tests/verify_browser_fixture.py (isolated environment; missing dummy provider config)",
+      "exit_code": 1,
+      "note": "Stopped during settings initialization; no persistence conclusion drawn."
+    },
+    {
+      "command": "python tests/verify_browser_fixture.py (same isolated environment with explicit test-only provider config; endpoint cannot reach provider)",
+      "exit_code": 0
+    },
+    {
+      "command": "python scripts/check_public_tree.py --json-output <supplement>/public-tree.json",
+      "exit_code": 0
+    }
+  ],
+  "exit_status": 0,
+  "tests": [
+    {
+      "name": "unit/component/reducer/API",
+      "passed": 26,
+      "failed": 0
+    },
+    {
+      "name": "browser contracts including partial/denied/delete recovery and automated WCAG",
+      "passed": 20,
+      "failed": 0
+    },
+    {
+      "name": "connected browser",
+      "passed": 1,
+      "failed": 0,
+      "http_mocking": false,
+      "provider": "local deterministic fixture",
+      "dispatch": "synchronous worker core",
+      "real_provider_quality_claim": false
+    },
+    {
+      "name": "fresh connection durability/retention",
+      "result": "PASS",
+      "report": "fresh-connection.json"
+    },
+    {
+      "name": "production bundle bounded-pattern scan",
+      "result": "PASS",
+      "js_chunks": 15
+    },
+    {
+      "name": "public active-source bounded scan",
+      "result": "PASS",
+      "tracked_files": 272
+    }
+  ],
+  "reproduced_before_fix": [
+    "Two job refresh browser regressions failed: no stale snapshot on 503; permission error accompanied by empty-state.",
+    "API unit test for null HTTP 403 body failed with TypeError instead of preserving HTTP status."
+  ],
+  "reproduction_limit": "Pre-fix failure outputs observed in local tool runs; only final successful machine-readable reports are included here.",
+  "source_manifest": "SOURCE_MANIFEST.json",
+  "artifacts": [
+    {
+      "path": "browser-contract-junit.xml",
+      "sha256": "7d9b0301ca71b058963bdcf5e2f25a4b2f8ecb7117ab2575b69b2b6cb3fcd518",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "connected-browser-junit.xml",
+      "sha256": "479c4431671d87b1624f29a176d6afec3031ef68e63f0e571f9425eab0b87a9e",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "fresh-connection.json",
+      "sha256": "7bececaea17f4db08ace2ad9f2b44a0ff8825292ae79d1fac9e5992a19341e52",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "frontend-unit-junit.xml",
+      "sha256": "43abdbbdd3755336951283297b4c064fbf4c11d252c6ac5ed3d9f1eca33423ab",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "public-tree.json",
+      "sha256": "4f9f648c2125a2a63f7b361b0f5ac7cfc8200d323fb3b0a90a19803cacf990d0",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "source-partial-state.png",
+      "sha256": "d9f7eff2ec98c28c01ec5327bd478f7f2f404fcc2ddb58ad9872880af1308c48",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    }
+  ],
+  "security_redactions": [
+    "JUnit local hostname replaced with redacted-local",
+    "Only synthetic fixture source/screenshot content",
+    "No real provider credentials, private documents, database dumps or raw logs included"
+  ],
+  "rollback": {
+    "schema_change": false,
+    "data_reset_required": false,
+    "instruction": "Revert only this frontend state patch if needed; retain all DBs/objects and the previous chat commit/diagnostic fixes."
+  },
+  "data_safety": {
+    "user_database_mutated": false,
+    "user_objects_deleted": false,
+    "existing_isolated_fixture_reused": true,
+    "new_synthetic_test_records_retained": true,
+    "fixture_server_stopped": true
+  },
+  "result": "PASS",
+  "scope": "Local frontend partial-state supplement, not phase closure.",
+  "phase_closed": false,
+  "independent_review": "Not performed for phase closure; implementing agent's review is not independent.",
+  "open_gates": [
+    "A9 owner dataset review and explicit private-pack/provider/model/budget approval",
+    "A9 real baseline seal",
+    "Remote CI/ruleset execution verification",
+    "A11 operations/restore/release candidate",
+    "A12 prerequisites and implementation",
+    "A13 independent closure verification"
+  ],
+  "remote_actions": {
+    "provider_call": false,
+    "push": false,
+    "pull_request": false,
+    "merge": false,
+    "release": false
+  },
+  "supersedes_claim": "Closes only the earlier A10 comprehensive partial-state UX local-verification gap; prior receipts remain unchanged."
+}

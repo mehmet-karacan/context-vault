@@ -51,13 +51,9 @@ class DocumentChunker:
             max_tokens if max_tokens is not None else settings.CHUNK_MAX_TOKENS
         )
         self.overlap_ratio = (
-            overlap_ratio
-            if overlap_ratio is not None
-            else settings.CHUNK_OVERLAP_RATIO
+            overlap_ratio if overlap_ratio is not None else settings.CHUNK_OVERLAP_RATIO
         )
-        self.overlap_tokens = max(
-            0, int(self.max_tokens * self.overlap_ratio)
-        )
+        self.overlap_tokens = max(0, int(self.max_tokens * self.overlap_ratio))
         self.profile = chunker_profile or ChunkerProfile()
 
     # --- public -----------------------------------------------------------
@@ -65,11 +61,7 @@ class DocumentChunker:
     def chunk(
         self, units: Sequence[ContentUnit], source: NormalizedSource
     ) -> List[ChunkCandidate]:
-        units = [
-            u
-            for u in units
-            if (u.text or u.markdown or "").strip()
-        ]
+        units = [u for u in units if (u.text or u.markdown or "").strip()]
         return self._chunk_units(units, source)
 
     # --- helpers ----------------------------------------------------------
@@ -106,7 +98,6 @@ class DocumentChunker:
                 buffer = []
                 buffer_tokens = 0
 
-        in_flight = False
         for unit in units:
             txt = self._render(unit)
             tokens = self.token_counter.count(txt)
@@ -118,9 +109,7 @@ class DocumentChunker:
                 over_section = heading and tuple(heading) != tuple(buffer[0][1])
                 # Bound by the token count of the *joined* chunk content, not the
                 # per-unit sum, so the reported token_count matches the bound.
-                joined = "\n\n".join(
-                    [self._render(u) for u, _ in buffer] + [txt]
-                )
+                joined = "\n\n".join([self._render(u) for u, _ in buffer] + [txt])
                 over_token = self.token_counter.count(joined) > self.max_tokens
 
             if over_token or over_section:
@@ -159,9 +148,7 @@ class DocumentChunker:
         content = "\n\n".join(self._render(u) for u, _ in buffer)
         heading_path = list(buffer[0][1])
         embedding_text = build_embedding_text(heading_path, content)
-        locator = merge_locators(
-            [u.locator for u, _ in buffer if u.locator]
-        )
+        locator = merge_locators([u.locator for u, _ in buffer if u.locator])
         unit_ids = [u.unit_id for u, _ in buffer]
         content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
         return ChunkCandidate(

@@ -2,7 +2,9 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-20
-- **Deciders:** Context Vault platform implementation (Aşama 2 / 7.6)
+- **Owner:** Mehmet KARACAN
+- **Supersedes:** none
+- **Evidence:** V3 migration receipt and ingestion tests
 
 ## Context
 
@@ -29,11 +31,9 @@ fresh upload (`AKTIF_GOREV.md` Aşama 2 & §13).
   `.../normalized/document.json`, `.../normalized/document.md`, `.../artifacts/...`
   (`original_key`, `normalized_json_key`, `normalized_markdown_key`,
   `artifact_key`; `safe_filename` guards traversal/control/length).
-- Re-index strategy (`application/reindex_service.py`, Aşama 7.6):
-  - snapshot keyed by `source_revision`; only files whose `content_hash`
-    changed are re-parsed/re-chunked/re-embedded; unchanged files copy the
-    previous version's chunks; deleted files simply never appear in the new
-    version; `active_version_id` swap is the final atomic step.
+- Re-index strategy is superseded by ADR-009. Repository, archive and directory
+  snapshots now enter the same `IngestionOrchestrator` as ordinary uploads;
+  `active_version_id` compare-and-swap remains the final atomic step.
 - Object storage I/O is via `infrastructure/storage/minio_storage.py`.
 
 ## Consequences

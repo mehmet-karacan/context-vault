@@ -1,38 +1,171 @@
 name: ci-security
 
 on:
+  push:
+  pull_request:
+    branches: [main]
   workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  security:
+  supply-chain:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
 
-      - name: Secret scan
-        uses: gitleaks/gitleaks-action@v2
+      - name: Secret scan (history and event diff)
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false"
 
       - name: Commit ownership check
         run: |
-          python scripts/check_commit_ownership.py --all \
+          python scripts/check_commit_ownership.py \
             --repo "$GITHUB_WORKSPACE" \
+            --refspec "${{ github.event.pull_request.head.sha || github.sha }}" \
             --allowed-author "mehmet-karacan karacan.mehmet@hotmail.com" \
             --allowed-author "Mehmet KARACAN karacan.mehmet@hotmail.com"
 
-      - name: Backend dependency vulnerability scan
-        run: |
-          pip install --upgrade pip setuptools wheel
-          pip install -r document-rag-platform/services/backend/requirements.txt
-          pip-audit
+      - name: Public source safety
+        run: python scripts/check_public_tree.py --repo . --json-output reports/public-tree.json
 
-      - name: SBOM
-        run: |
-          python -m pip install cyclonedx-bom
-          cyclonedx-py -i --out-file sbom.cdx.json
-          ls -la sbom.cdx.json
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version-file: .python-version
 
-      - name: Frontend dependency audit
+      - name: Cache uv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('document-rag-platform/services/backend/uv.lock') }}
+
+      - name: Python audit, SBOM and licenses
+        working-directory: document-rag-platform/services/backend
+        env:
+          UV_VERSION: 0.12.5
+        run: |
+          python -m pip install --no-deps "uv==$UV_VERSION"
+          uv lock --check
+          uv sync --frozen --all-groups --extra local-eval
+          uv run pip-audit --format=json --output=../../../reports/python-audit.json
+          uv run cyclonedx-py environment --pyproject pyproject.toml --output-reproducible --output-file ../../../reports/python-sbom.cdx.json .venv/bin/python
+          uv run pip-licenses --format=json --output-file=../../../reports/python-licenses.json
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: document-rag-platform/apps/web/.nvmrc
+          cache: npm
+          cache-dependency-path: document-rag-platform/apps/web/package-lock.json
+
+      - name: Node audit and SBOM
         working-directory: document-rag-platform/apps/web
-        run: npm audit --audit-level=high --omit=dev
+        run: |
+          npm ci --ignore-scripts
+          npm audit --audit-level=high --json > ../../../reports/node-audit.json
+          npm sbom --sbom-format=cyclonedx > ../../../reports/node-sbom.cdx.json
+
+      - name: License policy
+        run: python scripts/check_licenses.py --python-report reports/python-licenses.json --node-sbom reports/node-sbom.cdx.json --json-output reports/license-policy.json
+
+      - name: Build backend image
+        run: |
+          docker build --pull --no-cache \
+            --build-arg SOURCE_REVISION="${{ github.sha }}" \
+            --tag context-vault-backend:${{ github.sha }} \
+            document-rag-platform/services/backend
+
+      - name: Generate backend image SBOM
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: context-vault-backend:${{ github.sha }}
+          version: v0.70.0
+          format: cyclonedx
+          output: reports/backend-image.sbom.cdx.json
+
+      - name: Scan backend image
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: context-vault-backend:${{ github.sha }}
+          version: v0.70.0
+          format: json
+          output: reports/trivy-backend.json
+          exit-code: "1"
+          ignore-unfixed: false
+          severity: HIGH,CRITICAL
+
+      - name: Create exact image evidence subject
+        run: |
+          python scripts/a11_release_gate.py image-subject \
+            --image-ref context-vault-backend:${{ github.sha }} \
+            --sbom reports/backend-image.sbom.cdx.json \
+            --scan reports/trivy-backend.json \
+            --json-output reports/backend-image.provenance.json
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+        with:
+          cosign-release: v2.5.3
+
+      - name: Sign and verify exact image evidence
+        env:
+          CERTIFICATE_IDENTITY: https://github.com/${{ github.workflow_ref }}
+        run: |
+          cosign sign-blob --yes \
+            --bundle reports/backend-image.signature.bundle.json \
+            reports/backend-image.provenance.json
+          python scripts/a11_release_gate.py image-verify \
+            --subject reports/backend-image.provenance.json \
+            --sbom reports/backend-image.sbom.cdx.json \
+            --scan reports/trivy-backend.json \
+            --signature-bundle reports/backend-image.signature.bundle.json \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --json-output reports/backend-image-security.json
+
+      - name: Upload security evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: security-evidence-${{ github.sha }}
+          path: reports/
+          if-no-files-found: error
+          retention-days: 30
+
+  codeql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@fddeee1a7ece751b577e409a89057319e3172939 # v4
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@fddeee1a7ece751b577e409a89057319e3172939 # v4

@@ -30,6 +30,7 @@ from __future__ import annotations
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 from .base import RetrievalCandidate
+from src.domain.retrieval import FusedHit, RetrieverContribution, RetrieverHit
 
 
 def reciprocal_rank_fusion(
@@ -56,7 +57,11 @@ def reciprocal_rank_fusion(
 
     scores: Dict[Any, float] = {}
     for ranked in lists:
+        seen_in_retriever: set[Any] = set()
         for rank, key in enumerate(ranked, start=1):
+            if key in seen_in_retriever:
+                continue
+            seen_in_retriever.add(key)
             scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank)
 
     # Deterministic: higher score first; ties broken by ascending key.
@@ -67,7 +72,7 @@ def reciprocal_rank_fusion(
 def fuse(
     candidate_lists: Sequence[Sequence[RetrievalCandidate]],
     k: int = 60,
-) -> List[RetrievalCandidate]:
+) -> List[FusedHit]:
     """Fuse lists of ``RetrievalCandidate`` into one fused, ranked list.
 
     Re-emits candidates keyed by ``chunk_id``. When a chunk id appears in
@@ -79,36 +84,41 @@ def fuse(
         ([c.chunk_id for c in ranked] for ranked in candidate_lists),
         k=k,
     )
-    fused_by_key: Dict[Any, RetrievalCandidate] = {}
-    sources_by_key: Dict[Any, List[str]] = {}
+    fused_by_key: Dict[Any, RetrieverHit] = {}
+    contributions: Dict[Any, Dict[str, RetrieverContribution]] = {}
     for ranked in candidate_lists:
         for c in ranked:
             if c.chunk_id not in fused_by_key:
                 fused_by_key[c.chunk_id] = c
-            sources_by_key.setdefault(c.chunk_id, [])
-            if c.source not in sources_by_key[c.chunk_id]:
-                sources_by_key[c.chunk_id].append(c.source)
+            per_hit = contributions.setdefault(c.chunk_id, {})
+            if c.source in per_hit:
+                continue
+            per_hit[c.source] = RetrieverContribution(
+                retriever_name=c.source,
+                retriever_rank=c.rank,
+                raw_score=c.score,
+                rrf_contribution=1.0 / (k + c.rank),
+                match_type=c.match_type,
+                matched_terms=tuple(c.matched_terms),
+            )
 
-    result: List[RetrievalCandidate] = []
+    result: List[FusedHit] = []
     for key, rrf_score in order:
-        base = fused_by_key[key]
-        base = RetrievalCandidate(
-            chunk_id=base.chunk_id,
-            rank=len(result) + 1,
-            score=rrf_score,
-            source=base.source,
-            metadata=dict(base.metadata),
+        result.append(
+            FusedHit(
+                representative=fused_by_key[key],
+                per_retriever_contributions=contributions[key],
+                rrf_score=rrf_score,
+                fusion_rank=len(result) + 1,
+            )
         )
-        base.metadata["sources"] = list(sources_by_key.get(key, []))
-        base.metadata["rrf_k"] = k
-        result.append(base)
     return result
 
 
 def dedupe(
-    candidates: Sequence[RetrievalCandidate],
+    candidates: Sequence[FusedHit],
     content_key: str = "content_hash",
-) -> List[RetrievalCandidate]:
+) -> List[FusedHit]:
     """Drop duplicate *content* copies while keeping the highest-ranked one.
 
     Fusion already dedupes by ``chunk_id``; this handles the distinct-id case
@@ -118,9 +128,9 @@ def dedupe(
     Stable order is preserved: the first occurrence of a hash is kept.
     """
     seen: Dict[Any, str] = {}
-    out: List[RetrievalCandidate] = []
+    out: List[FusedHit] = []
     for c in candidates:
-        h = (c.metadata or {}).get(content_key)
+        h = c.content_hash or (c.metadata or {}).get(content_key)
         if h is None:
             out.append(c)
             continue

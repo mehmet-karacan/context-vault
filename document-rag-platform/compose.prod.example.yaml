@@ -1,0 +1,111 @@
+# Hardened example overlay. It contains no credentials or deployable defaults;
+# supply every required value from the production secret/configuration system.
+services:
+  postgres:
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    mem_limit: 2g
+    cpus: 1.0
+    pids_limit: 256
+  redis:
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    cpus: 0.5
+    pids_limit: 128
+  minio:
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    mem_limit: 2g
+    cpus: 1.0
+    pids_limit: 256
+  minio-bootstrap:
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m"]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    mem_limit: 128m
+    cpus: 0.25
+    pids_limit: 64
+  migration:
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=32m"]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    mem_limit: 512m
+    cpus: 0.5
+    pids_limit: 128
+  backend:
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/opt/context-vault/require-provider-ca.sh"]
+    environment:
+      SSL_CERT_FILE: /run/secrets/provider_ca_bundle
+      REQUESTS_CA_BUNDLE: /run/secrets/provider_ca_bundle
+    configs:
+      - source: provider_ca_guard
+        target: /opt/context-vault/require-provider-ca.sh
+        mode: 0555
+    secrets:
+      - source: provider_ca_bundle
+        target: provider_ca_bundle
+        mode: 0444
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    mem_limit: 2g
+    cpus: 1.0
+    pids_limit: 256
+  worker:
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/opt/context-vault/require-provider-ca.sh"]
+    environment:
+      SSL_CERT_FILE: /run/secrets/provider_ca_bundle
+      REQUESTS_CA_BUNDLE: /run/secrets/provider_ca_bundle
+      OPERATIONAL_BACKUP_RECEIPT_PATH: /run/context-vault/receipts/BACKUP_RECEIPT.json
+      OPERATIONAL_RESTORE_RECEIPT_PATH: /run/context-vault/receipts/RESTORE_RECEIPT.json
+    configs:
+      - source: provider_ca_guard
+        target: /opt/context-vault/require-provider-ca.sh
+        mode: 0555
+    secrets:
+      - source: provider_ca_bundle
+        target: provider_ca_bundle
+        mode: 0444
+    volumes:
+      - operational_receipts:/run/context-vault/receipts:ro
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    mem_limit: 4g
+    cpus: 2.0
+    pids_limit: 256
+  scheduler:
+    restart: unless-stopped
+    environment:
+      # Beat only publishes schedule entries. It must not inherit usable
+      # provider access from the shared application environment.
+      LITELLM_BASE_URL: https://provider-disabled.example.invalid/v1
+      LITELLM_API_KEY: provider-disabled-for-scheduler
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    mem_limit: 512m
+    cpus: 0.5
+    pids_limit: 128
+
+configs:
+  provider_ca_guard:
+    file: ./infra/docker/provider/require-provider-ca.sh
+
+secrets:
+  provider_ca_bundle:
+    external: true
+    name: ${PROVIDER_CA_SECRET_NAME:?set the external provider CA secret name}
+
+volumes:
+  operational_receipts:
+    external: true
+    name: ${OPERATIONAL_RECEIPTS_VOLUME_NAME:?set the external operational receipt volume}

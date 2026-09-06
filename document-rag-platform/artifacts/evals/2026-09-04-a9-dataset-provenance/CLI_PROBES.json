@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "contract_smoke": {
+    "exit_code": 0,
+    "result": "PASS",
+    "records": 66,
+    "dataset_provenance": "contract-golden-file",
+    "reported_dataset_sha256": "b64edd130207d51ae0f2b0e61a5c3fe74e6b698e809b1a81cb9a633bf0071c9b",
+    "actual_executed_dataset_sha256": "b64edd130207d51ae0f2b0e61a5c3fe74e6b698e809b1a81cb9a633bf0071c9b",
+    "unexecuted_public_dataset_sha256": "cb313befd19228e934fda53f3f57d92452e403daeec654b0a8773591b0395523"
+  },
+  "offline_e2e": {
+    "exit_code": 0,
+    "result": "PASS",
+    "tests": 42,
+    "failures": 0,
+    "dataset_sha256": null,
+    "dataset_provenance": "inline-test-fixtures",
+    "source_bundle_scope": "pytest-targets-conftest-config",
+    "source_files": 8,
+    "source_bundle_sha256": "fa6eb25e9147074e35cb41a71d03ee3e5ffd89e90b464e4db47c5c09c512c6bf"
+  },
+  "public_dataset_status": {
+    "exit_code": 0,
+    "integrity": "PASS",
+    "dataset_sha256": "cb313befd19228e934fda53f3f57d92452e403daeec654b0a8773591b0395523",
+    "review_status": "pending",
+    "review_claim_status": "manifest-declared-pending",
+    "approval_evidence_verified": false,
+    "review_complete": false,
+    "release_gate_eligible": false,
+    "provider_invoked": false
+  },
+  "restricted_public_status_probe": {
+    "arguments": ["--public-dataset-status", "--strict"],
+    "exit_code": 3,
+    "result": "ENVIRONMENT_UNAVAILABLE",
+    "request_type": "public-dataset-review-status",
+    "provider_invoked": false
+  },
+  "provider_invocations": 0
+}

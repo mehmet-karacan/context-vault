@@ -1,0 +1,124 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "verify",
+  "operation_id": "cv3-a9-preflight-20260903-002",
+  "work_item_id": "CV3-A9-EVAL",
+  "attempt_id": "post-commit-binding-001",
+  "actor": "codex-local-agent",
+  "tool_adapter": "local-cli-git-pytest",
+  "started_at": "2026-09-03T09:52:00Z",
+  "finished_at": "2026-09-03T09:52:00Z",
+  "time_scope": "Evidence-binding timestamp; post-commit tier pytest completed immediately before receipt assembly.",
+  "baseline_revision": "f25dbbf653720ae12ea153514bd34ea0fa6447a7",
+  "result_revision": "ac3a41ae76845f7779fb37081a668e051e40d206",
+  "scope_hash": "f0fdabd82cc21131af5277bb3909cf4b60a60dbe789ab769d769c46d1cb5cc41",
+  "context_manifest_hash": "872b86716d15f9f19829c969b3d3374ad4380fe449409a75c91288cade872553",
+  "idempotency_key_hash": null,
+  "commands": [
+    {
+      "command": "pytest -q document-rag-platform/services/backend/tests/evals/test_tier_contracts.py",
+      "exit_code": 0,
+      "result": "94 passed"
+    },
+    {
+      "command": "Verify four SOURCE_MANIFEST hashes against checked-out implementation commit; git status --short",
+      "exit_code": 0,
+      "result": "PASS; worktree clean before this receipt"
+    }
+  ],
+  "exit_status": 0,
+  "tests": [
+    {
+      "name": "post-commit A9 tier/operator contracts",
+      "passed": 94,
+      "failed": 0
+    },
+    {
+      "name": "source fingerprint binding",
+      "result": "PASS",
+      "files": 4
+    },
+    {
+      "name": "full backend and verifier gates",
+      "source": "PRECOMMIT_RECEIPT.json",
+      "binding": "Exact tested source bytes match implementation commit ac3a41ae76845f7779fb37081a668e051e40d206."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "CLI_PROBES.json",
+      "sha256": "826e7985f955f5dbf2e0682f3362e4c9b9c32a7e28f07b1de67a81ee29167398",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "INDEPENDENT_REVIEW.json",
+      "sha256": "4003ca40b30cb4244cfe4fcfb8390264880b8887198e497565e8cfba2a201475",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "PRECOMMIT_RECEIPT.json",
+      "sha256": "894b13f252ee3b1b0ceb8445341df499fd94e8bcc87054cfd378ae03d0b47ddd",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "REPRODUCTION_SUMMARY.json",
+      "sha256": "e1f838f50234e69a2cfc2eba4b941baf7b52b8c48ba49cf102658f7d1dc40d98",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "SOURCE_MANIFEST.json",
+      "sha256": "f0fdabd82cc21131af5277bb3909cf4b60a60dbe789ab769d769c46d1cb5cc41",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "backend-junit.xml",
+      "sha256": "dd41596ff3d1fca62fa5decf3940fca7bfd6daaaa056f6b2bfe4634bc346c25a",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "public-tree.json",
+      "sha256": "4f9f648c2125a2a63f7b361b0f5ac7cfc8200d323fb3b0a90a19803cacf990d0",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "tier-junit.xml",
+      "sha256": "ff2021e9d41441709b33d7ed8e1fb137d7e8a1d477f971725f832fdb35921eae",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    }
+  ],
+  "security_redactions": [
+    "JUnit hostname and absolute paths removed",
+    "No private path, credential value or provider output recorded",
+    "Synthetic-only local operator-preparation evidence"
+  ],
+  "rollback": {
+    "schema_change": false,
+    "data_reset_required": false,
+    "instruction": "Revert this receipt-only commit if needed; leave application data, prior receipts and fail-closed release decisions unchanged."
+  },
+  "result": "PASS",
+  "phase_closed": false,
+  "independent_review": true,
+  "scope": "Local no-effect A9 operator preparation and exact revision binding, not real-provider quality or human baseline approval.",
+  "open_gates": [
+    "Human owner-reviewed real private pack",
+    "Explicit provider/model/credential-name/provider-side-budget authorization",
+    "Audited real-provider evidence and human baseline seal",
+    "A11-A13, remote CI and final independent verification"
+  ],
+  "remote_actions": {
+    "provider_call": false,
+    "push": false,
+    "pull_request": false,
+    "merge": false,
+    "release": false
+  }
+}

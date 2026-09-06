@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "review_type": "independent_split_provider_contract_review",
+  "reviewer": "separate-codex-subagent",
+  "result": "APPROVE",
+  "scope": "V2 embedding/generation identity split contract patch only; not human approval, provider execution authority, private benchmark review, baseline seal or A9 closure.",
+  "verification": {
+    "tier_tests_passed": 158,
+    "ruff_check": "PASS",
+    "ruff_format_check": "PASS",
+    "diff_check": "PASS",
+    "runtime_v2_schema_paths": "PASS",
+    "legacy_and_mixed_approval_rejected": "PASS",
+    "legacy_and_mixed_report_rejected": "PASS",
+    "full_baseline_and_current_v2_validation": "PASS",
+    "four_identity_child_environment": "PASS",
+    "four_identity_approval_report_binding": "PASS",
+    "four_identity_baseline_provenance": "PASS",
+    "historical_v1_generic_paths_preserved": "PASS"
+  },
+  "first_review_result": "REJECT",
+  "first_review_findings": [
+    "A v2 provider report carrying legacy provider/model fields was accepted.",
+    "A v2 baseline report carrying legacy provider/model fields was accepted.",
+    "A sealed baseline missing a required quality metric was accepted because the full report contract was not applied.",
+    "A v1 current report could be passed directly to the comparator.",
+    "The first schema move did not preserve historical generic v1 paths and exact bytes."
+  ],
+  "final_source_sha256": {
+    "scripts/run_eval.py": "f0748a7ea5571ea3f3571fa2f58856c17d635ac05fb50f926029f7f23bcd1e19",
+    "document-rag-platform/services/backend/tests/evals/test_tier_contracts.py": "fea6febf46504115787fbc9c804521a8e55313bfbf65e7b1373d9be94421795c",
+    "document-rag-platform/tests/evals/datasets/benchmark-approval-manifest-v2.schema.json": "c831996cbc34f97e64982e0cdbcd30af644e27d4ca8bacac8182b65d2ec6cd1e",
+    "document-rag-platform/tests/evals/datasets/benchmark-baseline-seal-v2.schema.json": "cedf948e64839a422e055a5c714d80683238f21458635626db01d53481400b6f",
+    "document-rag-platform/tests/evals/real_benchmark/README.md": "fbe1bad420d1f0c4df31493f6fabfde6c36b5579273e2a0d07b767ee7c0de4b8"
+  },
+  "limitations": [
+    "The contract can bind a local BGE embedding model and a future generation model separately, but it does not supply or run that generation model.",
+    "No human approval, owner-reviewed private pack, real production-path run, independent request evidence or baseline seal is represented."
+  ],
+  "phase_closed": false
+}

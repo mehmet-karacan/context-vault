@@ -1,60 +1,121 @@
 name: ci-backend
 
 on:
+  push:
+  pull_request:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-backend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        image: pgvector/pgvector:pg16@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b
         env:
           POSTGRES_USER: raguser
-          POSTGRES_PASSWORD: rag_password
+          POSTGRES_PASSWORD: test-only-password
           POSTGRES_DB: rag_platform
         ports:
-          - "5432:5432"
+          - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U raguser"
+          --health-cmd "pg_isready -U raguser -d rag_platform"
           --health-interval 5s --health-timeout 5s --health-retries 12
     env:
-      DATABASE_URL: postgresql://raguser:rag_password@localhost:5432/rag_platform
+      DATABASE_URL: postgresql://raguser:test-only-password@localhost:5432/rag_platform
+      MINIO_ENDPOINT: localhost:9000
+      MINIO_ACCESS_KEY: cv3_ci
+      MINIO_SECRET_KEY: cv3-ci-test-only-12345
+      MINIO_BUCKET: rag-documents
+      OBJECT_STORAGE_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      UV_VERSION: 0.12.5
     defaults:
       run:
         working-directory: document-rag-platform/services/backend
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          python-version: "3.12"
+          fetch-depth: 0
 
-      - name: Dependency install (lock)
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version-file: .python-version
+
+      - name: Cache uv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('document-rag-platform/services/backend/uv.lock') }}
+
+      - name: Install locked environment
         run: |
-          python -m pip install --upgrade pip setuptools wheel
-          pip install -r requirements-dev.txt
+          python -m pip install --no-deps "uv==$UV_VERSION"
+          uv lock --check
+          uv sync --frozen --all-groups
 
-      - name: Ruff format check
-        run: ruff format --check .
+      - name: Static quality gates
+        run: |
+          uv run ruff format --check . ../../../scripts/check_mypy_ratchet.py
+          uv run ruff check . ../../../scripts/check_mypy_ratchet.py
+          uv run python ../../../scripts/check_mypy_ratchet.py
 
-      - name: Ruff lint
-        run: ruff check .
+      - name: Blank database migration cycle
+        run: |
+          mkdir -p reports
+          uv run alembic upgrade head
+          uv run python ../../../scripts/verify_migrations.py --repo ../../.. --database-url "$DATABASE_URL" --json-output reports/migration-blank.json
+          uv run alembic downgrade base
+          uv run alembic upgrade head
 
-      - name: MyPy type check
-        run: mypy src
+      - name: Restored-schema compatibility fixture
+        run: |
+          pg_dump --format=custom "$DATABASE_URL" --file=reports/schema-fixture.dump
+          psql "postgresql://raguser:test-only-password@localhost:5432/postgres" -v ON_ERROR_STOP=1 -c "CREATE DATABASE rag_restore_fixture"
+          pg_restore --dbname="postgresql://raguser:test-only-password@localhost:5432/rag_restore_fixture" --exit-on-error reports/schema-fixture.dump
+          DATABASE_URL="postgresql://raguser:test-only-password@localhost:5432/rag_restore_fixture" uv run alembic upgrade head
+          DATABASE_URL="postgresql://raguser:test-only-password@localhost:5432/rag_restore_fixture" uv run python ../../../scripts/verify_migrations.py --repo ../../.. --database-url "postgresql://raguser:test-only-password@localhost:5432/rag_restore_fixture" --json-output reports/migration-restored.json
 
-      - name: Unit tests
-        run: pytest -m "not integration" --disable-warnings
+      - name: Unit tests and coverage
+        env:
+          LITELLM_API_KEY: test-only
+          LITELLM_BASE_URL: https://llm-gateway.example.invalid/v1
+        run: |
+          uv run pytest -m "not integration" --junitxml=reports/unit-junit.xml --cov=src --cov-report= --cov-fail-under=0
+          uv run coverage report --include="src/domain/*" --fail-under=100
 
       - name: Integration tests
-        run: pytest -m integration --disable-warnings
-
-      - name: Migration upgrade/downgrade/upgrade
+        env:
+          LITELLM_API_KEY: test-only
+          LITELLM_BASE_URL: https://llm-gateway.example.invalid/v1
         run: |
-          alembic upgrade head
-          alembic downgrade base
-          alembic upgrade head
+          uv run pytest -m "integration and not evals" --junitxml=reports/integration-junit.xml --cov=src --cov-append --cov-report=xml:reports/coverage.xml --cov-report=json:reports/coverage.json --cov-fail-under=0
+          uv run coverage report --fail-under=77
 
-      - name: Coverage report
-        run: pytest --cov=src --cov-report=term-missing -m "not integration" --disable-warnings
+      - name: Import and OpenAPI smoke
+        env:
+          LITELLM_API_KEY: test-only
+          LITELLM_BASE_URL: https://llm-gateway.example.invalid/v1
+        run: |
+          uv run python ../../../scripts/generate_openapi.py --check
+          uv run python ../../../scripts/generate_verified_status.py --output reports/verified-state.json --require-projection-safety
+          uv run python -c 'from src.main import app; import json; print(json.dumps(app.openapi(), sort_keys=True))' > reports/openapi.json
+          test -s reports/openapi.json
+
+      - name: Upload backend evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: backend-evidence-${{ github.sha }}
+          path: document-rag-platform/services/backend/reports/
+          if-no-files-found: error
+          retention-days: 14

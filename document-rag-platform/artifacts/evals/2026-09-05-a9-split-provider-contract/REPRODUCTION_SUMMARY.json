@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "work_item": "CV3-A9-SPLIT-PROVIDER-CONTRACT",
+  "baseline_revision": "da15ce7d2bbc2093d3e18b7741fc9268378461ff",
+  "test_first": [
+    {
+      "result": "FAIL",
+      "passed": 115,
+      "failed": 20,
+      "reason": "The runtime and v1 schemas still accepted only one provider/model identity while the fixture required distinct embedding and generation identities."
+    },
+    {
+      "result": "FAIL",
+      "passed": 154,
+      "failed": 4,
+      "reason": "Independent break tests reproduced mixed legacy/v2 report acceptance, incomplete sealed-baseline acceptance and a v1 current comparator candidate."
+    }
+  ],
+  "final": {
+    "tier_contracts": "158 passed",
+    "full_backend": "787 passed, 2 skipped, 1 warning",
+    "ruff": "PASS",
+    "mypy_strict_ratchet": "PASS; 14 source files",
+    "openapi_deterministic": "PASS",
+    "offline_lock": "PASS; 163 packages",
+    "independent_review": "APPROVE for this bounded contract patch"
+  },
+  "infrastructure": {
+    "postgresql_revision": "cv3_00000006",
+    "postgresql": "isolated existing synthetic test database",
+    "redis": "isolated password-protected test endpoint",
+    "minio": "isolated synthetic test bucket",
+    "first_full_suite": "783 passed, 2 skipped, 1 failed because the Redis URL omitted the test endpoint password",
+    "recovery": "No code or data reset; the same suite passed after supplying the correct isolated Redis URL."
+  },
+  "historical_schema_preservation": {
+    "approval_v1_sha256": "a071586bc85dcbede58185d7ba7a4b843df4a823aefd167a5d4efab5a4d2f6f6",
+    "baseline_seal_v1_sha256": "6a18222393fe66a7d62bbcaf974357aa2e60172b41c94d1d04f35f47e565b255",
+    "generic_paths_preserved": true,
+    "runtime_uses_v2_only": true
+  },
+  "data_safety": {
+    "user_data_mutated": false,
+    "database_reset": false,
+    "remote_provider_calls": 0,
+    "model_weights_changed": false
+  },
+  "quality_scope": "Versioned embedding/generation identity binding only; no real benchmark quality score and no A9 closure.",
+  "remaining_gate": "Exact local generation runtime, owner-reviewed private pack, real production-path benchmark, independent request/non-transfer evidence and human baseline seal remain required."
+}

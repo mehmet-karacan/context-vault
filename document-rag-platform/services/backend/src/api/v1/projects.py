@@ -4,21 +4,29 @@ Moved verbatim from ``main.py`` — no behavior change.
 """
 
 import uuid
-from datetime import datetime
 from typing import Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
+from .contracts import ProjectResponse
 from sqlalchemy.orm import Session
 
 from ...db import get_db
 from ...models import Project
+from src.domain.identity import PrincipalContext
+from src.domain.clock import utc_now
+from src.infrastructure.security.auth import (
+    get_principal_context,
+    require_project_access,
+)
 
 router = APIRouter(tags=["projects"])
 
 
 class ProjectCreate(BaseModel):
-    name: str
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    name: str = Field(min_length=1, max_length=200)
 
 
 def serialize_project(project: Project, document_count: Optional[int] = None) -> dict:
@@ -26,24 +34,55 @@ def serialize_project(project: Project, document_count: Optional[int] = None) ->
         "id": str(project.id),
         "name": project.name,
         "created_at": project.created_at.strftime("%Y-%m-%d %H:%M"),
-        "document_count": document_count if document_count is not None else len(project.documents),
+        "document_count": document_count
+        if document_count is not None
+        else len(project.documents),
     }
 
 
-@router.get("/projects")
-def list_projects(db: Session = Depends(get_db)):
-    projects = db.query(Project).order_by(Project.created_at.desc()).all()
+@router.get("/projects", response_model=list[ProjectResponse])
+def list_projects(
+    db: Session = Depends(get_db),
+    principal: PrincipalContext = Depends(get_principal_context),
+):
+    projects = (
+        db.query(Project)
+        .filter(
+            Project.workspace_id == principal.workspace_id,
+            Project.deleted_at.is_(None),
+        )
+        .order_by(Project.created_at.desc())
+        .all()
+    )
     return [serialize_project(p) for p in projects]
 
 
-@router.post("/projects")
-def create_project(payload: ProjectCreate, db: Session = Depends(get_db)):
+@router.post("/projects", response_model=ProjectResponse)
+def create_project(
+    payload: ProjectCreate,
+    db: Session = Depends(get_db),
+    principal: PrincipalContext = Depends(get_principal_context),
+):
     name = payload.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="Proje adı boş olamaz")
-    if db.query(Project).filter(Project.name == name).first():
+    if (
+        db.query(Project)
+        .filter(
+            Project.workspace_id == principal.workspace_id,
+            Project.name == name,
+            Project.deleted_at.is_(None),
+        )
+        .first()
+    ):
         raise HTTPException(status_code=409, detail="Bu isimde bir proje zaten var")
-    project = Project(id=uuid.uuid4(), name=name, created_at=datetime.utcnow())
+    project = Project(
+        id=uuid.uuid4(),
+        workspace_id=principal.workspace_id,
+        name=name,
+        created_at=utc_now(),
+        updated_at=utc_now(),
+    )
     db.add(project)
     db.commit()
     db.refresh(project)
@@ -51,10 +90,14 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db)):
 
 
 @router.delete("/projects/{project_id}")
-def delete_project(project_id: str, db: Session = Depends(get_db)):
-    project = db.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    db.delete(project)
+def delete_project(
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    principal: PrincipalContext = Depends(get_principal_context),
+):
+    project = require_project_access(db, principal, project_id)
+    now = utc_now()
+    project.deleted_at = now
+    project.updated_at = now
     db.commit()
     return {"success": True, "message": f"Project {project_id} deleted"}

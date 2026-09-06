@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "scope": [
+    "all-git-tracked-files"
+  ],
+  "tracked_files_total": 713,
+  "tracked_files_checked": 713,
+  "findings": []
+}

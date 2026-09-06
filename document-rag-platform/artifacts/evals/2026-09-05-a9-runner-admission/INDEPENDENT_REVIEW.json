@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0",
+  "review_type": "independent_local_runner_admission_review",
+  "reviewer": "separate-codex-subagent",
+  "result": "APPROVE",
+  "scope": "Runner input, source-closure and runtime-identity hardening only; not owner approval, private-pack review, benchmark evidence, baseline seal or A9 closure.",
+  "rejection_rounds": [
+    {
+      "result": "REJECT",
+      "finding": "Nested directory symlinks were not traversed or rejected by the Python-only source glob."
+    },
+    {
+      "result": "REJECT",
+      "finding": "Credential names could override PATH, Python, loader, locale and other execution-control environment."
+    },
+    {
+      "result": "REJECT",
+      "findings": [
+        "Unchecked bytecode and native extension artifacts were importable but outside the source hash.",
+        "Ambient PATH was unbound and could change runner interpreter selection."
+      ]
+    },
+    {
+      "result": "REJECT",
+      "finding": "Using os.defpath alone selected the host system Python rather than the locked backend environment."
+    },
+    {
+      "result": "REJECT",
+      "finding": "The python3 entry selected by the child PATH could be retargeted independently from sys.executable without changing admission identity."
+    }
+  ],
+  "final_verification": {
+    "focused_tests": "188 passed",
+    "ruff_check": "PASS",
+    "ruff_format_check": "PASS",
+    "git_diff_check": "PASS",
+    "source_and_private_manifest_post_run_drift": "fail-closed",
+    "environment_pre_and_post_run_drift": "fail-closed",
+    "nested_symlink_and_non_source_import_artifacts": "fail-closed",
+    "execution_control_credential_names": "fail-closed",
+    "ambient_path_normalization": "PASS",
+    "real_env_python3_smoke": "same interpreter and prefix",
+    "runner_python_retarget": "fail-closed"
+  },
+  "final_source_sha256": {
+    "scripts/run_eval.py": "c6fbb1a70c149bf6b2437da03c1f87d54b28af891f9d484518c86de6ed4ee5cd",
+    "document-rag-platform/services/backend/tests/evals/test_tier_contracts.py": "a90a05fe34f55b3f4c0ee1496bc90285a16ef13c166ed108f1a880ba4c80bbe9"
+  },
+  "limitations": [
+    "The review assumes a trusted local operator and does not claim cryptographic protection against a malicious same-user filesystem race.",
+    "No provider, database or remote operation was performed.",
+    "Technical subagent approval cannot replace owner review or human authorization."
+  ],
+  "phase_closed": false
+}

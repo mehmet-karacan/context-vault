@@ -52,7 +52,9 @@ def test_redacts_private_key_blob():
 
 
 def test_redacts_aws_and_github_tokens():
-    out = redact_secrets("region=us-east-1 AKIAIOSFODNN7EXAMPLE ghp_abcdefghijklmnopqrstuvwxyz")
+    out = redact_secrets(
+        "region=us-east-1 AKIAIOSFODNN7EXAMPLE ghp_abcdefghijklmnopqrstuvwxyz"
+    )
     assert "AKIAIOSFODNN7EXAMPLE" not in out
     assert "ghp_abcdefghijklmnopqrstuvwxyz" not in out
 
@@ -61,7 +63,10 @@ def test_contains_secret_true_for_credentials():
     assert contains_secret("Password=Hunt3r2!") is True
     assert contains_secret("token = ghp_zzzzzzzzzzzzzzzzz") is True
     assert contains_secret(_ENV_SAMPLE) is True
-    assert contains_secret("-----BEGIN PRIVATE KEY-----\nxyz\n-----END PRIVATE KEY-----") is True
+    assert (
+        contains_secret("-----BEGIN PRIVATE KEY-----\nxyz\n-----END PRIVATE KEY-----")
+        is True
+    )
 
 
 def test_contains_secret_false_for_plain_text():

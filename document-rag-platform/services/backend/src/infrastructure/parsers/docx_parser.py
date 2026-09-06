@@ -262,16 +262,22 @@ class DocxParser:
         header_texts: List[str] = []
         footer_texts: List[str] = []
         for section in document.sections:
-            for header in (section.header, section.first_page_header,
-                           section.even_page_header):
+            for header in (
+                section.header,
+                section.first_page_header,
+                section.even_page_header,
+            ):
                 try:
                     for p in header.paragraphs:
                         if p.text.strip():
                             header_texts.append(p.text.strip())
                 except Exception:
                     continue
-            for footer in (section.footer, section.first_page_footer,
-                           section.even_page_footer):
+            for footer in (
+                section.footer,
+                section.first_page_footer,
+                section.even_page_footer,
+            ):
                 try:
                     for p in footer.paragraphs:
                         if p.text.strip():

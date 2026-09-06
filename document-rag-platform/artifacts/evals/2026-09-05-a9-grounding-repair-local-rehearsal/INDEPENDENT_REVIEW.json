@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "review_scope": "grounding-repair source diff and regression contracts",
+  "reviewer_kind": "independent_codex_subagent",
+  "verdict": "APPROVE",
+  "findings": {
+    "p0": 0,
+    "p1": 0,
+    "p2": 0
+  },
+  "verified": [
+    "grounding prompt matches validator invariants",
+    "application and LocalQwen repair chain is bounded",
+    "rejected provider outputs are not copied to repair prompts or reports",
+    "worst-case repair prompt remains included in token budgeting",
+    "validator and fail-closed behavior are not weakened"
+  ],
+  "limitations": [
+    "This is code review, not owner private-pack review.",
+    "This is not an independent provider-request non-transfer receipt.",
+    "Runtime quality requires separate measured evidence."
+  ]
+}

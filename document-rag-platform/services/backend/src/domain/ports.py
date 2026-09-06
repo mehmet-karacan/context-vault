@@ -25,14 +25,13 @@ from .normalized_content import NormalizedSource
 class DocumentParser(Protocol):
     """Parses a raw source file into a normalized content model."""
 
-    def supports(self, mime_type: str, extension: str) -> bool:
-        ...
+    def supports(self, mime_type: str, extension: str) -> bool: ...
 
     def parse(
         self,
         file_path: str,
         filename: str,
-        options: Optional[dict] = None,
+        options: Optional[dict[str, Any]] = None,
     ) -> NormalizedSource:
         """Returns a ``NormalizedSource`` for the given file.
 
@@ -50,7 +49,7 @@ class OcrProvider(Protocol):
         self,
         image_or_page: Any,
         languages: List[str],
-        options: Optional[dict] = None,
+        options: Optional[dict[str, Any]] = None,
     ) -> Any:
         """Returns an OcrResult (full_text, blocks, confidence, ...)."""
         ...
@@ -69,19 +68,16 @@ class Chunker(Protocol):
 class TokenCounter(Protocol):
     """Counts tokens for a given text under a specific tokenizer/model."""
 
-    def count(self, text: str) -> int:
-        ...
+    def count(self, text: str) -> int: ...
 
 
 @runtime_checkable
 class EmbeddingProvider(Protocol):
     """Produces dense embedding vectors for text."""
 
-    def embed(self, texts: List[str]) -> List[List[float]]:
-        ...
+    def embed(self, texts: List[str]) -> List[List[float]]: ...
 
-    def embed_one(self, text: str) -> List[float]:
-        ...
+    def embed_one(self, text: str) -> List[float]: ...
 
 
 @runtime_checkable
@@ -92,9 +88,8 @@ class VectorRetriever(Protocol):
         self,
         query_embedding: List[float],
         top_k: int,
-        filters: Optional[dict] = None,
-    ) -> List[Any]:
-        ...
+        filters: Optional[dict[str, Any]] = None,
+    ) -> List[Any]: ...
 
 
 @runtime_checkable
@@ -105,17 +100,15 @@ class LexicalRetriever(Protocol):
         self,
         query_text: str,
         top_k: int,
-        filters: Optional[dict] = None,
-    ) -> List[Any]:
-        ...
+        filters: Optional[dict[str, Any]] = None,
+    ) -> List[Any]: ...
 
 
 @runtime_checkable
 class Reranker(Protocol):
     """Re-scores a candidate list of chunks against a query."""
 
-    def rerank(self, query: str, candidates: List[Any], top_k: int) -> List[Any]:
-        ...
+    def rerank(self, query: str, candidates: List[Any], top_k: int) -> List[Any]: ...
 
 
 @runtime_checkable
@@ -126,14 +119,11 @@ class ObjectStorage(Protocol):
         """Writes an object and returns its storage key."""
         ...
 
-    def get(self, key: str) -> bytes:
-        ...
+    def get(self, key: str) -> bytes: ...
 
-    def delete(self, key: str) -> None:
-        ...
+    def delete(self, key: str) -> None: ...
 
-    def exists(self, key: str) -> bool:
-        ...
+    def exists(self, key: str) -> bool: ...
 
 
 @runtime_checkable

@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "help_contract": {
+    "approval_preflight_exposed": true,
+    "check_approval_exposed": true,
+    "exit_code": 0
+  },
+  "missing_input_preflight": {
+    "result": "ENVIRONMENT_UNAVAILABLE",
+    "request_type": "real-benchmark-approval-preflight",
+    "provider_invoked": false,
+    "output_created": false,
+    "exit_code": 3
+  },
+  "tested_valid_modes": {
+    "preflight_status": "HUMAN_APPROVAL_REQUIRED",
+    "approval_check_status": "APPROVAL_VALID_FOR_CURRENT_INPUTS",
+    "provider_invoked": false,
+    "credential_values_read": false,
+    "output_mode": "0600"
+  },
+  "negative_probes": {
+    "non_executable_runner": "REJECTED",
+    "dangling_output_symlink": "REJECTED_WITHOUT_TARGET_CREATION",
+    "existing_output": "REJECTED_WITHOUT_OVERWRITE",
+    "repository_internal_output": "REJECTED",
+    "private_binding_drift": "REJECTED",
+    "future_private_review": "REJECTED"
+  },
+  "provider_invocations": 0
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "2.0.0",
+  "dataset_sha256": "cb313befd19228e934fda53f3f57d92452e403daeec654b0a8773591b0395523",
+  "records": 16,
+  "classification": "public-synthetic",
+  "reviewer": "PENDING_OWNER_REVIEW",
+  "review_status": "pending",
+  "reviewed_at_utc": null,
+  "review_receipt_sha256": null,
+  "splits": ["train", "holdout"],
+  "fixture_independence": "Runtime fixture builders do not read expected_facts, expected_source_constraints or forbidden_sources.",
+  "private_equivalent": "private-pack-manifest-v2.schema.json"
+}

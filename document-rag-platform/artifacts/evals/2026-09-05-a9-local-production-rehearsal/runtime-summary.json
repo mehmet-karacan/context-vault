@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0",
+  "status": "PARTIAL_PASS_A9_OPEN",
+  "repository_revision": "b9155103e952401550ebc7f81cfcae7bfafb9039",
+  "branch": "fix/context-vault-v3-hardening",
+  "pack_kind": "unapproved-local-rehearsal",
+  "pack_sha256": "2619e9e96be0e32015354f493e4f426f4446747548140499cd05ecc95d102899",
+  "runner_bundle_sha256": "9bfbb788a3733e179f6fbd55d8d7699ce0236662a77b3751bf060aa261f082d6",
+  "source_manifest_sha256": "4b17461b52ffd4294c141b2992bdf312c789ccf022bbae46f5073e4209fb3b53",
+  "embedding_model": "BAAI/bge-m3@5617a9f61b028005a4858fdac845db406aefb181",
+  "generation_model": "Qwen/Qwen2.5-1.5B-Instruct@989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+  "infrastructure": {
+    "alembic_head": "cv3_00000006",
+    "redis_role": "health-only",
+    "celery_delivery_exercised": false,
+    "databases_deleted": 0,
+    "buckets_deleted": 0
+  },
+  "runs": [
+    {
+      "id": "01",
+      "database": "cv3_eval_a9_local_20260905_01",
+      "bucket": "cv3-eval-a9-local-20260905-01",
+      "projects": 1,
+      "documents": 1,
+      "completed_ingestion_jobs": 1,
+      "retrieval_runs": 1,
+      "messages": 0,
+      "bucket_objects": 3,
+      "all_bucket_objects_encrypted": true,
+      "result": "TERMINATED_UNBOUNDED_LOCAL_GENERATION"
+    },
+    {
+      "id": "02",
+      "database": "cv3_eval_a9_local_20260905_02",
+      "bucket": "cv3-eval-a9-local-20260905-02",
+      "projects": 1,
+      "documents": 1,
+      "completed_ingestion_jobs": 1,
+      "retrieval_runs": 1,
+      "messages": 2,
+      "bucket_objects": 3,
+      "all_bucket_objects_encrypted": true,
+      "result": "PRODUCTION_CASE_COMPLETE_POST_REQUEST_LABEL_GATE_REJECTED"
+    },
+    {
+      "id": "03",
+      "database": "cv3_eval_a9_local_20260905_03",
+      "bucket": "cv3-eval-a9-local-20260905-03",
+      "projects": 1,
+      "documents": 1,
+      "completed_ingestion_jobs": 1,
+      "retrieval_runs": 1,
+      "messages": 0,
+      "bucket_objects": 3,
+      "all_bucket_objects_encrypted": true,
+      "result": "FAILED_900_SECOND_DURATION_BUDGET"
+    },
+    {
+      "id": "04",
+      "database": "cv3_eval_a9_local_20260905_04",
+      "bucket": "cv3-eval-a9-local-20260905-04",
+      "projects": 1,
+      "documents": 1,
+      "completed_ingestion_jobs": 1,
+      "retrieval_runs": 1,
+      "messages": 0,
+      "bucket_objects": 3,
+      "all_bucket_objects_encrypted": true,
+      "result": "FAILED_900_SECOND_DURATION_BUDGET_WITH_INFERENCE_MODE"
+    }
+  ],
+  "verification": {
+    "focused_tests_passed": 279,
+    "focused_tests_failed": 0,
+    "full_backend_tests_passed": 950,
+    "full_backend_tests_skipped": 2,
+    "full_backend_tests_failed": 0,
+    "full_backend_warnings": 1,
+    "ruff": "PASS_SCOPED",
+    "mypy_ratchet": "PASS_14_SOURCES",
+    "deterministic_openapi": "PASS",
+    "offline_lock_packages": 163,
+    "dependency_audit": "PASS_NO_KNOWN_VULNERABILITIES",
+    "git_diff_check": "PASS"
+  },
+  "a9_closed": false,
+  "a11_started": false
+}

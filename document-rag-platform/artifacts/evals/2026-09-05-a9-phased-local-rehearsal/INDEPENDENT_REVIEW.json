@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "verdict": "APPROVE",
+  "repository_revision": "6dbbfbbe5939f710faad3aa06258fe1dc32d2d89",
+  "commit_tree": "bcc9b651916e6bd853e1992a0a6882d40e34e9da",
+  "runner_bundle_sha256": "abeaaf8a3d1901318139f41ec215c362470e60336ba3b639056e93fc7d133858",
+  "runner_source_closure_members": 109,
+  "structured_prompt_helper_tracked": true,
+  "structured_prompt_helper_git_blob": "09724c888903412138746a8d230c526a634b7a4c",
+  "structured_prompt_helper_sha256": "ed189c0f357c71f3a902fe77f1cb07d904f10b9ab2093e535aa45f3a03b2d3f2",
+  "focused_tests_passed": 337,
+  "ruff": "PASS",
+  "git_diff_check": "PASS",
+  "worktree_clean_at_review": true,
+  "findings": {
+    "p0": 0,
+    "p1": 0,
+    "p2": 0
+  },
+  "claims_not_made": [
+    "owner approval",
+    "approved private benchmark",
+    "human baseline seal",
+    "A9 closure"
+  ]
+}

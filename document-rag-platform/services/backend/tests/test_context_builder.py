@@ -11,6 +11,7 @@ from src.infrastructure.retrieval.context_builder import (
     ContextBuilder,
     context_item_from,
 )
+from src.domain.retrieval_scope import RetrievalScope
 
 
 class FakeTokenCounter:
@@ -32,8 +33,17 @@ class _FixedCounter:
         return max(1, len(text or "") // self.divisor)
 
 
-def _chunk(chunk_id, content, *, seq=0, source="src-1", ctype="document",
-           parent=None, metadata=None, heading=()):
+def _chunk(
+    chunk_id,
+    content,
+    *,
+    seq=0,
+    source="src-1",
+    ctype="document",
+    parent=None,
+    metadata=None,
+    heading=(),
+):
     return ChunkCandidate(
         chunk_id=chunk_id,
         source_id=source,
@@ -74,11 +84,13 @@ def test_adjacent_expansion_adds_controlled_neighbours():
         4: _chunk("c4", "content four", seq=4),
     }
     selected = chunks[2]
-    resolver = lambda source, seq: chunks.get(seq)
 
-    result = ContextBuilder(
-        token_counter=_counter(), adjacent_window=1
-    ).build([selected], neighbor_resolver=resolver)
+    def resolver(scope, key):
+        return chunks.get(key.sequence_no)
+
+    result = ContextBuilder(token_counter=_counter(), adjacent_window=1).build(
+        [selected], neighbor_resolver=resolver
+    )
 
     rel = {i.chunk_id: i.relation for i in result.items}
     assert rel["c1"] == "adjacent"
@@ -107,7 +119,9 @@ def test_dedup_expansion_not_repeated():
     parent = _chunk("par", "parent text that equals selected")
     child = _chunk("child", "parent text that equals selected", parent="par")
 
-    result = ContextBuilder(token_counter=_counter()).build([child], chunk_pool={"par": parent})
+    result = ContextBuilder(token_counter=_counter()).build(
+        [child], chunk_pool={"par": parent}
+    )
 
     assert len(result.items) == 1
     assert result.items[0].relation == "selected"
@@ -198,7 +212,9 @@ def test_deterministic_output():
         _chunk("c2", "second content", seq=2, parent="par"),
     ]
     pool = {"par": _chunk("par", "parent for second", seq=1)}
-    resolver = lambda source, seq: None
+
+    def resolver(scope, key):
+        return None
 
     builder = ContextBuilder(token_counter=_counter())
     r1 = builder.build(chunks, chunk_pool=pool, neighbor_resolver=resolver)
@@ -247,3 +263,44 @@ def test_accepts_generic_dict_candidates():
     assert len(result.items) == 1
     assert result.items[0].chunk_id == "d1"
     assert result.items[0].content == "dict based content"
+
+
+def test_scoped_neighbor_cannot_cross_project_or_version():
+    scope = RetrievalScope(
+        principal_id="11111111-1111-4111-8111-111111111111",
+        workspace_id="22222222-2222-4222-8222-222222222222",
+        project_id="33333333-3333-4333-8333-333333333333",
+        embedding_profile_id="44444444-4444-4444-8444-444444444444",
+    )
+    selected = {
+        "chunk_id": "selected",
+        "workspace_id": str(scope.workspace_id),
+        "project_id": str(scope.project_id),
+        "document_id": "55555555-5555-4555-8555-555555555555",
+        "version_id": "66666666-6666-4666-8666-666666666666",
+        "source_file_id": "77777777-7777-4777-8777-777777777777",
+        "source_id": "scoped",
+        "chunk_type": "document",
+        "content": "selected body",
+        "sequence_no": 2,
+    }
+    cross_version = dict(selected) | {
+        "chunk_id": "cross",
+        "version_id": "88888888-8888-4888-8888-888888888888",
+        "content": "must not leak",
+        "sequence_no": 1,
+    }
+
+    def resolver(received_scope, key):
+        assert received_scope == scope
+        assert key.workspace_id == str(scope.workspace_id)
+        assert key.project_id == str(scope.project_id)
+        return cross_version if key.sequence_no == 1 else None
+
+    bundle = ContextBuilder(adjacent_window=1).build(
+        [selected], scope=scope, neighbor_resolver=resolver
+    )
+    assert [item.chunk_id for item in bundle.selected_items] == ["selected"]
+    assert any(
+        item.reason == "neighbor_boundary_mismatch" for item in bundle.rejected_items
+    )

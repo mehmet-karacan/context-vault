@@ -19,7 +19,13 @@ query surface, and chunks resolve from an in-memory dict.
 
 import uuid
 
-from src.application.answer_service import ensure_conversation, generate_answer
+import pytest
+
+from src.application.answer_service import (
+    ConversationScopeError,
+    ensure_conversation,
+    generate_answer,
+)
 from src.application.retrieval_service import RetrievalResult
 from src.infrastructure.retrieval.base import RetrievalCandidate
 from src.infrastructure.retrieval.no_answer import INTENT_DOCUMENT, Answerability
@@ -96,6 +102,18 @@ class FakeLLM:
         self.calls += 1
         return self.answer
 
+    def complete_structured(self, system_prompt, user_prompt, *, schema, model=None):
+        self.calls += 1
+        return {
+            "answerable": True,
+            "no_answer_reason": None,
+            "answer_text": self.answer,
+            "claims": [{"claim_text": self.answer, "source_labels": ["S1"]}],
+            "used_source_labels": ["S1"],
+            "uncertainty": [],
+            "safety_flags": [],
+        }
+
 
 def cand(chunk_id, rank, score, source="dense", meta=None, rerank=None):
     c = RetrievalCandidate(
@@ -104,9 +122,8 @@ def cand(chunk_id, rank, score, source="dense", meta=None, rerank=None):
         score=score,
         source=source,
         metadata=dict(meta or {}),
+        rerank_score=rerank,
     )
-    if rerank is not None:
-        c.rerank_score = rerank  # type: ignore[attr-defined]
     return c
 
 
@@ -172,7 +189,8 @@ def test_chat_runtime_creates_conversation_and_persists_message_and_citations():
     )
 
     # --- the exact runtime sequence chat.py performs -------------------------
-    conv_id = ensure_conversation(db, project_id="proj-1", conversation_id=None)
+    project_id = str(uuid.uuid4())
+    conv_id = ensure_conversation(db, project_id=project_id, conversation_id=None)
     resp = generate_answer(
         query="PAYMENT_FLAG nasıl?",
         retrieval_result=make_result("PAYMENT_FLAG nasıl?", [candidate]),
@@ -186,7 +204,11 @@ def test_chat_runtime_creates_conversation_and_persists_message_and_citations():
     assert len(conv) == 1, "a Conversation must be created and flushed"
     assert str(conv[0].id) == conv_id
 
-    messages = [o for o in db.added if o.__class__.__name__ == "Message"]
+    messages = [
+        o
+        for o in db.added
+        if o.__class__.__name__ == "Message" and o.role == "assistant"
+    ]
     citations = [o for o in db.added if o.__class__.__name__ == "MessageCitation"]
 
     assert len(messages) == 1
@@ -209,23 +231,32 @@ def test_chat_runtime_creates_conversation_and_persists_message_and_citations():
     assert resp["citations"][0]["label"] == "S1"
 
 
-def test_chat_runtime_reuses_existing_conversation_when_present():
-    """When a Conversation already exists for the project it is reused, not
-    re-created (ensure_conversation returns the existing id)."""
+def test_chat_runtime_creates_fresh_conversation_when_id_absent():
+    """Ambient existing conversations are never selected implicitly."""
     existing = type("Conv", (), {"id": uuid.uuid4()})()
     db = FakeSessionWithConv(existing)
 
-    conv_id = ensure_conversation(db, project_id="proj-1", conversation_id=None)
+    conv_id = ensure_conversation(
+        db, project_id=str(uuid.uuid4()), conversation_id=None
+    )
 
-    assert conv_id == str(existing.id)
+    assert conv_id != str(existing.id)
     convs = [o for o in db.added if o.__class__.__name__ == "Conversation"]
-    assert convs == [], "no new Conversation should be created when one exists"
+    assert len(convs) == 1
 
 
 def test_chat_runtime_honors_explicit_conversation_id():
-    """A client-supplied conversation_id is returned unchanged (resume path)."""
+    """A client-supplied conversation is used only after scoped lookup."""
     cid = str(uuid.uuid4())
-    assert ensure_conversation(FakeSession(), project_id="proj-1", conversation_id=cid) == cid
+    existing = type("Conv", (), {"id": uuid.UUID(cid)})()
+    assert (
+        ensure_conversation(
+            FakeSessionWithConv(existing),
+            project_id=str(uuid.uuid4()),
+            conversation_id=cid,
+        )
+        == cid
+    )
 
 
 def test_feature_new_citations_false_skips_persistence_but_keeps_citations():
@@ -255,10 +286,20 @@ def test_feature_new_citations_false_skips_persistence_but_keeps_citations():
     assert resp["citations"][0]["label"] == "S1"
 
 
-def test_ensure_conversation_returns_none_without_db_or_project():
-    # DB-free path must not crash and must signal "no persistence".
-    assert ensure_conversation(None, project_id="proj-1") is None
-    assert ensure_conversation(FakeSession(), project_id=None) is None
+def test_ensure_conversation_fails_closed_without_db_or_valid_project():
+    with pytest.raises(ConversationScopeError):
+        ensure_conversation(None, project_id=str(uuid.uuid4()))
+    with pytest.raises(ConversationScopeError):
+        ensure_conversation(FakeSession(), project_id="not-a-uuid")
+
+
+def test_explicit_conversation_must_exist_in_project():
+    with pytest.raises(ConversationScopeError):
+        ensure_conversation(
+            FakeSession(),
+            project_id=str(uuid.uuid4()),
+            conversation_id=str(uuid.uuid4()),
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -273,14 +314,20 @@ def test_retrieval_debug_stages_shape_matches_frontend_contract():
 
     dense = [cand("A", 1, 0.9, "dense")]
     rerank = [cand("A", 1, 0.9, "dense", rerank=0.95)]
-    rerank[0].chunk = chunk_obj(
-        "A", "body", metadata={"document_name": "rules.docx", "source_type": "document"}
+    rerank[0] = rerank[0].with_chunk(
+        chunk_obj(
+            "A",
+            "body",
+            metadata={"document_name": "rules.docx", "source_type": "document"},
+        )
     )
 
     result = RetrievalResult(
         query="q",
         ranked_candidates=rerank,
-        answerability=Answerability(intent=INTENT_DOCUMENT, answerable=True, reason="ok"),
+        answerability=Answerability(
+            intent=INTENT_DOCUMENT, answerable=True, reason="ok"
+        ),
         stage_candidates={"dense": dense, "rerank": rerank},
     )
 
@@ -295,7 +342,9 @@ def test_retrieval_debug_stages_shape_matches_frontend_contract():
         for item in items:
             # Every entry is renderable: at least one of label/document_name/chunk_id.
             assert {"chunk_id", "rank", "score", "source"} <= set(item), item
-            assert item.get("label") or item.get("document_name") or item.get("chunk_id")
+            assert (
+                item.get("label") or item.get("document_name") or item.get("chunk_id")
+            )
 
     # document_name is surfaced when the resolved chunk has it (rerank stage).
     rerank_item = stages["rerank"][0]

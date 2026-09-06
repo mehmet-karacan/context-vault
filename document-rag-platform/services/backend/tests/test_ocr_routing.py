@@ -17,7 +17,6 @@ in-memory ``ObjectStorage`` (DB-free).
 from __future__ import annotations
 
 import json
-from typing import Optional
 
 from src.infrastructure.parsers.image_parser import OcrBlock, OcrResult
 from src.infrastructure.parsers.ocr_artifact import (
@@ -74,10 +73,10 @@ def test_should_ocr_feature_disabled_always_false():
 
 def test_routes_exactly_low_coverage_pages():
     page_coverage = [
-        {"text_present": True},   # page 0 - digital
+        {"text_present": True},  # page 0 - digital
         {"text_present": False},  # page 1 - scanned -> OCR
-        {"text_present": True},   # page 2 - digital
-        {"has_text": False},      # page 3 - scanned -> OCR (alt key)
+        {"text_present": True},  # page 2 - digital
+        {"has_text": False},  # page 3 - scanned -> OCR (alt key)
     ]
     assert route_pdf_pages_to_ocr(page_coverage) == [1, 3]
 

@@ -1,9 +1,17 @@
 # Aktif Görevler
 
+> **Sınıflandırma:** historical/non-canonical human projection
+> **last_verified_sha:** `6b99a53d19e7f5f7b07b403e751c629f79ab7663`
+> **last_verified_at:** `2026-09-02T11:59:53Z`
+> **evidence_manifest:** `document-rag-platform/artifacts/audit/2026-09-02-baseline/audit-manifest.json`
+> **STALE UYARISI:** Bu dosya aktif iş otoritesi değildir. Güncel ve tek görev
+> kaydı root `AKTIF_GOREV.md` dosyasıdır.
+
 **Son güncelleme:** 2026-08-20
 **Kanonik plan:** `AKTIF_GOREV.md` (ilerleme kaydı §18)
 
-> Önceki "MVP TAMAMLANDI — 6 aşama tümü yeşil" bloğu gerçek kodla çeliştiği için kaldırıldı. Gerçek durum: **Aşama 0–9 tamamlandı, Aşama 10 devam ediyor.**
+> Aşağıdaki aşama durumu 2026-08-20 tarihli, superseded bir snapshot'tır.
+> Güncel iş listesi veya tamamlanma kanıtı değildir.
 
 ## Aşama Durumu
 
@@ -11,8 +19,8 @@
 - ⏳ **Aşama 10 — Dokümantasyon, Temizlik ve Son Aktivasyon** devam ediyor:
   - ✅ Durum dokümanları (`context-summary.md`, `IMPLEMENTATION_CHECKLIST.md`, `active/current-tasks.md`, `done/completed-tasks.md`) gerçek koda göre düzeltildi.
   - ✅ Feature flag aktivasyon/doğrulama kontrolü yapıldı (rapor için `IMPLEMENTATION_CHECKLIST.md` bölümüne bakın).
-  - ⏳ ADR-005 (repo tarama güvenlik modeli) ve ADR-006 (OCR provider stratejisi) yazılacak.
-  - ⏳ Ops runbook'ları yazılacak: re-index, embedding model/profile değişimi, OCR model + language pack kurulumu, repo scan limitleri, backup/restore.
+  - ✅ Tarihsel ADR-005/006 ve runbook TODO'ları daha sonra tamamlandı;
+    güncel envanter ilgili ADR/runbook index'indedir.
   - ⏳ Eski chunk temizliği (yeni version + eval doğrulaması sonrası, kontrollü).
   - ⏳ Root `README.md` güncellemesi (ayrı görev atanmış olabilir).
 
@@ -29,8 +37,9 @@
 
 1. OCR motorlarını (Docling / Tesseract + `tur+eng` language pack) kur ve tarama manuel doğrula.
 2. `FEATURE_REPOSITORY_INGESTION=true` ile repo/arşiv/klasör akışını uçtan uca doğrula.
-3. ADR-005 ve ADR-006'yı yaz.
-4. Ops runbook'larını tamamla (re-index, embedding değişimi, OCR kurulumu, repo scan limitleri, backup/restore).
+3. ~~ADR-005 ve ADR-006'yı yaz.~~ Superseded; dosyalar ve index mevcut.
+4. ~~Ops runbook'larını tamamla.~~ Superseded; güncel kapsam runbook
+   index'inde izlenir.
 5. Root `README.md`'yi gerçek durumla eşleştir.
 6. Yeni version + eval doğrulamasından sonra eski chunk temizliğini kontrollü yap.
 7. `AKTIF_GOREV.md` §18 ilerleme kaydını (koordinatör) final sonuçlarla güncelle.

@@ -1,0 +1,115 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "verify",
+  "operation_id": "cv3-a9-admission-20260902-002",
+  "work_item_id": "CV3-A9-EVAL",
+  "attempt_id": "post-commit-binding-001",
+  "actor": "codex-local-agent",
+  "tool_adapter": "local-cli-git-pytest",
+  "started_at": "2026-09-02T19:41:03.177Z",
+  "finished_at": "2026-09-02T19:41:03.177Z",
+  "time_scope": "Evidence binding timestamp; post-commit tier pytest completed immediately before binding.",
+  "baseline_revision": "c25bebcdeb92d70ba0d6ba8d4fd05a06c247d944",
+  "result_revision": "23c34ec3328ece4f847a3bca8403af6bb39395ff",
+  "scope_hash": "3487a796e4c54a583696aa61cfeacb97d1f2949dfb202293f0ae141ffcff75af",
+  "context_manifest_hash": "56c83e443bce4e9656ec8fbaa22ebedfb512dd9dfc10d326a213f289f3d4639e",
+  "idempotency_key_hash": null,
+  "commands": [
+    {
+      "command": "pytest -q tests/evals/test_tier_contracts.py",
+      "exit_code": 0
+    },
+    {
+      "command": "Verify six SOURCE_MANIFEST hashes against checked-out implementation commit; git status --short",
+      "exit_code": 0
+    }
+  ],
+  "exit_status": 0,
+  "tests": [
+    {
+      "name": "post-commit tier contracts",
+      "passed": 41,
+      "failed": 0
+    },
+    {
+      "name": "source fingerprint binding",
+      "result": "PASS",
+      "files": 6
+    },
+    {
+      "name": "full backend and other verifier gates",
+      "source": "PRECOMMIT_RECEIPT.json",
+      "binding": "Exact tested source bytes match the implementation commit."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "CLI_ADMISSION_PROBE.json",
+      "sha256": "52f93ac50c1fd1fac7ae54d1c592740b9146a3ccd52fa5574ff45ab308a72668",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "PRECOMMIT_RECEIPT.json",
+      "sha256": "27d977d3601778c57db8b064142cf2bb1c37be8e84137fb314082382265c9a65",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "REPRODUCTION_SUMMARY.json",
+      "sha256": "4769fa91780f215218a56a571bfa6a105d1ca8caa9ef9b8688e1439805afe837",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "SOURCE_MANIFEST.json",
+      "sha256": "cda77a659072405271fceda58ff5f1fa30792ea13182c9fd544c4ebee74635ea",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "backend-junit.xml",
+      "sha256": "74d874008a257b269676fc90d59868ae96aa23974448822c1189533eac5e803b",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "public-tree.json",
+      "sha256": "4f9f648c2125a2a63f7b361b0f5ac7cfc8200d323fb3b0a90a19803cacf990d0",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "tier-junit.xml",
+      "sha256": "15c5598376d6a15b08e8aeaa76485d5cf2715bbcbac003eb12264050bd0ceb54",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    }
+  ],
+  "security_redactions": [
+    "JUnit hostname/absolute paths removed",
+    "Failure summaries omit tracebacks",
+    "Synthetic-only regression data"
+  ],
+  "rollback": {
+    "schema_change": false,
+    "data_reset_required": false,
+    "instruction": "Revert this evaluator patch only; retain data and prior immutable receipts."
+  },
+  "result": "PASS",
+  "phase_closed": false,
+  "independent_review": false,
+  "scope": "Local admission fix and exact revision binding, not real-provider quality or final baseline seal.",
+  "open_gates": [
+    "A9 owner dataset and provider/model/private-pack/budget approval",
+    "Audited real provider evidence and human baseline seal",
+    "Remote CI",
+    "A11-A13 and independent final verification"
+  ],
+  "remote_actions": {
+    "provider_call": false,
+    "push": false,
+    "merge": false,
+    "release": false
+  }
+}

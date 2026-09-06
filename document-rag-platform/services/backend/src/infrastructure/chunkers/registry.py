@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, List, Optional, Sequence
 
 from ...config import settings
 from ...domain.normalized_content import NormalizedSource, UnitType
@@ -107,9 +107,7 @@ class ChunkerRegistry:
             max_tokens if max_tokens is not None else settings.CHUNK_MAX_TOKENS
         )
         self.overlap_ratio = (
-            overlap_ratio
-            if overlap_ratio is not None
-            else settings.CHUNK_OVERLAP_RATIO
+            overlap_ratio if overlap_ratio is not None else settings.CHUNK_OVERLAP_RATIO
         )
         self.parent_max_tokens = (
             parent_max_tokens
@@ -248,8 +246,7 @@ class ChunkerRegistry:
             key = tuple(child.heading_path or [])
             tokens = self.token_counter.count(child.content)
             if bucket and (
-                bucket_key != key
-                or bucket_tokens + tokens > self.parent_max_tokens
+                bucket_key != key or bucket_tokens + tokens > self.parent_max_tokens
             ):
                 flush()
             bucket.append(child)

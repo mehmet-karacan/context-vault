@@ -12,6 +12,8 @@ from metrics import (
     recall_at_k,
 )
 
+pytestmark = pytest.mark.evals
+
 
 def test_recall_at_k():
     ranked = ["a", "b", "c"]
@@ -85,13 +87,13 @@ def test_compute_retrieval_metrics_aggregate():
     labels = {
         "q1": {"answerable": True, "relevant": ["b", "d"]},
         "q2": {"answerable": True, "relevant": ["z"]},  # never found
-        "q3": {"answerable": False, "relevant": []},    # excluded
+        "q3": {"answerable": False, "relevant": []},  # excluded
     }
     m = compute_retrieval_metrics(predictions, labels)
     # only q1 and q2 are evaluable
     assert m["n_evaluable"] == 2
-    assert m["recall@1"] == 0.0   # neither has a relevant at rank 1
-    assert m["recall@3"] == 0.5   # q1 hits at rank2, q2 misses entirely
+    assert m["recall@1"] == 0.0  # neither has a relevant at rank 1
+    assert m["recall@3"] == 0.5  # q1 hits at rank2, q2 misses entirely
     assert m["recall@5"] == 0.5
     assert m["recall@10"] == 0.5
     # q1 mrr = 1/rank2 = 0.5, q2 mrr = 0 -> avg 0.25
@@ -102,7 +104,11 @@ def test_evaluate_quality_gate_pass():
     metrics = {
         "recall@5": 0.9,
         "mrr@10": 0.8,
-        "no_answer": {"false_positives": 1, "false_negatives": 0, "overall_error": 0.02},
+        "no_answer": {
+            "false_positives": 1,
+            "false_negatives": 0,
+            "overall_error": 0.02,
+        },
     }
     gate = evaluate_quality_gate(metrics)
     assert gate["pass"] is True

@@ -14,9 +14,8 @@ relevance scores and keeps the top ``top_k``, exposing ``provider`` /
 
 from __future__ import annotations
 
+from dataclasses import is_dataclass, replace
 from typing import Any, List, Optional
-
-from ...domain.ports import Reranker
 
 
 class RemoteReranker:
@@ -53,9 +52,7 @@ class RemoteReranker:
 
     # -- Reranker port ------------------------------------------------------
 
-    def rerank(
-        self, query: str, candidates: List[Any], top_k: int
-    ) -> List[Any]:
+    def rerank(self, query: str, candidates: List[Any], top_k: int) -> List[Any]:
         if not candidates:
             return list(candidates)
 
@@ -106,6 +103,9 @@ def _extract_text(candidate: Any) -> str:
         value = getattr(candidate, attr, None)
         if value:
             return str(value)
+    chunk = getattr(candidate, "chunk", None)
+    if chunk is not None and chunk is not candidate:
+        return _extract_text(chunk)
     return ""
 
 
@@ -116,9 +116,7 @@ def _extract_results(response: Any) -> List[Any]:
     return results or []
 
 
-def _reorder(
-    candidates: List[Any], results: List[Any], top_k: int
-) -> List[Any]:
+def _reorder(candidates: List[Any], results: List[Any], top_k: int) -> List[Any]:
     """Maps gateway results back to the original candidates, re-ordered.
 
     Handles both dict-style and object-style candidate/result shapes. Each
@@ -164,9 +162,9 @@ def _attach_score(candidate: Any, score: Any) -> Any:
         enriched = dict(candidate)
         enriched["rerank_score"] = score
         return enriched
+    if is_dataclass(candidate) and hasattr(candidate, "rerank_score"):
+        return replace(candidate, rerank_score=_safe_score(score))
     try:
-        # Only attach when the object is genuinely mutable (no dataclass
-        # frozen/resolve flag); otherwise return the object untouched.
         candidate.rerank_score = score  # type: ignore[attr-defined]
     except (AttributeError, TypeError):
         pass

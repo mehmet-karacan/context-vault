@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "repository_revision": "4a51109d373fc6beb27222d738949e0d567c07c7",
+  "commit_tree": "326b7431f24ea54fb3d70fff4fbc64b85bc62046",
+  "files": {
+    "scripts/run_eval.py": "b84b9a6dee3ea96862ddcc4ec5b1675e340b9c6b19d362691bf1f942556ae268",
+    "scripts/local_benchmark_pack.py": "e625b6c856d4593de7e43de49bf1ce9ad5b15a3873b1de7fbfe887caa59cfb17",
+    "scripts/local_production_case_executor.py": "ac4cbf039c8bb1a51a7bbdc937c3bbdebb3bd93d989c8d570b5ffd911a0b51a1",
+    "document-rag-platform/services/backend/tests/evals/test_local_benchmark_pack.py": "fa6bff431db64ca8f3eb5fcacdd938924f7a7b9e5eaad7321478d6c3f13204e6",
+    "document-rag-platform/services/backend/tests/evals/test_local_production_case_executor.py": "ff2a33e6f6a0fa91b65d8e27bddfb100af75bd2ba00adc8ed5572a9a01c7ee97",
+    "document-rag-platform/services/backend/tests/evals/test_local_production_benchmark.py": "4f0ff1a542566637c44c2b922de94e6c9310f12859eeacb3b8d35c9fca6e42c6",
+    "document-rag-platform/services/backend/tests/evals/test_tier_contracts.py": "2f5893580064bef31c367546c8550fc9470161b12620c3d13d29ccbb16e0a950",
+    "document-rag-platform/tests/evals/real_benchmark/README.md": "44354829f6309e316558601a3a2c3eb16ecf6593df92f113ea51b9119ea8ddba",
+    "document-rag-platform/tests/evals/datasets/benchmark-golden-non-transfer-receipt-v1.schema.json": "55f831724112ad3feb530e915ad1652b015b59e9bac789e97e100473f6349fb6"
+  }
+}

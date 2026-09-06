@@ -30,22 +30,62 @@ stub the runner and assert the exact argv/env without making a network clone.
 from __future__ import annotations
 
 import os
+import ipaddress
+import socket
 import tempfile
 from typing import Callable, List, Optional
+from urllib.parse import urlsplit
+
+from src.config import settings
 
 from .discovery_compat import discover_files as _default_discover
 from .scan_result import ScanResult, ScannedFile
 
 # Env additions applied to every git subprocess. Never a shell.
 GIT_SAFE_ENV = {
-    "GIT_TERMINAL_PROMPT": "0",     # never prompt; fail instead
-    "GIT_LFS_SKIP_SMUDGE": "1",     # no LFS object download by default
-    "GIT_CONFIG_NOSYSTEM": "1",     # ignore host system/global git config
+    "GIT_TERMINAL_PROMPT": "0",  # never prompt; fail instead
+    "GIT_LFS_SKIP_SMUDGE": "1",  # no LFS object download by default
+    "GIT_CONFIG_NOSYSTEM": "1",  # ignore host system/global git config
 }
 
 
 class GitCommandError(RuntimeError):
     """Raised when a git subprocess exits non-zero."""
+
+
+class RepositoryUrlRejected(ValueError):
+    """Raised before network access when a repository URL violates policy."""
+
+
+def validate_repository_url(
+    repository_url: str,
+    allowed_hosts: set[str],
+    resolver: Callable[..., list] = socket.getaddrinfo,
+) -> str:
+    parsed = urlsplit(repository_url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise RepositoryUrlRejected("only HTTPS repository URLs are allowed")
+    if parsed.username or parsed.password:
+        raise RepositoryUrlRejected("credentials in repository URLs are forbidden")
+    hostname = parsed.hostname.rstrip(".").lower()
+    if hostname not in {host.rstrip(".").lower() for host in allowed_hosts}:
+        raise RepositoryUrlRejected("repository host is not allow-listed")
+    try:
+        addresses = {
+            item[4][0]
+            for item in resolver(hostname, parsed.port or 443, type=socket.SOCK_STREAM)
+        }
+    except OSError as exc:
+        raise RepositoryUrlRejected("repository host resolution failed") from exc
+    if not addresses:
+        raise RepositoryUrlRejected("repository host resolved to no address")
+    for raw in addresses:
+        address = ipaddress.ip_address(raw)
+        if not address.is_global:
+            raise RepositoryUrlRejected(
+                "repository host resolved to a non-public address"
+            )
+    return repository_url
 
 
 class GitRunner:
@@ -62,7 +102,13 @@ class GitRunner:
         if env:
             merged.update(env)
         proc = subprocess.run(
-            argv, cwd=cwd, env=merged, capture_output=True, text=True, shell=False
+            argv,
+            cwd=cwd,
+            env=merged,
+            capture_output=True,
+            text=True,
+            shell=False,
+            timeout=settings.CODE_SCAN_TIMEOUT_SECONDS,
         )
         if proc.returncode != 0:
             raise GitCommandError(proc.stderr.strip() or f"git {' '.join(argv)} failed")
@@ -84,10 +130,23 @@ class GitRepositorySource:
         git_runner: Optional[GitRunner] = None,
         sandbox_factory: Optional[Callable[[], str]] = None,
         discovery: Optional[Callable[..., List[ScannedFile]]] = None,
+        allowed_hosts: Optional[set[str]] = None,
+        resolver: Callable[..., list] = socket.getaddrinfo,
     ):
         self.git_runner = git_runner or GitRunner()
-        self.sandbox_factory = sandbox_factory or (lambda: tempfile.mkdtemp(prefix="code-repo-"))
+        self.sandbox_factory = sandbox_factory or (
+            lambda: tempfile.mkdtemp(prefix="code-repo-")
+        )
         self.discovery = discovery or _default_discover
+        configured_hosts = {
+            host.strip().lower()
+            for host in settings.REPOSITORY_ALLOWED_HOSTS.split(",")
+            if host.strip()
+        }
+        self.allowed_hosts = (
+            configured_hosts if allowed_hosts is None else allowed_hosts
+        )
+        self.resolver = resolver
         self._git_calls: List[List[str]] = []
 
     def _run_git(self, argv: List[str], cwd: str) -> str:
@@ -111,15 +170,23 @@ class GitRepositorySource:
         """
         sandbox = work or self.sandbox_factory()
         checkout = os.path.join(sandbox, "checkout")
+        validate_repository_url(repository_url, self.allowed_hosts, self.resolver)
 
-        argv = ["git", "clone"]
+        argv = ["git", "clone", "--depth", "1"]
         if ref:
-            argv += ["--depth", "1", "--branch", ref]
+            argv += ["--branch", ref]
         # Hardening flags (§7.2): no autocrlf, no LFS required, no host config.
         argv += [
-            "--config", "core.autocrlf=false",
-            "--config", "filter.lfs.required=false",
-            "--config", "core.hooksPath=",
+            "--config",
+            "core.autocrlf=false",
+            "--config",
+            "filter.lfs.required=false",
+            "--config",
+            "core.hooksPath=",
+            "--config",
+            "http.followRedirects=false",
+            "--config",
+            "transfer.fsckObjects=true",
         ]
         argv += [repository_url, checkout]
 
@@ -152,4 +219,5 @@ class GitRepositorySource:
             branch_or_ref=ref,
             commit_sha=commit_sha,
             files=files,
+            cleanup_root=sandbox if work is None else None,
         )

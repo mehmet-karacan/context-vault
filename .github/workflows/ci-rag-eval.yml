@@ -1,55 +1,159 @@
-name: ci-rag-eval
+name: ci-rag-contract
 
 on:
+  push:
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-rag-contract-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  rag-eval:
+  offline-contract-fixture:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        image: pgvector/pgvector:pg16@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b
         env:
           POSTGRES_USER: raguser
-          POSTGRES_PASSWORD: rag_password
+          POSTGRES_PASSWORD: test-only-password
           POSTGRES_DB: rag_platform
         ports:
-          - "5432:5432"
+          - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U raguser"
+          --health-cmd "pg_isready -U raguser -d rag_platform"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      redis:
+        image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
           --health-interval 5s --health-timeout 5s --health-retries 12
     env:
-      DATABASE_URL: postgresql://raguser:rag_password@localhost:5432/rag_platform
+      DATABASE_URL: postgresql://raguser:test-only-password@localhost:5432/rag_platform
+      REDIS_URL: redis://localhost:6379/0
+      MINIO_ENDPOINT: localhost:9000
+      MINIO_ACCESS_KEY: cv3_ci
+      MINIO_SECRET_KEY: cv3-ci-test-only-12345
+      MINIO_BUCKET: cv3-ci-eval
+      OBJECT_STORAGE_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      UV_VERSION: 0.12.5
     defaults:
       run:
         working-directory: document-rag-platform/services/backend
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
-          python-version: "3.12"
+          python-version-file: .python-version
 
-      - name: Dependency install
+      - name: Cache uv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('document-rag-platform/services/backend/uv.lock') }}
+
+      - name: Install locked environment
         run: |
-          python -m pip install --upgrade pip setuptools wheel
-          pip install -r requirements-dev.txt
+          python -m pip install --no-deps "uv==$UV_VERSION"
+          uv lock --check
+          uv sync --frozen --all-groups
 
-      - name: Migration upgrade
-        run: alembic upgrade head
-
-      - name: Deterministic fixture ingestion (offline/real pipeline)
-        run: pytest tests/evals -m "evals" --disable-warnings
-
-      - name: Leakage and citation gates
+      - name: Prepare deterministic fixture schema
         run: |
-          pytest -m "leakage" tests/evals --disable-warnings
-          pytest -m "citation" tests/evals --disable-warnings
+          mkdir -p reports
+          uv run alembic upgrade head
 
-      - name: Baseline comparison
-        run: pytest -m "baseline" tests/evals --disable-warnings
+      - name: Verify public dataset provenance
+        run: >-
+          uv run python ../../../scripts/run_eval.py --public-dataset-status
+          --json-output reports/public-dataset-status.json
 
-      - name: Fake release gate
+      - name: Start isolated MinIO
+        run: >-
+          docker run -d --name cv3-ci-minio -p 127.0.0.1:9000:9000
+          -e MINIO_ROOT_USER=cv3_ci
+          -e MINIO_ROOT_PASSWORD=cv3-ci-test-only-12345
+          minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+          server /data
+
+      - name: Contract smoke (not a quality claim)
+        env:
+          LITELLM_API_KEY: test-only
+          LITELLM_BASE_URL: https://llm-gateway.example.invalid/v1
+        run: >-
+          uv run python ../../../scripts/run_eval.py --tier contract-smoke --strict
+          --json-output reports/contract-smoke.json
+          --markdown-output reports/contract-smoke.md
+
+      - name: Offline production-pipeline E2E
+        env:
+          LITELLM_API_KEY: test-only
+          LITELLM_BASE_URL: https://llm-gateway.example.invalid/v1
+        run: >-
+          uv run python ../../../scripts/run_eval.py --tier offline-e2e --strict
+          --json-output reports/offline-e2e.json
+          --markdown-output reports/offline-e2e.md
+
+      - name: Set up Node for connected browser gate
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: document-rag-platform/apps/web/.nvmrc
+          cache: npm
+          cache-dependency-path: document-rag-platform/apps/web/package-lock.json
+
+      - name: Start isolated browser HTTP fixture
+        env:
+          LITELLM_API_KEY: test-only
+          CV3_BROWSER_TEST_MODE: "1"
         run: |
-          echo "Release evali, gercek indeks ve servis yolunu kullanmalidir; fake path burada reddedilir."
-          test -z "$(grep -rl FakeRetriever tests/evals || true)" || exit 1
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE cv3_a10_browser'
+          export DATABASE_URL='postgresql://raguser:test-only-password@localhost:5432/cv3_a10_browser'
+          uv run alembic upgrade head
+          uv run python tests/browser_fixture_server.py > reports/browser-server.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:44999/health/live; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:44999/health/live
+
+      - name: Connected browser product flow (local deterministic models)
+        working-directory: document-rag-platform/apps/web
+        env:
+          CV3_BROWSER_LIVE: "1"
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: reports/live-e2e-junit.xml
+        run: |
+          npm ci --ignore-scripts
+          npx playwright install --with-deps chromium
+          npm run build
+          npx playwright test live.spec.ts
+
+      - name: Fresh-connection citation durability and retention gate
+        env:
+          LITELLM_API_KEY: test-only
+          DATABASE_URL: postgresql://raguser:test-only-password@localhost:5432/cv3_a10_browser
+        run: uv run python tests/verify_browser_fixture.py
+
+      - name: Upload RAG contract evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: rag-contract-evidence-${{ github.sha }}
+          path: |
+            document-rag-platform/services/backend/reports/
+            document-rag-platform/apps/web/reports/
+          if-no-files-found: error
+          retention-days: 14
+
+# Real/private quality benchmarks are intentionally not run in public CI.
+# They require a separately approved environment, private corpus and provider budget.

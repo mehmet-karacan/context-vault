@@ -138,9 +138,7 @@ class BgeM3TokenCounter:
         if tokenizer is not None:
             # ``encode`` without add_special_tokens yields just the content
             # tokens, matching the tokenization the embedding gateway sees.
-            return len(
-                tokenizer.encode(text, add_special_tokens=False)
-            )
+            return len(tokenizer.encode(text, add_special_tokens=False))
         return _estimate_conservative(text)
 
     def report(self, text: str) -> CountReport:

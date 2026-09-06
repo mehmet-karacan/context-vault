@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "candidate_sha": "91b9bc6d9ffa89351dd557c4e6c36cdc5156b245",
+  "status": "PASS",
+  "expected_head": "cv3_00000007",
+  "observed_heads": ["cv3_00000007"],
+  "blank_upgrade": "PASS",
+  "downgrade_base_reupgrade": "PASS",
+  "alembic_check": "PASS",
+  "full_dump_restore_upgrade": "PASS",
+  "restored_active_embedding_profiles": 1,
+  "measured_invariant_violation_sum": 0,
+  "startup_ddl": false,
+  "existing_user_data_mutated": false
+}

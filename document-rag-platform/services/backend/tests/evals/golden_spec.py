@@ -64,7 +64,9 @@ def load_golden(path: Path | str = DEFAULT_DATASET_PATH) -> List[Dict[str, Any]]
             try:
                 records.append(json.loads(line))
             except json.JSONDecodeError as exc:
-                raise ValueError(f"{path}:{line_no}: gecersiz JSON satiri: {exc}") from exc
+                raise ValueError(
+                    f"{path}:{line_no}: gecersiz JSON satiri: {exc}"
+                ) from exc
     return records
 
 

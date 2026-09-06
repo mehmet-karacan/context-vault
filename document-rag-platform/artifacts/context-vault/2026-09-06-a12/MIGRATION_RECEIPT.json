@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "verified_date": "2026-09-06",
+  "database": "disposable PostgreSQL 16 with pgvector",
+  "blank_upgrade": {
+    "from": null,
+    "to": "cv3_00000007",
+    "integration_tests_passed": 13,
+    "alembic_check": "No new upgrade operations detected"
+  },
+  "recovery_path": {
+    "upgrade": "cv3_00000006 -> cv3_00000007",
+    "downgrade": "cv3_00000007 -> cv3_00000006",
+    "reupgrade_head": "cv3_00000007",
+    "sentinel_preserved_after_upgrade": true,
+    "sentinel_preserved_after_downgrade": true
+  },
+  "existing_user_data_touched": false,
+  "container_cleanup_remaining": 0
+}

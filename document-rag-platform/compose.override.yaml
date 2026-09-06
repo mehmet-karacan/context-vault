@@ -1,0 +1,51 @@
+# Docker Compose loads this development overlay automatically with compose.yaml.
+# Production and CI invocations must pass their overlay explicitly and disable
+# this implicit file (for example with COMPOSE_FILE or two explicit -f flags).
+x-local-backend-image: &local-backend-image
+  image: context-vault-backend:${BACKEND_IMAGE_TAG:-local}
+  build:
+    context: ./services/backend
+    dockerfile: Dockerfile
+
+services:
+  postgres:
+    ports:
+      - 127.0.0.1:${POSTGRES_PORT:-5432}:5432
+  redis:
+    ports:
+      - 127.0.0.1:${REDIS_PORT:-6379}:6379
+  minio:
+    ports:
+      - 127.0.0.1:${MINIO_API_PORT:-9000}:9000
+      - 127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001
+  migration:
+    <<: *local-backend-image
+    volumes:
+      - ./services/backend:/app
+      - backend_venv:/app/.venv
+  backend:
+    <<: *local-backend-image
+    environment:
+      APP_ENV: local
+    ports:
+      - 127.0.0.1:${BACKEND_PORT:-8000}:8000
+    volumes:
+      - ./services/backend:/app
+      - backend_venv:/app/.venv
+  worker:
+    <<: *local-backend-image
+    environment:
+      APP_ENV: local
+    volumes:
+      - ./services/backend:/app
+      - backend_venv:/app/.venv
+  scheduler:
+    <<: *local-backend-image
+    environment:
+      APP_ENV: local
+    volumes:
+      - ./services/backend:/app
+      - backend_venv:/app/.venv
+
+volumes:
+  backend_venv:

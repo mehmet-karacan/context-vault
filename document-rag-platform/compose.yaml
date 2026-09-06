@@ -1,0 +1,222 @@
+x-backend-image: &backend-image
+  image: ${BACKEND_IMAGE_REPOSITORY:?set the approved backend image repository}@sha256:${BACKEND_IMAGE_DIGEST:?set the approved backend image digest}
+
+x-app-environment: &app-environment
+  APP_ENV: ${APP_ENV:-production}
+  BIND_HOST: 0.0.0.0
+  AUTH_MODE: ${AUTH_MODE:?set an explicit authentication mode}
+  API_KEY_PEPPER: ${API_KEY_PEPPER:?set a high-entropy API key pepper}
+  CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:?set the permitted browser origins}
+  DATABASE_URL: ${DATABASE_RUNTIME_URL:?set the least-privilege runtime database URL}
+  EXPECTED_DATABASE_ROLE: ${POSTGRES_RUNTIME_USER:?set the expected runtime database role}
+  REDIS_URL: ${REDIS_URL:?set an authenticated Redis URL}
+  RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+  RATE_LIMIT_BACKEND: redis
+  METRICS_EXPORT_MODE: ${METRICS_EXPORT_MODE:-disabled}
+  METRICS_STATSD_HOST: ${METRICS_STATSD_HOST:-}
+  METRICS_STATSD_PORT: ${METRICS_STATSD_PORT:-8125}
+  MINIO_ENDPOINT: http://minio:9000
+  MINIO_ACCESS_KEY: ${MINIO_APP_ACCESS_KEY:?set a MinIO application access key}
+  MINIO_SECRET_KEY: ${MINIO_APP_SECRET_KEY:?set a MinIO application secret key}
+  MINIO_BUCKET: ${MINIO_BUCKET:?set a private application bucket}
+  OBJECT_STORAGE_ENCRYPTION_KEY: ${OBJECT_STORAGE_ENCRYPTION_KEY:?set an application-layer encryption key}
+  OBJECT_STORAGE_ALLOW_LEGACY_PLAINTEXT_READS: ${OBJECT_STORAGE_ALLOW_LEGACY_PLAINTEXT_READS:-false}
+  SECRET_KEY: ${SECRET_KEY:?set an application secret key}
+  LITELLM_BASE_URL: ${LITELLM_BASE_URL:?set the approved provider gateway URL}
+  LITELLM_API_KEY: ${LITELLM_API_KEY:?set the provider gateway credential}
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL:?set the approved embedding model}
+  CHAT_MODEL: ${CHAT_MODEL:?set the approved chat model}
+  CHAT_MODELS: ${CHAT_MODELS:?set the approved chat model allow-list}
+  PROVIDER_REQUEST_RETENTION: ${PROVIDER_REQUEST_RETENTION:-none}
+  FEATURE_REPOSITORY_INGESTION: ${FEATURE_REPOSITORY_INGESTION:-false}
+  REPOSITORY_ALLOWED_HOSTS: ${REPOSITORY_ALLOWED_HOSTS:-}
+  INGESTION_LEASE_SECONDS: ${INGESTION_LEASE_SECONDS:-120}
+  INGESTION_OUTBOX_RETRY_SECONDS: ${INGESTION_OUTBOX_RETRY_SECONDS:-30}
+  INGESTION_OUTBOX_CLAIM_TIMEOUT_SECONDS: ${INGESTION_OUTBOX_CLAIM_TIMEOUT_SECONDS:-120}
+  STAGING_ORPHAN_GRACE_SECONDS: ${STAGING_ORPHAN_GRACE_SECONDS:-3600}
+  STORAGE_RETENTION_DAYS: ${STORAGE_RETENTION_DAYS:-30}
+
+x-app-service: &app-service
+  <<: *backend-image
+  environment: *app-environment
+  networks:
+    - backend
+    - data
+    - egress
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set the application database name}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:?set the bootstrap database role}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?set the bootstrap database credential}
+      POSTGRES_RUNTIME_USER: ${POSTGRES_RUNTIME_USER:?set a distinct runtime database role}
+      POSTGRES_RUNTIME_PASSWORD: ${POSTGRES_RUNTIME_PASSWORD:?set a distinct runtime database credential}
+      DATABASE_SCHEMA: ${DATABASE_SCHEMA:-public}
+    configs:
+      - source: postgres_runtime_role_init
+        target: /docker-entrypoint-initdb.d/10-runtime-role.sql
+        mode: 0444
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - data
+
+  redis:
+    image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set a high-entropy Redis password}
+    command:
+      - /bin/sh
+      - -ec
+      - exec redis-server --appendonly yes --requirepass "$${REDIS_PASSWORD}" --maxmemory-policy noeviction
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$${REDIS_PASSWORD}\" redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - data
+
+  minio:
+    image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set a MinIO bootstrap administrator}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set a MinIO bootstrap administrator credential}
+    command: server /data --console-address :9001
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - data
+
+  minio-bootstrap:
+    image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    entrypoint: ["/bin/sh", "-ec"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set a MinIO bootstrap administrator}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set a MinIO bootstrap administrator credential}
+      MINIO_APP_ACCESS_KEY: ${MINIO_APP_ACCESS_KEY:?set a MinIO application access key}
+      MINIO_APP_SECRET_KEY: ${MINIO_APP_SECRET_KEY:?set a MinIO application secret key}
+      MINIO_BUCKET: ${MINIO_BUCKET:?set a private application bucket}
+      MINIO_BOOTSTRAP_MAX_ATTEMPTS: ${MINIO_BOOTSTRAP_MAX_ATTEMPTS:-30}
+      MC_CONFIG_DIR: /tmp/.mc
+    command:
+      - |
+        case "$${MINIO_BOOTSTRAP_MAX_ATTEMPTS}" in
+          ""|*[!0-9]*|0|0*|????*)
+            echo "MINIO_BOOTSTRAP_MAX_ATTEMPTS must be an integer from 1 through 300" >&2
+            exit 1
+            ;;
+        esac
+        if [ "$${MINIO_BOOTSTRAP_MAX_ATTEMPTS}" -gt 300 ]; then
+          echo "MINIO_BOOTSTRAP_MAX_ATTEMPTS must be an integer from 1 through 300" >&2
+          exit 1
+        fi
+        attempt=1
+        until mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" >/dev/null 2>&1; do
+          if [ "$${attempt}" -ge "$${MINIO_BOOTSTRAP_MAX_ATTEMPTS}" ]; then
+            echo "MinIO bootstrap authentication did not become ready" >&2
+            exit 1
+          fi
+          attempt=$$((attempt + 1))
+          sleep 2
+        done
+        mc mb --ignore-existing "local/$${MINIO_BUCKET}" >/dev/null
+        mc anonymous set none "local/$${MINIO_BUCKET}" >/dev/null
+        printf '%s\n%s\n' "$${MINIO_APP_ACCESS_KEY}" "$${MINIO_APP_SECRET_KEY}" | mc admin user add local >/dev/null
+        printf '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetBucketLocation","s3:ListBucket"],"Resource":["arn:aws:s3:::%s"]},{"Effect":"Allow","Action":["s3:GetObject","s3:PutObject","s3:DeleteObject"],"Resource":["arn:aws:s3:::%s/*"]}]}' "$${MINIO_BUCKET}" "$${MINIO_BUCKET}" > /tmp/context-vault-app-policy.json
+        mc admin policy create local context-vault-app /tmp/context-vault-app-policy.json >/dev/null
+        mc admin policy attach local context-vault-app --user "$${MINIO_APP_ACCESS_KEY}" >/dev/null
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - data
+    restart: "no"
+
+  migration:
+    <<: *backend-image
+    command: ["/bin/sh", "-ec", "python -m alembic upgrade head && exec python /opt/context-vault/apply_runtime_grants.py"]
+    environment:
+      DATABASE_URL: ${DATABASE_MIGRATION_URL:?set the migration-owner database URL}
+      DATABASE_SCHEMA: ${DATABASE_SCHEMA:-public}
+      POSTGRES_RUNTIME_USER: ${POSTGRES_RUNTIME_USER:?set a distinct runtime database role}
+      MIGRATION_LOCK_TIMEOUT_MS: ${MIGRATION_LOCK_TIMEOUT_MS:-5000}
+      MIGRATION_STATEMENT_TIMEOUT_MS: ${MIGRATION_STATEMENT_TIMEOUT_MS:-300000}
+    configs:
+      - source: postgres_runtime_grants
+        target: /opt/context-vault/apply_runtime_grants.py
+        mode: 0444
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - data
+    healthcheck:
+      disable: true
+    restart: "no"
+
+  backend:
+    <<: *app-service
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      minio-bootstrap:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *app-service
+    command: ["celery", "-A", "src.workers.celery_app", "worker", "-l", "info"]
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-bootstrap:
+        condition: service_completed_successfully
+    healthcheck:
+      disable: true
+
+  scheduler:
+    <<: *app-service
+    command: ["celery", "-A", "src.workers.celery_app", "beat", "-l", "info", "--schedule", "/tmp/celerybeat-schedule"]
+    depends_on:
+      worker:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+
+configs:
+  postgres_runtime_role_init:
+    file: ./infra/docker/postgres/10-runtime-role.sql
+  postgres_runtime_grants:
+    file: ./infra/docker/postgres/apply_runtime_grants.py
+
+networks:
+  backend:
+    internal: true
+  data:
+    internal: true
+  egress:

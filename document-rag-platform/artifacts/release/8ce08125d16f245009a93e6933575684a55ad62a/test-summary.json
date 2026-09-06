@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "candidate_sha": "8ce08125d16f245009a93e6933575684a55ad62a",
+  "status": "PASS",
+  "github_actions": {
+    "push_workflows_passed": 5,
+    "pull_request_workflows_passed": 5,
+    "candidate_check_runs_passed": 15,
+    "candidate_check_runs_failed": 0
+  },
+  "backend": {
+    "unit_tests_collected": 1513,
+    "unit_tests_skipped": 9,
+    "unit_test_failures": 0,
+    "integration_tests_collected": 34,
+    "integration_tests_skipped": 3,
+    "integration_test_failures": 0,
+    "combined_coverage_percent": 84,
+    "ruff": "PASS",
+    "mypy_ratchet": "PASS"
+  },
+  "frontend": {
+    "unit_passed": 26,
+    "playwright_passed": 20,
+    "lint": "PASS",
+    "typecheck": "PASS",
+    "api_client_drift": "PASS",
+    "production_build": "PASS",
+    "production_image": "PASS",
+    "browser_smoke": "PASS"
+  },
+  "offline_rag": {
+    "contract_smoke": "PASS",
+    "offline_e2e_passed": 55,
+    "permission_version_leakage": 0,
+    "invalid_citation_labels": 0,
+    "p95_latency_ms": 217.2
+  },
+  "strict_component_verifiers": {
+    "components_passed": 10,
+    "components_failed": 0,
+    "aggregate_checks_passed": 15,
+    "aggregate_checks_failed": 0,
+    "aggregate_findings": 0
+  }
+}

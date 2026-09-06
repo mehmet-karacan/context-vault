@@ -6,7 +6,7 @@ and returns a shared ``NormalizedSource`` (Bölüm 6).
 Behavior follows AKTIF_GOREV.md 3.3:
 
 - **Digital vs scanned classification.** Every page's text is extracted with
-  PyPDF2 and a text-coverage ratio is computed (``text pages / total pages``).
+  pypdf and a text-coverage ratio is computed (``text pages / total pages``).
   Coverage drives the ``digital`` / ``scanned`` / ``mixed`` classification
   that is recorded in source metadata together with a per-page coverage table.
   This stage only classifies and records coverage; the actual OCR *routing*
@@ -17,10 +17,10 @@ Behavior follows AKTIF_GOREV.md 3.3:
   order and page + bounding-box information. Docling is imported lazily inside
   the adapter and the dispatcher here degrades gracefully to the fallback when
   Docling is unavailable or fails.
-- **Limited PyPDF2 fallback.** Emits paragraph units carrying an accurate
+- **Limited pypdf fallback.** Emits paragraph units carrying an accurate
   ``page_start``/``page_end`` (0-based page index), best-effort empty
   ``heading_path``, and preserves reading order page by page. The capability
-  marker ``parser_profile="pypdf2-fallback"`` is recorded in metadata.
+  marker ``parser_profile="pypdf-fallback"`` is recorded in metadata.
 - Page numbers are accurate in ``SourceLocator.page_start``/``page_end`` and
   carried into every content unit that originates on a page (3.3: "PDF
   citation sayfa numarası doğru").
@@ -45,7 +45,7 @@ from ...domain.normalized_content import (
 from ...domain.ports import DocumentParser
 
 _PARSER_NAME = "pdf"
-_FALLBACK_PROFILE = "pypdf2-fallback"
+_FALLBACK_PROFILE = "pypdf-fallback"
 _PARSER_VERSION = "0.1.0"
 
 # A page is treated as "having text" when its extracted text has at least this
@@ -73,19 +73,17 @@ class DoclingUnavailableError(PdfParseError):
 
 
 def extract_page_texts(file_path: str, min_text_len: int = _MIN_TEXT_LEN) -> List[Dict]:
-    """Extracts text per page with PyPDF2, returning structured page info.
+    """Extracts text per page with pypdf, returning structured page info.
 
     Each entry: ``{"page": i, "paragraphs": [...], "text", "char_count",
     "has_text"}``. ``page`` is a 0-based page index.
     """
-    from PyPDF2 import PdfReader  # PyPDF2 is the light always-available dep.
+    from pypdf import PdfReader  # pypdf is the light always-available dep.
 
     try:
         reader = PdfReader(file_path)
     except Exception as exc:  # MissingPdfReadError / PyPdfError / OSError ...
-        raise UnreadablePdfError(
-            f"could not read PDF '{file_path}': {exc}"
-        ) from exc
+        raise UnreadablePdfError(f"could not read PDF '{file_path}': {exc}") from exc
 
     pages: List[Dict] = []
     for i, page in enumerate(reader.pages):
@@ -184,7 +182,7 @@ class PdfParser(DocumentParser):
     """Dispatcher parser for ``.pdf`` files (Aşama 3.3).
 
     Prefers the Docling structural adapter when it is available, otherwise
-    falls back to a limited PyPDF2 parser. Always records which parser profile
+    falls back to a limited pypdf parser. Always records which parser profile
     actually handled the file plus the digital/scanned text-coverage metadata.
     """
 
@@ -228,7 +226,7 @@ class PdfParser(DocumentParser):
         except ImportError:
             return False
 
-    # --- PyPDF2 fallback --------------------------------------------------
+    # --- pypdf fallback ---------------------------------------------------
 
     def _parse_fallback(
         self,
@@ -243,7 +241,7 @@ class PdfParser(DocumentParser):
             "parser": _PARSER_NAME,
             "parser_profile": _FALLBACK_PROFILE,
             "parser_version": _PARSER_VERSION,
-            "parser_library": _pypdf2_version(),
+            "parser_library": _pypdf_version(),
             "origin": filename,
             "capabilities": {
                 "headings": False,
@@ -252,9 +250,7 @@ class PdfParser(DocumentParser):
                 "bbox": False,
                 "digital_scanned_classification": True,
                 "ocr": False,
-                "warnings": [
-                    "Docling unavailable or disabled; limited fallback used"
-                ],
+                "warnings": ["Docling unavailable or disabled; limited fallback used"],
             },
         }
         source.metadata.update(coverage_metadata(pages, coverage, classification))
@@ -288,10 +284,10 @@ class PdfParser(DocumentParser):
                 )
 
 
-def _pypdf2_version() -> str:
+def _pypdf_version() -> str:
     try:
-        import PyPDF2
+        import pypdf
 
-        return "pypdf2 " + (getattr(PyPDF2, "__version__", "unknown") or "unknown")
+        return "pypdf " + (getattr(pypdf, "__version__", "unknown") or "unknown")
     except Exception:
-        return "pypdf2 unknown"
+        return "pypdf unknown"

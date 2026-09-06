@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://context-vault.local/schemas/public-dataset-review-receipt-v1.json",
+  "title": "External human review receipt for a public synthetic evaluation dataset",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "receipt_type", "review_id", "decision",
+    "reviewed_by", "reviewer_reference_sha256", "reviewed_at_utc",
+    "dataset_sha256", "dataset_version", "records", "splits",
+    "review_scope"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "receipt_type": {"const": "public-dataset-human-review"},
+    "review_id": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S"},
+    "decision": {"const": "approved"},
+    "reviewed_by": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S"},
+    "reviewer_reference_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "reviewed_at_utc": {"type": "string", "format": "date-time"},
+    "dataset_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "dataset_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "records": {"type": "integer", "minimum": 1},
+    "splits": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$"}
+    },
+    "review_scope": {"const": "all-records-content-labels-and-splits"}
+  }
+}

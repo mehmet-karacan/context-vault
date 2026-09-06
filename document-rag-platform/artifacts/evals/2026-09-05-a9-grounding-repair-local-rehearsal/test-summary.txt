@@ -1,0 +1,13 @@
+PASS focused answer/provider contracts: 69 passed
+PASS full backend on fresh cv3_eval_fullsuite_20260905_07 PostgreSQL, Redis, and separate absent-before-run MinIO bucket: 1041 passed, 2 skipped, 1 known warning in 19.42s
+PASS MyPy ratchet: 14 strict source files
+PASS deterministic OpenAPI contract
+PASS offline dependency lock: 163 packages
+PASS local dependency audit: no known vulnerabilities
+PASS Ruff, format check, py_compile, and git diff --check
+PASS independent code review: APPROVE with no P0/P1/P2
+FAIL-CLOSED run12 pack admission: wrong temporal query-type spelling, no provider invocation, zero DB domain rows, zero bucket objects, retained and not reused
+PASS exact local adversarial rehearsal run13: process exit 0 inside enforced 900-second budget
+PASS absolute safety: every leakage, invalid-citation, prompt-injection, retry, duplicate, orphan, and critical/high counter is zero
+PARTIAL quality: aggregate Recall@5/MRR/citation precision/coverage 0.833333 and answerability false-negative rate 0.166667; unsupported-claim rate improved to 0.0
+OPEN owner-reviewed private pack, exact human approval, independent non-transfer receipt, and first human baseline seal

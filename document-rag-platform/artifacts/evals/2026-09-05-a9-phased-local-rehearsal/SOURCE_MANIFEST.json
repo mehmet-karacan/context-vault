@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "source_revision": "6dbbfbbe5939f710faad3aa06258fe1dc32d2d89",
+  "source_tree": "bcc9b651916e6bd853e1992a0a6882d40e34e9da",
+  "runner_bundle_sha256": "abeaaf8a3d1901318139f41ec215c362470e60336ba3b639056e93fc7d133858",
+  "runner_source_closure_members": 109,
+  "files": {
+    "scripts/run_eval.py": "dd6b61b31ef7d035c165d51d8cb99358a0a4a349fe6e5f73296714b1d1d98539",
+    "scripts/local_benchmark_pack.py": "65fdb215d72e88cd23fef5efe594ae5ada8eb624e7f38d5efa81e9d4db99d2f2",
+    "scripts/local_benchmark_providers.py": "b31cff181edab840a8e8419cb7797ff2b2db6e4405ea82e377fce18c2f739669",
+    "scripts/local_production_case_executor.py": "7d59ba75222a5e64aa9c10a3c02e61bc381f253ba15ec280ec37c821aa442727",
+    "scripts/run_local_production_benchmark.py": "7c0d529bb3b0ab1c06342720b0db9c806f93a68eb1c422563627a27c1a80b2b2",
+    "scripts/run_local_production_benchmark.py.sources.json": "832585ac8cbac60798326349358adb43bc3e1f0e02e468ddb7b340c9fdce6203",
+    "document-rag-platform/services/backend/src/application/answer_service.py": "c1036a87a0b5105833e15159e908cdbf579f59f4b925f79adb53c9ec77b826c8",
+    "document-rag-platform/services/backend/src/application/structured_prompt_contract.py": "ed189c0f357c71f3a902fe77f1cb07d904f10b9ab2093e535aa45f3a03b2d3f2",
+    "document-rag-platform/services/backend/pyproject.toml": "131dd52612166eabd592fa95da4a7a91fe3a932fc741c3e1fe2c4b123066fa0b",
+    "document-rag-platform/services/backend/uv.lock": "92ce53a1346d77d15118e72670a41140cf73a6dc8bf780605bbf799663c9b954",
+    "document-rag-platform/services/backend/tests/evals/test_tier_contracts.py": "e34c196cfe56bee3690199e8c6ff19d72a832668bafc55ec8b9b5e3d551d0213",
+    "document-rag-platform/services/backend/tests/evals/test_local_benchmark_pack.py": "15576c6b6f8d4ca8c4d67cbeab8a622dcd0e2f427d4716beb0a230bfa7f70e2e",
+    "document-rag-platform/services/backend/tests/evals/test_local_benchmark_providers.py": "70cab4f02da7f4286e05a28ae32d2c5ad6b6eea3e844cb75733cdee73b9484c3",
+    "document-rag-platform/services/backend/tests/evals/test_local_production_benchmark.py": "ed318b8e2dcd2265b9e6cfa27a94906c6ae15574ef5e3ca7c223559d61b605e2",
+    "document-rag-platform/services/backend/tests/evals/test_local_production_case_executor.py": "03b6b9cf28462af33abcbd6c2566f8018cd0da1342ad1e023bbab4fba32ffadc",
+    "document-rag-platform/services/backend/tests/test_answer_service.py": "ec1d8687395860c464cead87fae2086902d3f2915046a96e5f89e88c3e3e46a7",
+    "document-rag-platform/services/backend/tests/test_structured_answer.py": "f54c786e4f01cc19d6c1078001e79abbb63ef74528f7d1ae2e9c8124846490eb"
+  }
+}

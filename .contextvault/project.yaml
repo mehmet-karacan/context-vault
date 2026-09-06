@@ -1,0 +1,52 @@
+schema_version: 1
+project_id: "3e1d6a52-f72e-4f45-982a-b64fa47fa48d"
+human:
+  repository:
+    root: "."
+    remote: "https://github.com/mehmet-karacan/context-vault.git"
+  context_sources:
+    - path: "AKTIF_GOREV.md"
+      load_tier: "MUST_LOAD"
+    - path: "PROJECT_CONTEXT.md"
+      load_tier: "MUST_LOAD"
+    - path: "SECURITY.md"
+      load_tier: "MUST_LOAD"
+    - path: "document-rag-platform/docs/adr"
+      load_tier: "SHOULD_LOAD_IF_RELEVANT"
+    - path: "document-rag-platform/docs/runbooks"
+      load_tier: "RETRIEVE_ON_DEMAND"
+    - path: "document-rag-platform/services/backend/src"
+      load_tier: "RETRIEVE_ON_DEMAND"
+    - path: "document-rag-platform/artifacts"
+      load_tier: "NEVER_AUTO_LOAD"
+  ignored_paths:
+    - ".git"
+    - ".venv"
+    - "document-rag-platform/services/backend/.venv"
+    - "document-rag-platform/apps/web/node_modules"
+  token_budget:
+    context_window: 32768
+    reserved_output: 8192
+    safety_margin: 2048
+  provider_data_policy:
+    remote_allowed_classifications:
+      - "PUBLIC"
+      - "INTERNAL"
+    local_allowed_classifications:
+      - "PUBLIC"
+      - "INTERNAL"
+      - "CONFIDENTIAL"
+      - "RESTRICTED"
+  validation_commands:
+    - "cd document-rag-platform/services/backend && uv run pytest -q -m 'not integration'"
+    - "cd document-rag-platform/services/backend && uv run ruff check src tests"
+    - "git diff --check"
+  approval_policy:
+    owner: "mehmet-karacan"
+    approvers:
+      - "mehmet-karacan"
+    human_required_for:
+      - "security_policy"
+      - "authority_change"
+      - "production_data_migration"
+      - "release"

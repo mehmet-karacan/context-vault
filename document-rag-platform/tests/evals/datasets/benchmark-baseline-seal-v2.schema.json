@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://context-vault.local/schemas/benchmark-baseline-seal-v2.json",
+  "title": "Human-approved real benchmark baseline seal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "seal_id", "sealed_by", "sealed_at_utc", "status",
+    "report_sha256", "embedding_provider", "embedding_model",
+    "generation_provider", "generation_model", "dataset_sha256",
+    "embedding_profile_hash", "prompt_hash", "config_hash", "environment_hash"
+  ],
+  "properties": {
+    "schema_version": {"const": "2.0"},
+    "seal_id": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S"},
+    "sealed_by": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S"},
+    "sealed_at_utc": {"type": "string", "format": "date-time"},
+    "status": {"const": "approved"},
+    "report_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "embedding_provider": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S"},
+    "embedding_model": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S"},
+    "generation_provider": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S"},
+    "generation_model": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S"},
+    "dataset_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "embedding_profile_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "prompt_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "config_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "environment_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

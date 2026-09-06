@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "candidate_sha": "8ce08125d16f245009a93e6933575684a55ad62a",
+  "status": "PASS",
+  "expected_head": "cv3_00000007",
+  "observed_heads": [
+    "cv3_00000007"
+  ],
+  "blank_upgrade": "PASS",
+  "restored_schema_compatibility": "PASS",
+  "schema_sha256": "c7ebf3bab2de3eda1bdfd1b911b58c3adbc441fe85b6365729af228f0113ecd7",
+  "measured_invariant_violation_sum": 0,
+  "provider_credentials_loaded": false,
+  "startup_ddl": false,
+  "existing_user_data_mutated": false,
+  "github_run_id": 34012683015
+}

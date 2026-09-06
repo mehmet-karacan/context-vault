@@ -1,0 +1,19 @@
+{
+  "classification": "synthetic",
+  "samples": [
+    {
+      "api_available": true,
+      "api_latency_ms": 2500,
+      "backup_age_seconds": 3600,
+      "benchmark_regression": false,
+      "ingestion_completed": true,
+      "ingestion_duration_seconds": 40,
+      "invalid_citation_count": 0,
+      "outbox_oldest_age_seconds": 10,
+      "permission_leakage_count": 0,
+      "restore_drill_succeeded": true,
+      "restore_drill_age_seconds": 86400
+    }
+  ],
+  "schema": "context-vault-slo-synthetic-samples/v1"
+}

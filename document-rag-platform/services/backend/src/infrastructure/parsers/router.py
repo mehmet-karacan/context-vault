@@ -32,12 +32,11 @@ end-to-end functional.
 from __future__ import annotations
 
 import codecs
-import concurrent.futures
-import mimetypes
+import multiprocessing
 import os
 import re
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+import zipfile
 from typing import Any, Dict, List, Optional, Tuple
 
 from ...config import settings
@@ -75,6 +74,16 @@ class ParserOutputLimitError(ParserError):
     """Raised when a parser's output exceeds the configured max char count."""
 
 
+def _parse_in_child(connection, parser, file_path, filename, options) -> None:
+    """Run untrusted parser work in a process that the parent can terminate."""
+    try:
+        connection.send(("ok", parser.parse(file_path, filename, options)))
+    except BaseException as exc:
+        connection.send(("error", type(exc).__name__, str(exc)))
+    finally:
+        connection.close()
+
+
 # --- Signal classification tables -----------------------------------------
 
 _EXTENSION_TYPES: Dict[str, str] = {
@@ -96,20 +105,82 @@ _EXTENSION_TYPES: Dict[str, str] = {
 
 # Source-code extensions routed to the "code" parser (Aşama 7.5).
 _CODE_EXTENSIONS: Tuple[str, ...] = (
-    ".py", ".pyi", ".pyw",
-    ".java", ".kt", ".kts", ".scala",
-    ".go", ".rs",
-    ".c", ".h", ".cc", ".cpp", ".cxx", ".c++", ".hh", ".hpp", ".hxx",
+    ".py",
+    ".pyi",
+    ".pyw",
+    ".java",
+    ".kt",
+    ".kts",
+    ".scala",
+    ".go",
+    ".rs",
+    ".c",
+    ".h",
+    ".cc",
+    ".cpp",
+    ".cxx",
+    ".c++",
+    ".hh",
+    ".hpp",
+    ".hxx",
     ".cs",
-    ".js", ".mjs", ".cjs", ".jsx", ".ts", ".mts", ".cts", ".tsx",
-    ".rb", ".php", ".swift", ".m", ".mm",
-    ".sh", ".bash", ".zsh", ".fish", ".ps1", ".bat", ".cmd",
-    ".sql", ".plsql", ".pks", ".pkb", ".prc", ".fnc", ".trg", ".vw",
-    ".json", ".yaml", ".yml", ".toml", ".xml",
-    ".html", ".htm", ".css", ".scss", ".sass", ".less",
-    ".tf", ".hcl", ".proto", ".graphql", ".gql", ".r", ".lua",
-    ".ex", ".exs", ".erl", ".hrl", ".hs", ".clj", ".cljs", ".dart",
-    ".vue", ".svelte", ".dockerfile",
+    ".js",
+    ".mjs",
+    ".cjs",
+    ".jsx",
+    ".ts",
+    ".mts",
+    ".cts",
+    ".tsx",
+    ".rb",
+    ".php",
+    ".swift",
+    ".m",
+    ".mm",
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".fish",
+    ".ps1",
+    ".bat",
+    ".cmd",
+    ".sql",
+    ".plsql",
+    ".pks",
+    ".pkb",
+    ".prc",
+    ".fnc",
+    ".trg",
+    ".vw",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".xml",
+    ".html",
+    ".htm",
+    ".css",
+    ".scss",
+    ".sass",
+    ".less",
+    ".tf",
+    ".hcl",
+    ".proto",
+    ".graphql",
+    ".gql",
+    ".r",
+    ".lua",
+    ".ex",
+    ".exs",
+    ".erl",
+    ".hrl",
+    ".hs",
+    ".clj",
+    ".cljs",
+    ".dart",
+    ".vue",
+    ".svelte",
+    ".dockerfile",
 )
 for _ext in _CODE_EXTENSIONS:
     _EXTENSION_TYPES.setdefault(_ext, "code")
@@ -209,6 +280,7 @@ def _type_from_extension(filename: Optional[str]) -> Optional[str]:
 
 
 # --- Concrete parser implementations --------------------------------------
+
 
 def _base_source(source_type: str, title: Optional[str]) -> NormalizedSource:
     return NormalizedSource(
@@ -318,10 +390,14 @@ def _decode_bytes(raw: bytes) -> Tuple[str, str, Dict[str, Any]]:
             return text, "utf-8", info
         return text, candidate, info
 
-    return raw.decode("utf-8", errors="replace"), "utf-8", {
-        **info,
-        "fallback": "replace",
-    }
+    return (
+        raw.decode("utf-8", errors="replace"),
+        "utf-8",
+        {
+            **info,
+            "fallback": "replace",
+        },
+    )
 
 
 def _detect_language(text: str) -> Optional[str]:
@@ -436,7 +512,7 @@ def _fence_info(stripped: str) -> Optional[Tuple[str, Optional[str]]]:
         marker = "~~~"
     if marker is None:
         return None
-    rest = stripped[len(marker):].strip()
+    rest = stripped[len(marker) :].strip()
     return marker, (rest or None)
 
 
@@ -770,7 +846,6 @@ class ParserRouter:
             if max_output_chars is None
             else max_output_chars
         )
-        self._executor = ThreadPoolExecutor(max_workers=4)
 
     # --- detection --------------------------------------------------------
 
@@ -782,6 +857,39 @@ class ParserRouter:
                 return fh.read(n)
         except OSError:
             return b""
+
+    @staticmethod
+    def _zip_source_type(file_path: Optional[str]) -> Optional[str]:
+        """Identify an OOXML package by structure without extracting it."""
+        if not file_path:
+            return None
+        try:
+            with zipfile.ZipFile(file_path) as archive:
+                names = set(archive.namelist())
+        except (OSError, zipfile.BadZipFile):
+            return None
+        if "[Content_Types].xml" not in names:
+            return None
+        if "word/document.xml" in names:
+            return "docx"
+        return None
+
+    @staticmethod
+    def _is_extensionless_text(file_path: Optional[str]) -> bool:
+        if not file_path:
+            return False
+        try:
+            with open(file_path, "rb") as handle:
+                probe = handle.read(8192)
+        except OSError:
+            return False
+        if not probe or b"\x00" in probe:
+            return False
+        try:
+            probe.decode("utf-8")
+        except UnicodeDecodeError:
+            return False
+        return True
 
     def detect_source_type(
         self,
@@ -795,18 +903,26 @@ class ParserRouter:
         magic_type = _classify_magic(self._read_magic(file_path))
 
         if magic_type == "zip":
-            # ZIP container: only route to DOCX when an office document is
-            # already suggested by extension or MIME; otherwise ambiguous.
-            if ext_type == "docx":
-                magic_type = "docx"
-            elif mime_type_derived == "docx":
-                magic_type = "docx"
-            else:
-                magic_type = None
+            # ZIP is a container, not proof of DOCX. Trust the package layout
+            # and refuse generic/corrupt ZIP files even when renamed .docx.
+            magic_type = self._zip_source_type(file_path)
+            if magic_type is None and (
+                ext_type == "docx" or mime_type_derived == "docx"
+            ):
+                raise AmbiguousSourceTypeError(
+                    "ZIP payload does not contain a supported DOCX structure"
+                )
 
         if magic_type:
             # Actual detected content wins over any claimed extension/MIME.
             return magic_type
+
+        if (
+            not _extension_from_filename(filename)
+            and mime_type_derived is None
+            and self._is_extensionless_text(file_path)
+        ):
+            return "plain_text"
 
         if ext_type and mime_type_derived and ext_type != mime_type_derived:
             # Signals conflict with no authoritative magic -> do not trust
@@ -844,14 +960,36 @@ class ParserRouter:
                 f"no parser registered for detected type {source_type!r}"
             )
 
-        future = self._executor.submit(parser.parse, file_path, filename, options or {})
-        try:
-            result = future.result(timeout=self.timeout_seconds)
-        except concurrent.futures.TimeoutError as exc:
+        methods = multiprocessing.get_all_start_methods()
+        method = "forkserver" if "forkserver" in methods else "spawn"
+        context = multiprocessing.get_context(method)
+        parent, child = context.Pipe(duplex=False)
+        process = context.Process(
+            target=_parse_in_child,
+            args=(child, parser, file_path, filename, options or {}),
+            daemon=True,
+        )
+        process.start()
+        child.close()
+        if not parent.poll(self.timeout_seconds):
+            process.terminate()
+            process.join(timeout=1)
+            if process.is_alive():
+                process.kill()
+                process.join(timeout=1)
+            parent.close()
             raise ParserTimeoutError(
                 f"parser for {source_type!r} exceeded timeout "
                 f"{self.timeout_seconds}s"
-            ) from exc
+            )
+        payload = parent.recv()
+        parent.close()
+        process.join(timeout=1)
+        if payload[0] == "error":
+            raise ParserError(
+                f"parser for {source_type!r} failed ({payload[1]}): {payload[2]}"
+            )
+        result = payload[1]
 
         if not isinstance(result, NormalizedSource):
             raise ParserError(

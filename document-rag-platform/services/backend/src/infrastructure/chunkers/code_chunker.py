@@ -30,7 +30,12 @@ from typing import Any, List, Optional
 
 from ...config import settings
 from ...domain.normalized_content import ContentUnit, NormalizedSource, UnitType
-from .base import ChunkCandidate, ChunkerProfile, NaiveTokenCounter, build_embedding_text
+from .base import (
+    ChunkCandidate,
+    ChunkerProfile,
+    NaiveTokenCounter,
+    build_embedding_text,
+)
 from .plsql_chunker import PLSQL_LANGS, PlSqlChunker
 
 __all__ = ["CodeChunker"]
@@ -134,7 +139,10 @@ class CodeChunker:
                         language=language,
                         content="\n".join(current),
                         locator=self._locator_for(
-                            source, file_path, current_start, current_start + len(current) - 1
+                            source,
+                            file_path,
+                            current_start,
+                            current_start + len(current) - 1,
                         ),
                         prefix_lines=current_start,
                         symbols=symbols,
@@ -156,7 +164,10 @@ class CodeChunker:
                     language=language,
                     content="\n".join(current),
                     locator=self._locator_for(
-                        source, file_path, current_start, current_start + len(current) - 1
+                        source,
+                        file_path,
+                        current_start,
+                        current_start + len(current) - 1,
                     ),
                     prefix_lines=current_start,
                     symbols=symbols,
@@ -176,17 +187,23 @@ class CodeChunker:
 
     # --- per-unit path (registry, fenced code inside a markdown source) -----
 
-    def chunk(self, unit: ContentUnit, source: NormalizedSource) -> List[ChunkCandidate]:
+    def chunk(
+        self, unit: ContentUnit, source: NormalizedSource
+    ) -> List[ChunkCandidate]:
         code = unit.text if unit.text else (unit.markdown or "")
         if not code.strip():
             return []
         heading_path = list(unit.hierarchy.heading_path) if unit.hierarchy else []
         locator = unit.locator.to_dict() if unit.locator else {}
-        language = unit.metadata.get("language") or source.language or source.metadata.get(
-            "language"
+        language = (
+            unit.metadata.get("language")
+            or source.language
+            or source.metadata.get("language")
         )
         if self.token_counter.count(code) <= self.max_tokens:
-            return [self._make_chunk(source, unit, code, language, heading_path, locator)]
+            return [
+                self._make_chunk(source, unit, code, language, heading_path, locator)
+            ]
 
         lines = code.splitlines()
         if not lines:
@@ -200,7 +217,12 @@ class CodeChunker:
             if current and current_tokens + block_tokens > self.max_tokens:
                 chunks.append(
                     self._make_chunk(
-                        source, unit, "\n".join(current), language, heading_path, locator
+                        source,
+                        unit,
+                        "\n".join(current),
+                        language,
+                        heading_path,
+                        locator,
                     )
                 )
                 current = []
@@ -263,7 +285,9 @@ class CodeChunker:
         prefix_lines: int,
         symbols: List[dict],
     ) -> ChunkCandidate:
-        symbol = self._containing_symbol(symbols, locator.get("line_start"), locator.get("line_end"))
+        symbol = self._containing_symbol(
+            symbols, locator.get("line_start"), locator.get("line_end")
+        )
         header = self._generic_header(
             file_path=file_path,
             language=language,

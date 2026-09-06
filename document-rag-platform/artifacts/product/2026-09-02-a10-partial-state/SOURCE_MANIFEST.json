@@ -1,0 +1,54 @@
+[
+  {
+    "path": "AKTIF_GOREV.md",
+    "sha256": "238ef3956a91db2eddc975e5ddb832d80e6b5998a99c69c103da483fbac073b8"
+  },
+  {
+    "path": "document-rag-platform/apps/web/features/dashboard/WorkspaceDashboard.tsx",
+    "sha256": "4a98850fd02b6ed47d6ccb92d952043eca6ee552036b8f023a3eb447fe333c47"
+  },
+  {
+    "path": "document-rag-platform/apps/web/features/documents/DocumentGrid.tsx",
+    "sha256": "da53db45f8c1919f9913df49fecff2261af41552f04f797b4c9bb3db89850004"
+  },
+  {
+    "path": "document-rag-platform/apps/web/features/documents/ResourceNotice.tsx",
+    "sha256": "49e53128869fba5e61954f0d0d5111526b5b028735cf5102332f819c9999103b"
+  },
+  {
+    "path": "document-rag-platform/apps/web/features/documents/documentState.test.ts",
+    "sha256": "52dd004cc788f7646e3b43f83987774fdcece1b5e1f13a3401b6f233eed1313d"
+  },
+  {
+    "path": "document-rag-platform/apps/web/features/documents/documentState.ts",
+    "sha256": "4ac26b1e43783880a72e10fe17c8a2ca4869f1837c8c4ad0c87c8d43d0ad6cb7"
+  },
+  {
+    "path": "document-rag-platform/apps/web/features/documents/useDocuments.ts",
+    "sha256": "a07e198eee188b927bc92a04b54a1219ab5677e99b1591cb9c05359d20cc02d5"
+  },
+  {
+    "path": "document-rag-platform/apps/web/features/ingestion/JobBoard.tsx",
+    "sha256": "950d4fd0c2ca8f633284e95ce5f3e6b0fd860f8bf0c6dea1df8b458ee76966df"
+  },
+  {
+    "path": "document-rag-platform/apps/web/features/projects/useProjects.ts",
+    "sha256": "2c2c161afa644a4013139f4adff02424c70f08b1e442910d35d766bd57ec378c"
+  },
+  {
+    "path": "document-rag-platform/apps/web/lib/api/client.test.ts",
+    "sha256": "50fae213af33698dafa98fcd67cb493141a9087b3cdae75e813780394a3f34de"
+  },
+  {
+    "path": "document-rag-platform/apps/web/lib/api/client.ts",
+    "sha256": "11d5c8df26bb14e4b6fe44d6494c9654846ceb783c535a3d7eb9b14871b8d270"
+  },
+  {
+    "path": "document-rag-platform/apps/web/tests/e2e/home.spec.ts",
+    "sha256": "c3c62c3204c1f24f33c48e3f03d377e9c1d07f4900bf0f53304629fe58a36a43"
+  },
+  {
+    "path": "document-rag-platform/docs/runbooks/web-product-contract.md",
+    "sha256": "a3159a906d8759bc818cb834a942b92afdd11efda7c946fda5656afb92d9a888"
+  }
+]

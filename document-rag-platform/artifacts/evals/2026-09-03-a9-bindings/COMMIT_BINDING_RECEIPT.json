@@ -1,0 +1,118 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "verify",
+  "operation_id": "cv3-a9-bindings-20260903-002",
+  "work_item_id": "CV3-A9-EVAL",
+  "attempt_id": "post-commit-binding-001",
+  "actor": "codex-local-agent",
+  "tool_adapter": "local-cli-git-pytest",
+  "started_at": "2026-09-03T01:55:00Z",
+  "finished_at": "2026-09-03T01:55:00Z",
+  "time_scope": "Evidence-binding timestamp; post-commit tier pytest completed immediately before receipt assembly.",
+  "baseline_revision": "518f7f694c83355ed483b062ce0331b6cd8048da",
+  "result_revision": "5a945f5581a120519d5e52f312795aee7d4c2c03",
+  "scope_hash": "3196f0b51ad6d7ca94fc52ab1bdeb8b62e14fad35dc2f771f5d5daec6e3050bc",
+  "context_manifest_hash": "cbfca52d128343246a9128ce85af247b67c4450fc66fdb069231b21db3d1f0cd",
+  "idempotency_key_hash": null,
+  "commands": [
+    {
+      "command": "pytest -q document-rag-platform/services/backend/tests/evals/test_tier_contracts.py",
+      "exit_code": 0,
+      "result": "83 passed"
+    },
+    {
+      "command": "Verify seven SOURCE_MANIFEST hashes against checked-out implementation commit; git status --short",
+      "exit_code": 0,
+      "result": "PASS; worktree clean before this receipt"
+    }
+  ],
+  "exit_status": 0,
+  "tests": [
+    {
+      "name": "post-commit A9 tier contracts",
+      "passed": 83,
+      "failed": 0
+    },
+    {
+      "name": "source fingerprint binding",
+      "result": "PASS",
+      "files": 7
+    },
+    {
+      "name": "full backend and verifier gates",
+      "source": "PRECOMMIT_RECEIPT.json",
+      "binding": "Exact tested source bytes match implementation commit 5a945f5581a120519d5e52f312795aee7d4c2c03."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "CLI_PROBES.json",
+      "sha256": "693327af5694b0b779442a100a4420ebce4121200322a989c21514ecf0a44ed0",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "INDEPENDENT_REVIEW.json",
+      "sha256": "48400e5aad9af0d5d0e3ef5d68a02b9e08e94a2873d1cb6ebf2aea6e0406601f",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "PRECOMMIT_RECEIPT.json",
+      "sha256": "676e6635014f9010cf668ba0e9dde8ae2cfc5704fd2aa7b76041a0c0733c7232",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "SOURCE_MANIFEST.json",
+      "sha256": "3196f0b51ad6d7ca94fc52ab1bdeb8b62e14fad35dc2f771f5d5daec6e3050bc",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "backend-junit.xml",
+      "sha256": "e6e2f14e80c58acdccdde8f61006fb504fa4e630acc38350d356435d96d1f0af",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "public-tree.json",
+      "sha256": "4f9f648c2125a2a63f7b361b0f5ac7cfc8200d323fb3b0a90a19803cacf990d0",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "tier-junit.xml",
+      "sha256": "8da68d5999ca26778492cb018491de290d854ddcb84952e8dc62d1ba8397249f",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    }
+  ],
+  "security_redactions": [
+    "JUnit hostname and absolute paths removed",
+    "Synthetic-only local admission evidence",
+    "No credential values, private pack content or provider output recorded"
+  ],
+  "rollback": {
+    "schema_change": false,
+    "data_reset_required": false,
+    "instruction": "Revert this receipt-only commit if needed; leave application data, prior receipts and fail-closed release decisions unchanged."
+  },
+  "result": "PASS",
+  "phase_closed": false,
+  "independent_review": true,
+  "scope": "Local admission fix and exact revision binding, not real-provider quality or final baseline approval.",
+  "open_gates": [
+    "Human owner-reviewed private pack and classification",
+    "Explicit provider/model/runner/budget/environment authorization",
+    "Audited real-provider evidence and human baseline seal",
+    "A11-A13, remote CI and final independent verification"
+  ],
+  "remote_actions": {
+    "provider_call": false,
+    "push": false,
+    "pull_request": false,
+    "merge": false,
+    "release": false
+  }
+}

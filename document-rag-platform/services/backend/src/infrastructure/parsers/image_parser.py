@@ -44,7 +44,6 @@ keeping the pipeline forward-compatible.
 from __future__ import annotations
 
 import mimetypes
-import os
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -60,7 +59,16 @@ from ...domain.normalized_content import (
 from ...domain.ports import DocumentParser
 from .ocr_routing import OcrRoutingConfig, should_ocr
 
-_IMAGE_SUPPORTED_EXTS = (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp", ".gif")
+_IMAGE_SUPPORTED_EXTS = (
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".tif",
+    ".tiff",
+    ".bmp",
+    ".webp",
+    ".gif",
+)
 
 _PARSER_NAME = "image"
 _PARSER_VERSION = "0.1.0"
@@ -195,8 +203,7 @@ class ImageParser(DocumentParser):
         source.metadata["preprocessing_steps"] = list(result.preprocessing_steps or [])
 
         needs_review = (
-            result.confidence is None
-            or result.confidence < self._min_confidence
+            result.confidence is None or result.confidence < self._min_confidence
         )
         source.metadata["needs_review"] = needs_review
         if needs_review:
@@ -222,7 +229,9 @@ class ImageParser(DocumentParser):
             return None, "no OCR provider available"
         languages = [source.language] if source.language else []
         try:
-            raw = provider.extract(file_path, languages=languages, options=options or None)
+            raw = provider.extract(
+                file_path, languages=languages, options=options or None
+            )
         except Exception as exc:  # noqa: BLE001 - provider failure must not crash parse
             return None, f"{type(exc).__name__}: {exc}"
         try:

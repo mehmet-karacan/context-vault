@@ -1,0 +1,101 @@
+{
+  "schema_version": "1.0",
+  "policy_id": "context-vault-a11-macbook-production-slo",
+  "status": "ACTIVE_BASELINE_BOUND",
+  "baseline_receipt_sha256": "5ce366549091597cc4bacd47339f4a946d3e2e1987c3e36e6a91d1ae3dcb868a",
+  "maximum_measurement_age_seconds": 900,
+  "on_call": {
+    "primary": "@mehmet-karacan via GitHub Issues",
+    "escalation_target": "repository owner @mehmet-karacan via GitHub Issues"
+  },
+  "slos": [
+    {
+      "name": "api_availability_percent",
+      "comparator": "at_least",
+      "threshold": 99.9,
+      "owner": "@mehmet-karacan",
+      "escalation": "Open a P1 GitHub issue and freeze feature releases while the error budget is exhausted.",
+      "runbook": "document-rag-platform/docs/runbooks/degraded-readiness.md"
+    },
+    {
+      "name": "api_p95_latency_ms",
+      "comparator": "at_most",
+      "threshold": 2000,
+      "owner": "@mehmet-karacan",
+      "escalation": "Open a P1 GitHub issue after two consecutive five-minute breaches.",
+      "runbook": "document-rag-platform/docs/runbooks/degraded-readiness.md"
+    },
+    {
+      "name": "ingestion_completion_p95_seconds",
+      "comparator": "at_most",
+      "threshold": 900,
+      "owner": "@mehmet-karacan",
+      "escalation": "Stop new ingestion admission and inspect the oldest active stage receipt.",
+      "runbook": "document-rag-platform/docs/runbooks/stuck-job-outbox-lease.md"
+    },
+    {
+      "name": "ingestion_failure_percent",
+      "comparator": "at_most",
+      "threshold": 1,
+      "owner": "@mehmet-karacan",
+      "escalation": "Freeze ingestion changes and classify failed stages before retrying.",
+      "runbook": "document-rag-platform/docs/runbooks/stuck-job-outbox-lease.md"
+    },
+    {
+      "name": "outbox_oldest_age_seconds",
+      "comparator": "at_most",
+      "threshold": 300,
+      "owner": "@mehmet-karacan",
+      "escalation": "Stop release traffic changes and inspect leases, dispatcher health and idempotency receipts.",
+      "runbook": "document-rag-platform/docs/runbooks/stuck-job-outbox-lease.md"
+    },
+    {
+      "name": "permission_leakage_count",
+      "comparator": "exactly",
+      "threshold": 0,
+      "owner": "@mehmet-karacan",
+      "escalation": "Declare a security incident, stop affected access paths and preserve content-free audit evidence.",
+      "runbook": "document-rag-platform/docs/runbooks/security-incident.md"
+    },
+    {
+      "name": "invalid_citation_count",
+      "comparator": "exactly",
+      "threshold": 0,
+      "owner": "@mehmet-karacan",
+      "escalation": "Disable the affected answer capability and run the approved citation regression pack.",
+      "runbook": "document-rag-platform/docs/runbooks/structured-answers.md"
+    },
+    {
+      "name": "backup_age_seconds",
+      "comparator": "at_most",
+      "threshold": 21600,
+      "owner": "@mehmet-karacan",
+      "escalation": "Stop release promotion and create a new verified backup without deleting the last good point.",
+      "runbook": "document-rag-platform/docs/runbooks/a11-backup-restore.md"
+    },
+    {
+      "name": "restore_drill_age_seconds",
+      "comparator": "at_most",
+      "threshold": 2592000,
+      "owner": "@mehmet-karacan",
+      "escalation": "Stop release promotion and perform a fresh-target restore drill.",
+      "runbook": "document-rag-platform/docs/runbooks/a11-backup-restore.md"
+    },
+    {
+      "name": "restore_drill_success_percent",
+      "comparator": "at_least",
+      "threshold": 100,
+      "owner": "@mehmet-karacan",
+      "escalation": "Stop release promotion and diagnose the failed fresh-target restore before retrying.",
+      "runbook": "document-rag-platform/docs/runbooks/a11-backup-restore.md"
+    },
+    {
+      "name": "real_benchmark_regression_percent",
+      "comparator": "at_most",
+      "threshold": 20,
+      "owner": "@mehmet-karacan",
+      "escalation": "Reject the candidate and prioritize retrieval or provider reliability analysis.",
+      "runbook": "document-rag-platform/docs/runbooks/retrieval.md"
+    }
+  ]
+}

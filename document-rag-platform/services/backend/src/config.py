@@ -10,7 +10,7 @@ previous ad-hoc ``os.getenv`` calls scattered across ``db.py`` / ``llm.py``
 — this module only centralizes and types them.
 """
 
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -33,20 +33,31 @@ class Settings(BaseSettings):
     # and FEATURE_RETRIEVAL_DEBUG are only honored outside production so a
     # production deployment can never accidentally expose stack traces or the
     # retrieval-debug surface (AKTIF_GOREV.md §9.5 / §11).
-    APP_ENV: str = "development"
+    APP_ENV: str = "local"
+    BIND_HOST: str = "127.0.0.1"
+    AUTH_MODE: Literal["disabled", "api_key", "oidc"] = "disabled"
+    API_KEY_PEPPER: Optional[str] = None
     API_DEBUG: bool = False
     FEATURE_RETRIEVAL_DEBUG: bool = True
+    # Content-free process metrics are exported through a shared StatsD sink.
+    # Local/test defaults remain side-effect free; staging/production runtime
+    # validation requires an explicit sink.
+    METRICS_EXPORT_MODE: Literal["disabled", "statsd"] = "disabled"
+    METRICS_STATSD_HOST: Optional[str] = None
+    METRICS_STATSD_PORT: int = 8125
+    OPERATIONAL_BACKUP_RECEIPT_PATH: Optional[str] = None
+    OPERATIONAL_RESTORE_RECEIPT_PATH: Optional[str] = None
+    OPERATIONAL_OBJECT_SCAN_LIMIT: int = 10_000
     # Comma-separated allow-list of CORS origins. Defaults to DEV_CORS_ORIGINS
     # in development and to an empty (restrictive) list in production — never
     # "*" (AKTIF_GOREV.md §9.5: "CORS'u üretim için `*` bırakmama").
     CORS_ALLOW_ORIGINS: Optional[str] = None
 
-    # --- Rate limiting (Aşama 9.5) --------------------------------------
-    # Lightweight in-memory sliding-window rate limiter keyed by client IP,
-    # applied to the expensive chat/upload/retrieval endpoints. Relaxed by
-    # default (disabled) so existing deployments are unaffected; enable via
-    # env in production (§11 style).
+    # --- Rate limiting ---------------------------------------------------
+    # Staging/production runtime validation requires the Redis backend and an
+    # enabled policy. Memory mode is intentionally local-only.
     RATE_LIMIT_ENABLED: bool = False
+    RATE_LIMIT_BACKEND: Literal["memory", "redis"] = "memory"
     RATE_LIMIT_MAX_REQUESTS: int = 60
     RATE_LIMIT_WINDOW_SECONDS: int = 60
     RATE_LIMIT_KEY_PREFIX: str = "rl"
@@ -56,9 +67,12 @@ class Settings(BaseSettings):
     # missing we want a loud, immediate startup failure rather than
     # silently trying to reach a bogus localhost database.
     DATABASE_URL: str
+    # Runtime deployment identity asserted against PostgreSQL ``current_user``.
+    # Production must set this to the dedicated, least-privilege login role.
+    EXPECTED_DATABASE_ROLE: Optional[str] = None
 
     # --- LLM gateway (LiteLLM-compatible) ------------------------------
-    LITELLM_BASE_URL: str = "https://aihub-api.turktelekom.com.tr/v1"
+    LITELLM_BASE_URL: str = "https://llm-gateway.example.invalid/v1"
     # Required. There is no default credential; failing fast at startup
     # is clearer than a downstream 401 from the gateway mid-request.
     LITELLM_API_KEY: str
@@ -67,6 +81,17 @@ class Settings(BaseSettings):
     # Comma-separated allow-list of chat models the UI may request.
     # None (unset) means "fall back to CHAT_MODEL only".
     CHAT_MODELS: Optional[str] = None
+    ANSWER_CONTEXT_WINDOW_TOKENS: int = 32768
+    ANSWER_RESERVED_OUTPUT_TOKENS: int = 2048
+    ANSWER_SAFETY_MARGIN_TOKENS: int = 1024
+    ANSWER_SCHEMA_REPAIR_ATTEMPTS: int = 1
+    ANSWER_PROMPT_TEMPLATE_VERSION: str = "answer-envelope-v1"
+    ANSWER_EVIDENCE_RETENTION_DAYS: int = 30
+    PROVIDER_REQUEST_RETENTION: Literal["none", "metadata_only"] = "none"
+    # Required by default: an unreachable generation/embedding gateway closes
+    # readiness. Deployments with a genuinely optional provider capability may
+    # opt into a truthful HTTP 200 `degraded` readiness response instead.
+    PROVIDER_REQUIRED_FOR_READINESS: bool = True
 
     # --- Object storage (MinIO / S3-compatible) ------------------------
     # Required. docker-compose.yml already injects ENDPOINT/ACCESS_KEY/
@@ -76,6 +101,12 @@ class Settings(BaseSettings):
     MINIO_ACCESS_KEY: str = "minioadmin"
     MINIO_SECRET_KEY: str = "minioadmin"
     MINIO_BUCKET: str = "context-vault"
+    # Base64-encoded 256-bit key used for application-layer AES-GCM. The key
+    # belongs in the deployment secret store, never in source control.
+    OBJECT_STORAGE_ENCRYPTION_KEY: Optional[str] = None
+    # Existing pre-encryption artifacts remain readable during the bounded
+    # migration window; every new write is encrypted regardless of this flag.
+    OBJECT_STORAGE_ALLOW_LEGACY_PLAINTEXT_READS: bool = False
 
     # --- Task queue (Redis / Celery) -----------------------------------
     # Used as both Celery broker and result backend. docker-compose.yml
@@ -101,6 +132,11 @@ class Settings(BaseSettings):
     # than being treated as a cheap request timeout.
     INGESTION_TASK_SOFT_TIME_LIMIT_SECONDS: int = 3600
     INGESTION_TASK_TIME_LIMIT_SECONDS: int = 3700
+    INGESTION_LEASE_SECONDS: int = 120
+    INGESTION_OUTBOX_RETRY_SECONDS: int = 30
+    INGESTION_OUTBOX_CLAIM_TIMEOUT_SECONDS: int = 120
+    STAGING_ORPHAN_GRACE_SECONDS: int = 3600
+    STORAGE_RETENTION_DAYS: int = 30
 
     # --- Reranking (Aşama 5.4) ----------------------------------------------
     # Feature-gated, remote-capable reranker. Off by default: when the feature
@@ -121,13 +157,6 @@ class Settings(BaseSettings):
     # result is flagged ``needs_review`` in normalized-content metadata so a
     # human can verify it (AKTIF_GOREV.md §8.4).
     OCR_MIN_CONFIDENCE: float = 0.5
-
-    # --- Features --------------------------------------------------------
-    # Aşama 2.4: upload endpoint returns immediately with a queued
-    # IngestionJob instead of blocking on parse+chunk+embed. Default True
-    # per AKTIF_GOREV.md §11; set to False to fall back to the old fully
-    # synchronous upload behavior (kept for transition/rollback safety).
-    FEATURE_ASYNC_INGESTION: bool = True
 
     # Aşama 6: evidence-packaged, citation-persisting chat answers
     # (AKTIF_GOREV.md §6 / §12.4 / §16). Gates the new labeled-evidence prompt
@@ -187,6 +216,10 @@ class Settings(BaseSettings):
     FUSION_CANDIDATE_K: int = 20
     RRF_K: int = 60
     RERANK_TOP_K: int = 8
+    RERANK_MAX_CANDIDATES: int = 20
+    RERANK_MAX_TOKENS: int = 6000
+    RETRIEVAL_SLOW_QUERY_MS: int = 500
+    RETRIEVAL_TRACE_QUERY_PLANS: bool = True
 
     # --- Retrieval context expansion (Aşama 5.5) ------------------------------
     # Final RAG context budget. CONTEXT_MAX_CHUNKS caps how many distinct chunks
@@ -235,7 +268,9 @@ class Settings(BaseSettings):
     # refuse to run when this is off. Default True per §11 example and Global
     # DoD (§17: "Repository URL, archive ve izinli klasör tarama çalışıyor");
     # set to False only to roll the feature back.
-    FEATURE_REPOSITORY_INGESTION: bool = True
+    FEATURE_REPOSITORY_INGESTION: bool = False
+    # Exact host allow-list for remote Git ingestion. Empty denies every URL.
+    REPOSITORY_ALLOWED_HOSTS: str = ""
     # Archive "zip bomb" / traversal protective limits (AKTIF_GOREV.md §7.2:
     # "Archive path traversal ve zip bomb koruması uygula", "Maksimum dosya
     # sayısı, tek dosya boyutu, toplam byte ve tarama süresi limiti koy").
@@ -352,7 +387,6 @@ class Settings(BaseSettings):
         if not self.is_production:
             return list(DEV_CORS_ORIGINS)
         return []
-
 
 
 settings = Settings()

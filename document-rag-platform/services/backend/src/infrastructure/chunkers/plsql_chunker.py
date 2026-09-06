@@ -197,7 +197,9 @@ class PlSqlChunker:
 
     # --- public entry points ----------------------------------------------
 
-    def chunk(self, unit: ContentUnit, source: NormalizedSource) -> List[ChunkCandidate]:
+    def chunk(
+        self, unit: ContentUnit, source: NormalizedSource
+    ) -> List[ChunkCandidate]:
         """Registry-compatible: chunk a single CODE unit with source context."""
         return self.chunk_source(source)
 
@@ -215,7 +217,9 @@ class PlSqlChunker:
             or source.title
         )
         language = source.language or source.metadata.get("language") or "plsql"
-        chunks = self._chunk_plsql(text, source=source, file_path=file_path, language=language)
+        chunks = self._chunk_plsql(
+            text, source=source, file_path=file_path, language=language
+        )
         chunks.sort(key=lambda c: (c.locator.get("line_start", 0) or 0))
         return chunks
 
@@ -253,7 +257,9 @@ class PlSqlChunker:
         if last < n:
             segments.append(self._generic(last, n - 1))
 
-        return self._build_chunks(segments, raw_lines, cleaned, source, file_path, language)
+        return self._build_chunks(
+            segments, raw_lines, cleaned, source, file_path, language
+        )
 
     @staticmethod
     def _generic(start: int, end: int) -> Dict[str, Any]:
@@ -568,4 +574,3 @@ class PlSqlChunker:
         if signature:
             parts.append(f"Signature: {signature}")
         return "# " + " | ".join(parts)
-

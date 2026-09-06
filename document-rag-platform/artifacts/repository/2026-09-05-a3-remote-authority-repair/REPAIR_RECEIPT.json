@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0",
+  "status": "PASS_LOCAL_WITH_REMOTE_GATES_OPEN",
+  "observed_at_utc": "2026-09-05T06:10:45Z",
+  "repository": "mehmet-karacan/context-vault",
+  "verified_source_sha": "2e7d301cab6987f0d199f82017bd5cb322fd99a9",
+  "commits": {
+    "authenticated_remote_evidence": "26b5f16",
+    "a2_receipt_correction": "ea60941",
+    "ruleset_exclusion_and_integration_binding": "d007f07",
+    "default_branch_authority_binding": "2e7d301"
+  },
+  "checks": {
+    "focused_regression_tests": "PASS_14",
+    "ruff_format": "PASS",
+    "ruff_lint": "PASS",
+    "public_tree": "PASS_280_TRACKED_FILES",
+    "a2_checksum_chain": "PASS_4_FILES",
+    "clean_worktree": "PASS",
+    "projection_safety": "PASS",
+    "independent_review_primary": "APPROVE_P0_0_P1_0_P2_0",
+    "independent_review_parallel": "APPROVE_P0_0_P1_0_P2_0"
+  },
+  "remote_observation": {
+    "repository_id": 1339450781,
+    "default_branch": "main",
+    "main_sha": "6b99a53d19e7f5f7b07b403e751c629f79ab7663",
+    "main_protected": false,
+    "rulesets": [],
+    "github_actions_app_id": 15368,
+    "candidate_present_on_remote": false,
+    "remote_ci_receipt_present": false,
+    "main_ruleset_receipt_present": false,
+    "verified_state": false
+  },
+  "closed_findings": [
+    "Local hand-authored CI receipts cannot pass without matching authenticated GitHub run and workflow API state.",
+    "Ruleset receipts cannot pass without matching authenticated repository, main branch and ruleset API state.",
+    "Ruleset ref exclusions fail closed; the default-branch alias is bound to authenticated repository metadata.",
+    "Required status contexts are job/check names and must be bound to GitHub Actions integration id 15368.",
+    "The original A2 precommit receipt is byte-identical and a new timestamped receipt explicitly supersedes its inaccurate fields."
+  ],
+  "open_remote_gates": [
+    "The exact candidate SHA is not present on GitHub.",
+    "GitHub main is not protected and the repository has no ruleset.",
+    "Exact-SHA automatic backend, frontend, RAG and security run evidence is absent.",
+    "A real rejected direct-push probe has not been performed."
+  ],
+  "data_safety": {
+    "database_or_object_mutation": false,
+    "remote_repository_mutation": false,
+    "push_pull_request_merge_or_release": false,
+    "secret_value_recorded": false
+  }
+}

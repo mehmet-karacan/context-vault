@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "status": "APPROVE",
+  "review_kind": "independent_subagent_code_and_evidence_review",
+  "reviewer": "subagent:a9_pipeline_map",
+  "human_review": false,
+  "owner_authority": false,
+  "repository_revision": "807845de7d35db34bce05a206ba4c87fb10d2aba",
+  "commit_tree": "3eeae9d929f0ebb03e05b7c3ed16ae56c9d0d4bd",
+  "findings": {
+    "p0": 0,
+    "p1": 0,
+    "p2": 0
+  },
+  "verified": [
+    "evaluated source tree equals reviewed run17 tree",
+    "rejected run18 no-answer example is absent after history-preserving revert",
+    "visible snippet canonicalization and label mismatches remain fail-closed",
+    "Alinti and full content prompt surfaces remain separated and escaped",
+    "direct relevance rule is generic and contains no case or golden-data branch",
+    "run19 report and source-manifest hashes match",
+    "reported metrics and open-gate limitations match bounded evidence",
+    "repository evidence contains no raw pack, raw prompt, raw model output, golden label, credential, or secret"
+  ],
+  "test_evidence": {
+    "focused_tests_passed": 160,
+    "ruff": "PASS",
+    "py_compile": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "limitations": [
+    "This is not human or dataset-owner approval.",
+    "This does not independently observe provider requests or prove golden non-transfer.",
+    "This does not seal a baseline or close A9."
+  ]
+}

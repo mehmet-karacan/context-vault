@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "register_id": "context-vault-a11-known-risks",
+  "risks": [
+    {
+      "id": "A11-RISK-001",
+      "severity": "P1",
+      "status": "CLOSED",
+      "owner": "Context Vault repository owner",
+      "summary": "Main required-check ruleset and direct-push enforcement are independently verified.",
+      "mitigation": "Ruleset 22369487 is active; authenticated exact-candidate status is verified and direct-push probe 34009527143 was rejected with GH013.",
+      "release_effect": "Resolved for candidate 8ce08125d16f245009a93e6933575684a55ad62a."
+    },
+    {
+      "id": "A11-RISK-002",
+      "severity": "P2",
+      "status": "OPEN",
+      "owner": "Context Vault operations owner",
+      "summary": "The first backup/restore drill uses disposable synthetic data rather than the existing user-data source.",
+      "mitigation": "Run the same non-destructive drill against an approved encrypted backup of the authoritative data before production release.",
+      "release_effect": "Requires explicit owner review and a production-data-class restore receipt."
+    },
+    {
+      "id": "A11-RISK-003",
+      "severity": "P2",
+      "status": "OPEN",
+      "owner": "Context Vault operations owner",
+      "summary": "Production scheduler and key escrow have not been exercised in the local MacBook deployment environment.",
+      "mitigation": "Alert delivery is verified through GitHub issue #2; capture scheduler and key-access receipts if those optional external services are enabled.",
+      "release_effect": "Non-blocking for the current local MacBook deployment; becomes an admission gate before enabling an external scheduler or key escrow."
+    },
+    {
+      "id": "A11-RISK-004",
+      "severity": "P1",
+      "status": "CLOSED",
+      "owner": "@mehmet-karacan",
+      "summary": "The local MacBook SLO policy is bound to a measured content-free baseline and a real external alert delivery receipt.",
+      "mitigation": "Active policy context-vault-a11-macbook-production-slo binds baseline 5ce366549091597cc4bacd47339f4a946d3e2e1987c3e36e6a91d1ae3dcb868a; all 11 gates passed and GitHub issue #2 was assigned, acknowledged and closed by @mehmet-karacan.",
+      "release_effect": "Resolved for candidate 8ce08125d16f245009a93e6933575684a55ad62a in the approved local MacBook deployment scope."
+    },
+    {
+      "id": "A9-RISK-005",
+      "severity": "P2",
+      "status": "OPEN",
+      "owner": "Context Vault retrieval owner",
+      "summary": "The human-sealed exact-candidate local benchmark observed one answerable_claims_empty repair and Recall@5/MRR of 0.833333.",
+      "mitigation": "Track the observation without weakening absolute safety gates; candidate capture03 passed the owner-sealed regression budget with all leakage and citation gates at zero.",
+      "release_effect": "Non-blocking P2 quality observation for candidate 8ce08125d16f245009a93e6933575684a55ad62a."
+    }
+  ]
+}

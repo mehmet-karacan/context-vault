@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "a11-initial-slo-baseline",
+  "status": "PASS",
+  "source_sha": "8ce08125d16f245009a93e6933575684a55ad62a",
+  "environment_class": "owner-macbook-local-production",
+  "observed_at_utc": "2026-09-06T05:36:00Z",
+  "window_seconds": 900,
+  "approved_by": "Mehmet KARACAN",
+  "approval_basis": "explicit owner authorization for completion of the canonical active task",
+  "measurements": {
+    "api_availability_percent": 100.0,
+    "api_p95_latency_ms": 0.601125,
+    "ingestion_completion_p95_seconds": 2.982313,
+    "ingestion_failure_percent": 0.0,
+    "outbox_oldest_age_seconds": 0.0,
+    "permission_leakage_count": 0,
+    "invalid_citation_count": 0,
+    "backup_age_seconds": 0.0,
+    "restore_drill_age_seconds": 0.0,
+    "restore_drill_success_percent": 100.0,
+    "real_benchmark_regression_percent": 0.0
+  },
+  "measurement_basis": {
+    "api": "50 HTTP requests to /health/live on the exact candidate; 50 succeeded",
+    "ingestion": "exact-candidate real benchmark stage p95",
+    "outbox": "fresh exact-head PostgreSQL query returned zero unpublished events",
+    "safety": "exact-candidate real benchmark and aggregate verifier",
+    "backup_restore": "fresh-target exact-candidate backup and restore drill",
+    "benchmark_regression": "strict capture03 improved over the owner-sealed capture02 baseline"
+  },
+  "evidence_sha256": {
+    "health_live_measurement": "7e0a887a2b0c6e8eca658ba8eda4e02f52365d0341c5d4c9802d9cce3fafa61f",
+    "real_benchmark_regression": "79f7c24e2cddc32507f50917b494671b50b26544809b924ac4b3600fcaad6a94",
+    "migration_verification": "9fc97672aafb21b70bd4e8a3e846630e6b9893047af81453391665666d241b56",
+    "restore_receipt": "577661f67a3daa756e27bf6274d6e311f81a5f8f3774749fefd4d1c1a81185f5",
+    "aggregate_release_verifier": "c7f30def0b3bbac601f2c701c956b704dc99efaf562a294258ac0cfa093f601a"
+  },
+  "production_baseline": true,
+  "owner_approval": true,
+  "contains_application_content": false,
+  "contains_credentials": false,
+  "existing_user_data_mutated": false
+}

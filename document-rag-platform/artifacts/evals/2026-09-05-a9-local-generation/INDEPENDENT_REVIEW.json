@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "review_type": "independent_local_generation_runtime_review",
+  "reviewer": "separate-codex-subagent",
+  "result": "APPROVE",
+  "scope": "Exact local generation verifier package only; not owner approval, private-pack review, baseline seal or A9 closure.",
+  "rejection_rounds": [
+    {
+      "result": "REJECT",
+      "findings": [
+        "Inference fields could inject raw output and override trusted report-envelope/provenance fields.",
+        "Grounded predicate accepted arbitrary unsupported suffixes.",
+        "Malformed config escaped the bounded error and architectures accepted a string.",
+        "Snapshot, inference and wall-clock resource bounds plus direct dependency pins were incomplete."
+      ]
+    },
+    {
+      "result": "REJECT",
+      "findings": [
+        "Numeric observations lacked upper bounds and exact output-hash/runtime-version bindings.",
+        "A caller-supplied worker flag bypassed the timeout parent."
+      ]
+    },
+    {
+      "result": "REJECT",
+      "findings": [
+        "The CLI allowed the nominal 600-second timeout to be raised to 3,600 seconds."
+      ]
+    }
+  ],
+  "final_verification": {
+    "focused_tests": "42 passed",
+    "ruff_check": "PASS",
+    "ruff_format_check": "PASS",
+    "offline_lock_check": "PASS",
+    "diff_check": "PASS",
+    "unexpected_inference_fields_rejected": "PASS",
+    "numeric_and_token_upper_bounds": "PASS",
+    "exact_output_hash_and_runtime_pins": "PASS",
+    "malformed_config_rejected": "PASS",
+    "same_cache_same_byte_symlink_retarget_rejected": "PASS",
+    "snapshot_resource_envelope": "PASS",
+    "timeout_values_0_601_3600_rejected_before_subprocess": "PASS",
+    "invalid_direct_worker_capability_rejected_before_inference": "PASS",
+    "artifact_hash_bindings": "PASS",
+    "artifact_secret_path_and_raw_output_scan": "PASS"
+  },
+  "final_source_sha256": {
+    "scripts/verify_local_generation.py": "12eaa0a015b6e66670e988074ca5dd066642d939016bd163951a66094846900c",
+    "document-rag-platform/services/backend/tests/evals/test_local_generation_runtime.py": "3a5ed5d3a6785338dbf23be1550f21e68425e9e79acac887a8de56d3567bcbe8",
+    "document-rag-platform/services/backend/pyproject.toml": "131dd52612166eabd592fa95da4a7a91fe3a932fc741c3e1fe2c4b123066fa0b",
+    "document-rag-platform/services/backend/uv.lock": "92ce53a1346d77d15118e72670a41140cf73a6dc8bf780605bbf799663c9b954",
+    "LOCAL_GENERATION_MPS.json": "dc98fec90be1e9edf53b134536e73febf7d0134d224faef0344bc129255df9cf"
+  },
+  "limitations": [
+    "The smoke is controlled prompt adherence, not broad grounding quality.",
+    "The pipe capability is a trusted-local accidental/direct CLI guard, not same-user origin authentication.",
+    "Library offline mode is not OS-level network isolation.",
+    "Cached identity is not cryptographic publisher or license provenance.",
+    "No human approval, owner-reviewed private pack, real benchmark or baseline seal is represented."
+  ],
+  "phase_closed": false
+}

@@ -3,6 +3,7 @@ module.exports = {
   content: [
     './pages/**/*.{js,ts,jsx,tsx,mdx}',
     './components/**/*.{js,ts,jsx,tsx,mdx}',
+    './features/**/*.{js,ts,jsx,tsx,mdx}',
     './app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
@@ -10,7 +11,7 @@ module.exports = {
       colors: {
         ink: {
           DEFAULT: '#1e2128',
-          soft: '#736f60',
+          soft: '#655f50',
           line: 'rgba(30,33,40,0.12)',
         },
         paper: {
@@ -20,7 +21,7 @@ module.exports = {
         surface: '#fffdf7',
         brass: {
           DEFAULT: '#c68a3d',
-          dim: '#a3702f',
+          dim: '#805620',
         },
         moss: '#5c7a4c',
         rust: '#a3432e',

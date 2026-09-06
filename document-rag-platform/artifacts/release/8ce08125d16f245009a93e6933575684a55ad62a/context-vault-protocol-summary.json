@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "candidate_sha": "8ce08125d16f245009a93e6933575684a55ad62a",
+  "status": "PASS",
+  "project_manifest_schema": "PASS",
+  "context_compiler_budget_and_tiers": "PASS",
+  "work_graph_prepare_claim_apply_receipt": "PASS",
+  "claim_fencing_and_replay": "PASS",
+  "knowledge_review_and_approval": "PASS",
+  "provider_model_skill_registry": "PASS",
+  "data_policy_routing": "PASS",
+  "adapters": {
+    "codex": "PASS",
+    "claude": "PASS",
+    "opencode_contract_only": "PASS_NOT_EXECUTED_ON_MACBOOK"
+  },
+  "canonical_authority": "PostgreSQL",
+  "raw_transcript_is_canonical": false,
+  "strict_protocol_tests_passed": 205
+}

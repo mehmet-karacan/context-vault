@@ -34,3 +34,7 @@ if str(BACKEND_ROOT) not in sys.path:
 
 os.environ.setdefault("DATABASE_URL", "postgresql://test:test@localhost:5432/test")
 os.environ.setdefault("LITELLM_API_KEY", "test-key-not-used")
+os.environ.setdefault(
+    "OBJECT_STORAGE_ENCRYPTION_KEY",
+    "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+)

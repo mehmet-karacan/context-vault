@@ -8,18 +8,24 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: commit-ownership-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check-ownership:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
       - name: Commit sahiplik ve vocab denetimi
         run: |
-          python scripts/check_commit_ownership.py --all \
+          python scripts/check_commit_ownership.py \
             --repo "$GITHUB_WORKSPACE" \
+            --refspec "${{ github.event.pull_request.head.sha || github.sha }}" \
             --allowed-author "mehmet-karacan karacan.mehmet@hotmail.com" \
             --allowed-author "Mehmet KARACAN karacan.mehmet@hotmail.com"

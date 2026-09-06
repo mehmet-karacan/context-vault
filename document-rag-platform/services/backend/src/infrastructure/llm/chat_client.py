@@ -11,9 +11,12 @@ AKTIF_GOREV.md Aşama 1.3 instructions.
 
 from __future__ import annotations
 
-from typing import List, Optional
+import json
+from typing import Any, List, Optional
 
 from openai import OpenAI
+
+from ..observability import record_provider_usage, traced
 
 RAG_SYSTEM_PROMPT = """Sen Mehmet adında bir belge asistanısın.
 Sana BELGE başlığı altında verilen metin, kullanıcının sorusuyla en yakın bulunan belge parçalarıdır.
@@ -45,7 +48,12 @@ class ChatCompletionClient:
         self._client = OpenAI(base_url=base_url, api_key=api_key)
         self._default_model = default_model
         self._available_models = available_models
+        self.is_remote = True
 
+    def resolve_model(self, requested: Optional[str] = None) -> str:
+        return requested if requested in self._available_models else self._default_model
+
+    @traced("provider.chat")
     def generate_answer(
         self, query: str, context_chunks: List[str], model: Optional[str] = None
     ) -> str:
@@ -63,9 +71,7 @@ class ChatCompletionClient:
 
         # Only honor a model the deployment explicitly allow-listed — never
         # pass an arbitrary client-supplied string straight to the gateway.
-        selected_model = (
-            model if model in self._available_models else self._default_model
-        )
+        selected_model = self.resolve_model(model)
 
         response = self._client.chat.completions.create(
             model=selected_model,
@@ -73,8 +79,10 @@ class ChatCompletionClient:
             max_tokens=8000,
             temperature=0.2,
         )
+        record_provider_usage(response)
         return response.choices[0].message.content
 
+    @traced("provider.chat")
     def complete(
         self,
         system_prompt: str,
@@ -89,9 +97,7 @@ class ChatCompletionClient:
         instructions (prompt-injection protection) while still honoring the
         same model allow-list and sampling parameters.
         """
-        selected_model = (
-            model if model in self._available_models else self._default_model
-        )
+        selected_model = self.resolve_model(model)
         response = self._client.chat.completions.create(
             model=selected_model,
             messages=[
@@ -101,4 +107,43 @@ class ChatCompletionClient:
             max_tokens=8000,
             temperature=0.2,
         )
+        record_provider_usage(response)
         return response.choices[0].message.content
+
+    @traced("provider.chat")
+    def complete_structured(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        schema: dict[str, Any],
+        model: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Request a strict JSON-schema answer from the remote gateway."""
+
+        selected_model = self.resolve_model(model)
+        response = self._client.chat.completions.create(
+            model=selected_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "answer_envelope",
+                    "strict": True,
+                    "schema": schema,
+                },
+            },
+            max_tokens=2048,
+            temperature=0,
+        )
+        record_provider_usage(response)
+        raw = response.choices[0].message.content
+        if not isinstance(raw, str):
+            raise ValueError("generation provider returned no structured content")
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            raise ValueError("structured generation result must be an object")
+        return parsed

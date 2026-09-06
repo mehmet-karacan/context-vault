@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "prepare",
+  "operation_id": "cv3-lineage-owner-decision-20260902-001",
+  "work_item_id": "CV3-BOOTSTRAP",
+  "attempt_id": "cv3-lineage-reset-attempt-001",
+  "actor": "repository-owner",
+  "tool_adapter": "codex-desktop-conversation",
+  "started_at": "2026-09-02T11:14:00Z",
+  "finished_at": "2026-09-02T11:16:00Z",
+  "baseline_revision": "6b99a53d19e7f5f7b07b403e751c629f79ab7663",
+  "result_revision": "6b99a53d19e7f5f7b07b403e751c629f79ab7663",
+  "scope_hash": "sha256:74aa2fc87630b013f1ddd1be4d3b05f8df8ee2b2579703667c1b3146c86172d1",
+  "context_manifest_hash": "sha256:c3bc4776812371e1f536b292ac8127d7fccba0838620fb2ed7d09cc76e6ab2d0",
+  "idempotency_key_hash": "sha256:8938fb6be701a32b553812c567637206b039886b88f5d3ac3d472bd9bd0fa39f",
+  "commands": [],
+  "exit_status": 0,
+  "tests": [],
+  "artifacts": [],
+  "security_redactions": [
+    "raw conversation transcript"
+  ],
+  "rollback": {
+    "required": false,
+    "reason": "This receipt records authorization and performs no effect."
+  },
+  "decision": "V3_NEW_DB_LINEAGE_RESET_AND_CUTOVER",
+  "authorization": "ACCEPT_UNRECOVERABLE_LEGACY_DATA_AND_BUILD_EMPTY_ISOLATED_V3_LINEAGE",
+  "constraints": [
+    "Do not delete or overwrite any discovered legacy database, object or volume",
+    "Do not push, merge or release without separate explicit authorization"
+  ],
+  "result": "PASS"
+}

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="13" failures="0" errors="0" time="0.042212125">
+    <testsuite name="lib/api.test.ts" timestamp="2026-09-02T19:06:24.289Z" hostname="mkaracan.local" tests="2" failures="0" errors="0" skipped="0" time="0.002118167">
+        <testcase classname="lib/api.test.ts" name="apiUrl &gt; uses same-origin during server-side rendering" time="0.001055916">
+        </testcase>
+        <testcase classname="lib/api.test.ts" name="apiUrl &gt; uses deployment runtime configuration" time="0.000163042">
+        </testcase>
+    </testsuite>
+    <testsuite name="features/conversations/components.test.tsx" timestamp="2026-09-02T19:06:24.290Z" hostname="mkaracan.local" tests="5" failures="0" errors="0" skipped="0" time="0.020359791">
+        <testcase classname="features/conversations/components.test.tsx" name="product semantic components &gt; does not silently preselect the first project" time="0.004438125">
+        </testcase>
+        <testcase classname="features/conversations/components.test.tsx" name="product semantic components &gt; renders each no-answer reason distinctly" time="0.00088725">
+        </testcase>
+        <testcase classname="features/conversations/components.test.tsx" name="product semantic components &gt; renders only supplied used citations and warns on changed version" time="0.0006605">
+        </testcase>
+        <testcase classname="features/conversations/components.test.tsx" name="product semantic components &gt; does not render raw HTML, scripts, javascript links or remote images" time="0.012442917">
+        </testcase>
+        <testcase classname="features/conversations/components.test.tsx" name="product semantic components &gt; keeps failed terminal jobs visible and never fabricates percent" time="0.000904542">
+        </testcase>
+    </testsuite>
+    <testsuite name="lib/api/client.test.ts" timestamp="2026-09-02T19:06:24.290Z" hostname="mkaracan.local" tests="6" failures="0" errors="0" skipped="0" time="0.019734167">
+        <testcase classname="lib/api/client.test.ts" name="fail-closed API boundary &gt; does not send a request before workspace/auth admission" time="0.0023755">
+        </testcase>
+        <testcase classname="lib/api/client.test.ts" name="fail-closed API boundary &gt; sends explicit headers without cookies and validates response" time="0.014847417">
+        </testcase>
+        <testcase classname="lib/api/client.test.ts" name="fail-closed API boundary &gt; rejects malformed successful payloads" time="0.000516041">
+        </testcase>
+        <testcase classname="lib/api/client.test.ts" name="fail-closed API boundary &gt; never displays arbitrary server exceptions" time="0.000303125">
+        </testcase>
+        <testcase classname="lib/api/client.test.ts" name="fail-closed API boundary &gt; rejects insecure non-loopback transport before transmitting a key" time="0.000483167">
+        </testcase>
+        <testcase classname="lib/api/client.test.ts" name="fail-closed API boundary &gt; validates generated request limits and enum values" time="0.000200208">
+        </testcase>
+    </testsuite>
+</testsuites>

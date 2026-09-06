@@ -10,6 +10,7 @@ from src.infrastructure.repositories.discovery import (
     ScanConfig,
     discover_directory,
 )
+from src.infrastructure.repositories import discovery_compat
 from src.infrastructure.repositories.directory_source import (
     DirectorySourceScanner,
 )
@@ -146,6 +147,53 @@ def test_symlink_not_followed(tmp_path):
     assert not any("linked" in p for p in paths)
 
 
+def test_file_swapped_to_symlink_after_walk_is_rejected(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    outside = tmp_path / "outside.txt"
+    candidate = repo / "candidate.txt"
+    repo.mkdir()
+    candidate.write_text("safe\n", encoding="utf-8")
+    outside.write_text("private\n", encoding="utf-8")
+    real_open = os.open
+    swapped = False
+
+    def racing_open(path, flags, *args, **kwargs):
+        nonlocal swapped
+        if os.fspath(path) == str(candidate) and not swapped:
+            swapped = True
+            candidate.unlink()
+            os.symlink(outside, candidate)
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(
+        "src.infrastructure.repositories.discovery.os.open", racing_open
+    )
+    result = discover_directory(str(repo), config=_config())
+    assert result.files == []
+
+
+def test_compat_scanner_uses_fail_closed_canonical_pipeline(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "safe.py").write_text("print(1)\n", encoding="utf-8")
+    outside = tmp_path / "outside.txt"
+    outside.write_text("private\n", encoding="utf-8")
+    try:
+        (repo / "linked.txt").symlink_to(outside)
+    except OSError:
+        pytest.skip("symlink creation not permitted in this environment")
+
+    files = discovery_compat.discover_files(str(repo))
+    assert {item.relative_path for item in files} == {"safe.py"}
+
+    def fail_closed(*args, **kwargs):
+        raise PermissionError("scanner refused source")
+
+    monkeypatch.setattr(discovery_compat, "discover_directory", fail_closed)
+    with pytest.raises(PermissionError, match="scanner refused source"):
+        discovery_compat.discover_files(str(repo))
+
+
 def test_fake_walker_injection(tmp_path, monkeypatch):
     """Pure test: inject a filesystem walker, no real tree required."""
     fake_walker = iter(
@@ -162,9 +210,7 @@ def test_fake_walker_injection(tmp_path, monkeypatch):
     (tmp_path / "root.txt").write_text("root\n", encoding="utf-8")
     (tmp_path / "src" / "a.py").write_text("print(1)\n", encoding="utf-8")
 
-    result = discover_directory(
-        str(tmp_path), config=_config(), walker=walker
-    )
+    result = discover_directory(str(tmp_path), config=_config(), walker=walker)
     paths = {f.relative_path for f in result.files}
     assert "root.txt" in paths
     assert "src/a.py" in paths
@@ -177,12 +223,8 @@ def test_directory_scanner_scan_by_relative_path(tmp_path):
     proj.mkdir(parents=True)
     (proj / "main.py").write_text("print(1)\n", encoding="utf-8")
 
-    scanner = DirectorySourceScanner(
-        allowed_roots=[str(workspace)], config=_config()
-    )
-    files = scanner.scan(
-        str(workspace), relative_path="project-a", include_patterns=[]
-    )
+    scanner = DirectorySourceScanner(allowed_roots=[str(workspace)], config=_config())
+    files = scanner.scan(str(workspace), relative_path="project-a", include_patterns=[])
     paths = {f.relative_path for f in files}
     assert "src/main.py" in paths
 
@@ -190,9 +232,7 @@ def test_directory_scanner_scan_by_relative_path(tmp_path):
 def test_directory_scanner_rejects_absolute_client_path(tmp_path):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
-    scanner = DirectorySourceScanner(
-        allowed_roots=[str(workspace)], config=_config()
-    )
+    scanner = DirectorySourceScanner(allowed_roots=[str(workspace)], config=_config())
     with pytest.raises(ValueError):
         scanner.scan(str(workspace), relative_path=str(workspace))
 
@@ -200,9 +240,7 @@ def test_directory_scanner_rejects_absolute_client_path(tmp_path):
 def test_directory_scanner_rejects_unknown_alias(tmp_path):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
-    scanner = DirectorySourceScanner(
-        allowed_roots=[str(workspace)], config=_config()
-    )
+    scanner = DirectorySourceScanner(allowed_roots=[str(workspace)], config=_config())
     with pytest.raises(ValueError):
         scanner.scan("nonexistent-alias", relative_path="")
 
@@ -212,9 +250,7 @@ def test_directory_scanner_rejects_escape_outside_roots(tmp_path):
     outside = tmp_path / "outside"
     workspace.mkdir()
     outside.mkdir()
-    scanner = DirectorySourceScanner(
-        allowed_roots=[str(workspace)], config=_config()
-    )
+    scanner = DirectorySourceScanner(allowed_roots=[str(workspace)], config=_config())
     with pytest.raises(PermissionError):
         scanner.scan(str(workspace), relative_path="../outside")
 
@@ -222,9 +258,7 @@ def test_directory_scanner_rejects_escape_outside_roots(tmp_path):
 def test_directory_scanner_conforms_to_source_scanner_port(tree):
     from src.domain.ports import SourceScanner
 
-    scanner = DirectorySourceScanner(
-        allowed_roots=[str(tree.parent)], config=_config()
-    )
+    scanner = DirectorySourceScanner(allowed_roots=[str(tree.parent)], config=_config())
     assert isinstance(scanner, SourceScanner)
     files = scanner.scan(str(tree.parent), relative_path=tree.name)
     assert files

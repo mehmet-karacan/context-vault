@@ -43,8 +43,7 @@ def test_fallback_exceeds_naive_reasonable_lower_bound():
         "merhaba dünya nasıl gidiyor",
         "bugün hava çok güzel ve sıcak",
         "the quick brown fox jumps over the lazy dog",
-        "nğş Türkçe karakterler ý"
-        "SELECT * FROM users WHERE id = ?",
+        "nğş Türkçe karakterler ý" "SELECT * FROM users WHERE id = ?",
     ]
     for text in texts:
         words = len(text.split())
@@ -61,10 +60,9 @@ def test_fallback_is_deterministic():
     counts = {counter.count(text) for _ in range(50)}
     assert len(counts) == 1
     # Two equal instances agree too.
-    assert (
-        BgeM3TokenCounter(use_transformers=False).count(text)
-        == BgeM3TokenCounter(use_transformers=False).count(text)
-    )
+    assert BgeM3TokenCounter(use_transformers=False).count(text) == BgeM3TokenCounter(
+        use_transformers=False
+    ).count(text)
 
 
 def test_fallback_method_descriptor_is_exposed():

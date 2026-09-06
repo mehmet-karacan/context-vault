@@ -57,13 +57,23 @@ class ArchiveSourceScanner:
         discovery: Optional[Callable[..., List[ScannedFile]]] = None,
     ):
         self.max_total_bytes = (
-            max_total_bytes if max_total_bytes is not None else settings.CODE_ARCHIVE_MAX_TOTAL_BYTES
+            max_total_bytes
+            if max_total_bytes is not None
+            else settings.CODE_ARCHIVE_MAX_TOTAL_BYTES
         )
         self.max_entry_bytes = (
-            max_entry_bytes if max_entry_bytes is not None else settings.CODE_ARCHIVE_MAX_ENTRY_BYTES
+            max_entry_bytes
+            if max_entry_bytes is not None
+            else settings.CODE_ARCHIVE_MAX_ENTRY_BYTES
         )
-        self.max_entries = max_entries if max_entries is not None else settings.CODE_ARCHIVE_MAX_ENTRIES
-        self.sandbox_factory = sandbox_factory or (lambda: tempfile.mkdtemp(prefix="code-archive-"))
+        self.max_entries = (
+            max_entries
+            if max_entries is not None
+            else settings.CODE_ARCHIVE_MAX_ENTRIES
+        )
+        self.sandbox_factory = sandbox_factory or (
+            lambda: tempfile.mkdtemp(prefix="code-archive-")
+        )
         self.discovery = discovery or _default_discover
         self.warnings: List[str] = []
 
@@ -118,7 +128,9 @@ class ArchiveSourceScanner:
                     continue
                 target = self._resolve_member(dest_dir, info.filename)
                 if target is None:
-                    self.warnings.append(f"blocked path traversal member: {info.filename}")
+                    self.warnings.append(
+                        f"blocked path traversal member: {info.filename}"
+                    )
                     continue
                 if info.file_size > self.max_entry_bytes:
                     self.warnings.append(
@@ -132,10 +144,14 @@ class ArchiveSourceScanner:
                     raise ArchiveLimitError(
                         f"archive total {total} bytes exceeds limit {self.max_total_bytes}"
                     )
-                os.makedirs(os.path.dirname(target), exist_ok=True) if os.path.dirname(target) else None
+                os.makedirs(os.path.dirname(target), exist_ok=True) if os.path.dirname(
+                    target
+                ) else None
                 with open(target, "wb") as out:
                     out.write(data)
-                extracted.append(os.path.relpath(target, root_real).replace(os.sep, "/"))
+                extracted.append(
+                    os.path.relpath(target, root_real).replace(os.sep, "/")
+                )
 
     def _extract_tar(self, archive_path, dest_dir, extracted, total) -> None:
         root_real = os.path.realpath(dest_dir)
@@ -155,7 +171,9 @@ class ArchiveSourceScanner:
                     continue
                 target = self._resolve_member(dest_dir, member.name)
                 if target is None:
-                    self.warnings.append(f"blocked path traversal member: {member.name}")
+                    self.warnings.append(
+                        f"blocked path traversal member: {member.name}"
+                    )
                     continue
                 if member.size > self.max_entry_bytes:
                     self.warnings.append(
@@ -176,7 +194,9 @@ class ArchiveSourceScanner:
                     os.makedirs(parent, exist_ok=True)
                 with open(target, "wb") as out:
                     out.write(data)
-                extracted.append(os.path.relpath(target, root_real).replace(os.sep, "/"))
+                extracted.append(
+                    os.path.relpath(target, root_real).replace(os.sep, "/")
+                )
 
     def _checksum(self, archive_bytes: bytes) -> str:
         return hashlib.sha256(archive_bytes).hexdigest()
@@ -211,4 +231,5 @@ class ArchiveSourceScanner:
             root_dir=sandbox,
             files=files,
             warnings=list(self.warnings),
+            cleanup_root=sandbox if work is None else None,
         )

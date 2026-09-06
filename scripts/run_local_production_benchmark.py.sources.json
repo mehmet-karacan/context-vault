@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "python_roots": [
+    "document-rag-platform/services/backend/src"
+  ],
+  "files": [
+    "scripts/capture_local_provider_boundary.py",
+    "scripts/local_benchmark_pack.py",
+    "scripts/local_benchmark_providers.py",
+    "scripts/local_production_case_executor.py",
+    "scripts/verify_local_bge.py",
+    "scripts/verify_local_generation.py",
+    "document-rag-platform/services/backend/pyproject.toml",
+    "document-rag-platform/services/backend/uv.lock"
+  ]
+}

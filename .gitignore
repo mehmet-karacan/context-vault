@@ -17,6 +17,15 @@ dist/
 build/
 .next/
 out/
+reports/
+test-results/
+.coverage
+coverage.xml
+
+# Generated verification projection (exact current HEAD; never canonical input)
+status/verified-state.json
+document-rag-platform/artifacts/ci/latest/
+document-rag-platform/artifacts/governance/latest/
 
 # IDE
 .idea/

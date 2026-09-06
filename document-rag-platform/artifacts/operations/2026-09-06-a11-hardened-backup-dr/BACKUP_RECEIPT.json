@@ -1,0 +1,32 @@
+{
+  "backup_id_hash": "e032fa43ad8134b950dcb11cde4404dc1c8a267952caa6d3c5397a9e244431bf",
+  "backup_manifest_sha256": "30d15d82a0056753f522c27f2c361280fb50d378018caf52d93cce48338c7b23",
+  "completed_at_utc": "2026-09-05T22:28:40.266997Z",
+  "credential_values_retained": false,
+  "encrypted_envelope_count": 1,
+  "object_bytes": 90,
+  "object_count": 1,
+  "object_inventory_digest": "4c8df956981c8549f716815ffd304d381bf33e61d1872e6226d156c4fb609d51",
+  "postgres_dump_sha256": "ca9920eb4f7e850befc64dc05039d9b9312f75fafa9e0b0f3b95ebe3d2154a9f",
+  "private_manifest_contains_restore_keys": true,
+  "raw_object_names_retained_in_receipt": false,
+  "receipt_type": "backup-complete",
+  "release_gate_eligible": false,
+  "repository_revision": "bde49aca525f7ccc40b21c039af003413621223c",
+  "restore_verified": false,
+  "retention_days": 30,
+  "schema_version": "1.0",
+  "source_database_binding": {
+    "container_id_sha256": "4c268e756fe7c60bdf37605ed2c9bb7d19f80754e11a1fa65a7531b53d1bbb7b",
+    "database_sha256": "0ec51bad16508ac776dec2266f14eccfe372aacd00bd63fde6f11db54926f3e4",
+    "system_identifier_sha256": "559be260f959ee04b16d7a13c9a1aeead745d7d37e1c1d9470643ccd921e62dd"
+  },
+  "source_mutated": false,
+  "source_object_binding": {
+    "bucket_sha256": "738cd9896f6d90e96bbde237859e78dd01190cfd4e04ce19da39859a046e5c7e",
+    "resolved_identity_sha256": "fb62e1c0a93f0cfd90eb72d01cf4934c07c324eeeb71bed8e51f9c5d54df1e84"
+  },
+  "started_at_utc": "2026-09-05T22:28:39.414363Z",
+  "status": "PASS",
+  "versioning_enabled": true
+}

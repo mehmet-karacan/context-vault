@@ -14,7 +14,7 @@ as an extension point (8.2) without touching this module.
 
 from __future__ import annotations
 
-from typing import Callable, Dict, Optional, Type
+from typing import Callable, Dict, Optional
 
 from .base import (
     OcrConfigurationError,
@@ -54,7 +54,10 @@ def build_ocr_provider(
       provider's engine is available.
     - ``OcrConfigurationError`` when a configured provider name is unknown.
     """
-    if not (getattr(settings, "FEATURE_OCR", True) and getattr(settings, "OCR_ENABLED", True)):
+    if not (
+        getattr(settings, "FEATURE_OCR", True)
+        and getattr(settings, "OCR_ENABLED", True)
+    ):
         raise OcrUnavailableError(
             "OCR is disabled (FEATURE_OCR/OCR_ENABLED is false); cannot build an "
             "OCR provider."
@@ -74,8 +77,7 @@ def build_ocr_provider(
         constructor = reg.get(name)
         if constructor is None:
             raise OcrConfigurationError(
-                f"unknown OCR provider: {name!r} (expected one of "
-                f"{sorted(reg)})"
+                f"unknown OCR provider: {name!r} (expected one of " f"{sorted(reg)})"
             )
         provider = _try_build(constructor)
         if provider is not None and getattr(provider, "available", True):

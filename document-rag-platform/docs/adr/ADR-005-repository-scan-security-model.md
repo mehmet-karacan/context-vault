@@ -2,7 +2,9 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-20
-- **Deciders:** Context Vault platform implementation (Aşama 7)
+- **Owner:** Mehmet KARACAN
+- **Supersedes:** none
+- **Evidence:** repository path/archive/security tests
 
 ## Context
 

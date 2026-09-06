@@ -1,3 +1,10 @@
+> **Sınıflandırma:** historical/non-canonical completion projection
+> **last_verified_sha:** `6b99a53d19e7f5f7b07b403e751c629f79ab7663`
+> **last_verified_at:** `2026-09-02T11:59:53Z`
+> **evidence_manifest:** `document-rag-platform/artifacts/audit/2026-09-02-baseline/audit-manifest.json`
+> **STALE UYARISI:** Bu dosyadaki geçmiş tamamlanma iddiaları güncel kabul
+> kanıtı değildir; root `AKTIF_GOREV.md` tarafından geçersiz kılınır.
+
 ## 2026-08-31 — Aşama 0: Git sahiplik temizliği ve araç-bağımsızlaştırma
 
 - Eski aktif görev `AKTIF_GOREV.md` → `done/active-tasks/2026-08-19-context-vault-rag-v2.md` arşivlendi.
@@ -15,7 +22,9 @@
 **Son güncelleme:** 2026-08-20
 **Kanonik plan:** `AKTIF_GOREV.md`
 
-Bu dosya tamamlanmış işlerin gerçek kaydıdır. Mevcut durum: **Aşama 0–9 tamamlandı**, Aşama 10 devam ediyor. (Eski "6 aşama / 13 tablo / 24,666+ dosya" iddiaları gerçek kodla çeliştiği için düzeltildi.)
+Bu dosya tarihsel bir tamamlama projeksiyonudur; current truth veya kabul kanıtı
+değildir. 2026-08-20 snapshot'ında Aşama 0–9 tamamlandı, Aşama 10 devam
+ediyor denmişti. Güncel durum yalnız `AKTIF_GOREV.md` içindedir.
 
 ## Aşama 0 — Gerçek Durumu Sabitle ve Güvenli Başlangıç ✅
 
@@ -105,7 +114,8 @@ Bu dosya tamamlanmış işlerin gerçek kaydıdır. Mevcut durum: **Aşama 0–9
 ## Aşama 10 — Dokümantasyon, Temizlik ve Son Aktivasyon (DEVAM EDİYOR)
 
 - ✅ Durum dokümanları gerçek koda göre düzeltildi (bu dört dosya).
-- ⏳ ADR-005/006, ops runbook'ları, kontrollü eski-chunk temizliği, root README, aktivasyon — `active/current-tasks.md`'de.
+- Tarihsel ADR-005/006 ve ops runbook TODO'ları superseded; dosyalar ve
+  kanonik index'leri daha sonra oluşturuldu.
 
 ---
 

@@ -2,7 +2,7 @@
 
 The live retrieval pipeline reads three indexes per chunk:
 
-- dense    -> ``chunk_embeddings.embedding`` (or the legacy ``chunks.embedding``)
+- dense    -> profile-bound ``chunk_embeddings.embedding``
 - lexical  -> ``chunks.search_vector`` (a ``simple``-config tsvector)
 - identifi -> ``chunks.identifiers`` (array of technical identifier tokens)
 

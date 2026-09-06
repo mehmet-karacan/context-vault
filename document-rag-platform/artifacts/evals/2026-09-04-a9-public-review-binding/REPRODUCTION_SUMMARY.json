@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "scope": "A9 public synthetic dataset external human-review receipt binding preparation",
+  "baseline_revision": "e27c1312814301bb4e321837f1c5554e94c875e4",
+  "initial_finding": "The public manifest required a review_receipt_sha256 but the supported CLI could not consume or bind the referenced receipt bytes.",
+  "test_first_result": {"passed": 115, "failed": 12},
+  "fixes": [
+    "Added a versioned, additional-field-closed external public review receipt schema.",
+    "Bound exact receipt bytes to the manifest receipt SHA and exact dataset/version/count/split/reviewer/time fields.",
+    "Rejected pending-manifest receipt use and receipt use outside public-dataset-status before provider dispatch.",
+    "Kept receipt integrity separate from unverified human authority and review completion."
+  ],
+  "final_result": {
+    "backend_tests": {"passed": 743, "skipped": 2, "failed": 0, "warnings": 1},
+    "tier_tests": {"passed": 127, "failed": 0},
+    "public_pending_status": "PASS_UNVERIFIED",
+    "independent_review": "APPROVE_LOCAL_VERIFIER_ONLY",
+    "provider_invoked": false,
+    "user_data_mutated": false
+  },
+  "phase_closed": false,
+  "remaining_external_gates": [
+    "Actual owner review and externally authoritative receipt/decision for the public corpus",
+    "Owner-reviewed real private pack",
+    "Human provider/model/credential-name/provider-side-budget approval",
+    "Real provider run and independent request/non-transfer evidence",
+    "Human baseline seal"
+  ]
+}

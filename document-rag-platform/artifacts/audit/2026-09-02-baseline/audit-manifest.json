@@ -1,0 +1,198 @@
+{
+  "schema": "context-vault-cv3-admission-audit/v1",
+  "observed_at_utc": "2026-09-02T11:59:53Z",
+  "repository": {
+    "name": "mehmet-karacan/context-vault",
+    "remote": "https://github.com/mehmet-karacan/context-vault",
+    "baseline_branch": "main",
+    "working_branch": "fix/context-vault-v3-hardening",
+    "head_sha": "6b99a53d19e7f5f7b07b403e751c629f79ab7663",
+    "origin_main_sha": "6b99a53d19e7f5f7b07b403e751c629f79ab7663",
+    "ahead": 0,
+    "behind": 0,
+    "initial_dirty_state": false,
+    "current_authorized_bootstrap_changes": true,
+    "tracked_file_count": 277,
+    "remote_write_performed": false
+  },
+  "observer": {
+    "tool": "codex-local-agent",
+    "git_version": "2.55.0",
+    "docker_client_version": "29.7.2",
+    "docker_server_version": "29.7.2",
+    "uv_version": "0.12.5",
+    "ci_reproduction_python": "3.12",
+    "host_python": "3.9.6",
+    "node_version": "24.18.0",
+    "npm_version": "11.16.0",
+    "zekam_version": "0.1.0",
+    "zekam_doctor_result": "POSTGRES_READY_OVERALL_BLOCKED_UNRELATED_CONTINUITY"
+  },
+  "migrations": {
+    "code_alembic_heads": [
+      "cv3_00000001"
+    ],
+    "code_revision_count": 1,
+    "legacy_evidence_revision_count": 3,
+    "runtime_alembic_version": "cv3_00000001",
+    "runtime_status": "ISOLATED_SYNTHETIC_VERIFIED",
+    "historical_unverified_runtime_revision": "b2f1c0a10005",
+    "missing_exact_revisions": [
+      "b2f1c0a10004",
+      "b2f1c0a10005"
+    ],
+    "recovery_decision": "V3_NEW_DB_LINEAGE_RESET_AND_CUTOVER",
+    "decision_status": "AUTHORIZED_AND_ADMITTED"
+  },
+  "runtime": {
+    "context_vault_stack_status": "ISOLATED_TEST_RUNTIME_ONLY",
+    "docker_contexts_checked": 3,
+    "matching_containers": 0,
+    "matching_volumes": 0,
+    "postgresql_version": "16.15",
+    "extensions": ["pgcrypto", "plpgsql", "vector"],
+    "table_counts": {
+      "projects": 1,
+      "documents": 1,
+      "document_versions": 1,
+      "chunks": 1
+    },
+    "schema_fingerprint": "sha256:55ceada8d3539f817af0a03b11c000abcf6aadb2ee7f248a8343495728814af8",
+    "object_inventory": {
+      "source_count": 1,
+      "restore_count": 1,
+      "byte_sha256": "39bccd0bc73b6af8397a4a4e3274a0543aa1dbf4e0c4eeff2f58884d814dc93b"
+    },
+    "data_integrity_status": "PASS_SYNTHETIC_NEW_LINEAGE"
+  },
+  "compose": {
+    "services": [
+      "minio",
+      "postgres",
+      "redis",
+      "backend",
+      "worker"
+    ],
+    "image_references": [
+      "document-rag-platform-backend",
+      "document-rag-platform-worker",
+      "minio/minio",
+      "pgvector/pgvector:pg16",
+      "redis:7-alpine"
+    ],
+    "health_result": "NOT_STARTED_MISSING_LOCAL_RUNTIME_CONFIGURATION"
+  },
+  "historical_unverified_integrity_targets": {
+    "cross_active_version_chunks": 2,
+    "active_profile_missing_config_hash": 1,
+    "extensionless_failed_source": 1,
+    "orphan_migration_container": 1
+  },
+  "ci": {
+    "primary_workflows_manual_only": 4,
+    "backend": {
+      "run_id": 33400923781,
+      "job_id": 99516735112,
+      "result": "FAIL",
+      "first_terminal_step": "Ruff format check",
+      "local_reproduction_exit": 1,
+      "files_would_reformat": 97
+    },
+    "rag_eval": {
+      "run_id": 33400923547,
+      "job_id": 99516734315,
+      "result": "FAIL",
+      "first_terminal_step": "Migration upgrade",
+      "local_reproduction_exit": 0,
+      "local_root_cause": "MISSING_LITELLM_API_KEY_VALIDATION_RESOLVED"
+    },
+    "security": {
+      "run_id": 33400923851,
+      "result": "FAIL",
+      "first_terminal_step": "Secret scan"
+    },
+    "frontend": {
+      "run_id": 33400923778,
+      "result": "PASS"
+    },
+    "commit_ownership": {
+      "run_id": 33401641746,
+      "head_sha": "6b99a53d19e7f5f7b07b403e751c629f79ab7663",
+      "result": "PASS"
+    }
+  },
+  "github_governance": {
+    "visibility": "public",
+    "branches": [
+      "main"
+    ],
+    "ruleset_count": 0,
+    "main_protected": false,
+    "open_issue_count": 0,
+    "release_count": 0,
+    "repository_secret_name_count": 0,
+    "repository_variable_name_count": 0,
+    "environment_count": 0
+  },
+  "security_candidates": {
+    "paths": [
+      "document-rag-platform/.env.example",
+      "document-rag-platform/services/backend/Dockerfile",
+      "document-rag-platform/services/backend/src/config.py",
+      "document-rag-platform/services/backend/ttroot-g3.crt"
+    ],
+    "certificate_sha256": "d83cd3f0daeadd01889a1b5a90cdde1630e26017a37afeaf180bfb7e6fa34ca2",
+    "gitleaks_version": "8.30.1",
+    "gitleaks_release_checksum_verified": true,
+    "gitleaks_history_scan": "PASS_ZERO_FINDINGS",
+    "gitleaks_working_tree_scan": "PASS_ZERO_FINDINGS",
+    "gitleaks_redacted_report_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "gitleaks_ignore_sha256": "a6c24ae15b61fef880f7021d85fcb94095183f1b1f8e8f9189bb25574cf4f4f9",
+    "public_audit_regex_scan": "PASS"
+  },
+  "documentation_drift": {
+    "gitkeep_count": 56,
+    "root_skeleton_gitkeep_count": 28,
+    "duplicate_rerank_top_k_definitions": 2,
+    "module_level_settings_singleton": true,
+    "unclassified_tracked_artifact_candidates": [
+      "new 1.txt"
+    ]
+  },
+  "archive": {
+    "previous_task_path": "done/active-tasks/2026-08-31-rag-reliability-productization.md",
+    "previous_task_sha256": "ec2e537c59fafc87340f4271075dcc12813073df44aaa0e901a5e86d3fe65f56",
+    "previous_baseline_blob_sha256": "ec2e537c59fafc87340f4271075dcc12813073df44aaa0e901a5e86d3fe65f56",
+    "activated_task_source_sha256": "6de7b2fe31e8fc11f125615239c7602c2c4de6d5d9426af10abbf9497dcfcd8f",
+    "current_canonical_task_sha256": "320643427c25e5c194ab6e1ff5247317c979b3227a7ccd2d2e434bcc00cc3cb9"
+  },
+  "verification": {
+    "clean_detached_baseline_result": "PASS",
+    "clean_detached_baseline_report_sha256": "cd93832eee06e6384289c7efac368d7d8da93fca9be8aa8209dd096c0c59c893",
+    "current_dirty_tree_result": "EXPECTED_FAIL"
+  },
+  "artifact_hashes": {
+    "PREPARE_RECEIPT.json": "5fbdce6f045e6bced3320fb2d92fb0e6582244ad6454cc0fe34106589f51f7f8",
+    "PREPARE_RECEIPT-002.json": "a406b7c8fddcfc892b9440243e2aeed2531536aba76eeddda1531faae3ccdf01",
+    "OWNER_DECISION_RECEIPT.json": "cdf2b4cce0e5c879b044375f64acdb01d49f6890dcb22e036d4894d35429c3c8",
+    "backup-restore-plan.md": "551bd807e0e54fc945f9ca6dd549175f5033dc33eb2262be93c4063ccbeae517",
+    "ci-summary.md": "430a605c3441e6f25976f329443372e46c0473ab3dc42035ac59b39323a70b4b",
+    "data-integrity-summary.md": "66f35d334c13bf28d313d3d18c7268ab684d2671cd10979bacd43ca2b06fb65f",
+    "documentation-drift-summary.md": "712ab9171cb55845878bd3c1cfc8708b3d6c55393ae934c33e37f6aabdd49e88",
+    "migration-recovery-inventory.md": "41b44d2f20bb624f87dc97666c6988fb6f348f4c6c10ebc94d6ec1823217ace4",
+    "repository-summary.md": "d4adf149993b9314d455d025522d2b5ca80a9624026b673f700725346e7423d1",
+    "schema-summary.md": "0a56e5e83e50d60f527559b4b19681cd8a5c5efbe0926bf5ad4c0f3d0242dfc6",
+    "security-exposure-summary.md": "2560de79d54af21e1c99b817c3d206a60d73c8c0fbffb997f356f0753a287c91",
+    "scripts/verify_baseline.py": "dc3f0f742da568f48d8858bdad1691c2b8a4c62b698fea778cc2134be1cace50"
+  },
+  "admission": {
+    "result": "PASS",
+    "phase_0_pass": true,
+    "database_mutation_performed": true,
+    "object_store_mutation_performed": true,
+    "mutation_scope": "NEW_EPHEMERAL_SYNTHETIC_RUNTIME_ONLY",
+    "application_code_mutation_performed": true,
+    "remote_mutation_performed": false,
+    "blockers": []
+  }
+}

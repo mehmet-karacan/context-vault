@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "candidate_sha": "2c552c443c843b31b24c6ea3baa9457d4c901909",
+  "status": "PASS_OFFLINE_REAL_BENCHMARK_HUMAN_GATE_OPEN",
+  "contract_smoke": "PASS",
+  "offline_e2e": "PASS",
+  "offline_e2e_tests": 55,
+  "permission_version_leakage": 0,
+  "invalid_citation_labels": 0,
+  "citation_precision": 1.0,
+  "citation_coverage": 1.0,
+  "p95_latency_ms": 218.4,
+  "local_embedding": {
+    "provider": "local-sentence-transformers",
+    "model": "BAAI/bge-m3@5617a9f61b028005a4858fdac845db406aefb181",
+    "bundle_sha256": "d87c47601ade6251c7e0c236d4b863b797bfd280f94ac09be9cc7fbeede74668",
+    "device": "mps",
+    "dimension": 1024,
+    "normalized": true,
+    "remote_provider_invoked": false,
+    "result": "PASS"
+  },
+  "local_generation": {
+    "provider": "local-transformers",
+    "model": "Qwen/Qwen2.5-1.5B-Instruct@989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+    "bundle_sha256": "5a6a6259762fed70e38ae346763b105a7b05aa981e5ab078c8e5b033f87f0c87",
+    "device": "mps",
+    "grounded_guard": "PASS",
+    "no_answer_guard": "PASS",
+    "remote_provider_invoked": false,
+    "result": "PASS"
+  },
+  "real_benchmark": {
+    "release_gate_eligible": false,
+    "provider_invoked_for_candidate": false,
+    "reason": "A fresh exact-candidate owner approval, independent request-boundary receipt, and post-run human seal are not present. No authority artifact was fabricated."
+  }
+}

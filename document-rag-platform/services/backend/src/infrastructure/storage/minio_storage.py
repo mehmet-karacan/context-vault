@@ -1,10 +1,8 @@
 """MinIO ``ObjectStorage`` adaptör (Aşama 2.2).
 
 Implements ``domain.ports.ObjectStorage`` against a MinIO/S3-compatible
-endpoint using the official ``minio`` SDK. This module is intentionally
-standalone: nothing in the existing upload flow (``api/v1/documents.py``)
-imports it yet — it will be wired in when the upload endpoint moves to the
-job-based ingestion pipeline (see AKTIF_GOREV.md Aşama 2).
+endpoint using the official ``minio`` SDK. Every new object is encrypted with
+an authenticated AES-256-GCM envelope before it leaves the application.
 
 Connection settings come from ``src.config.Settings``
 (``MINIO_ENDPOINT`` / ``MINIO_ACCESS_KEY`` / ``MINIO_SECRET_KEY`` /
@@ -14,12 +12,38 @@ Connection settings come from ``src.config.Settings``
 
 from __future__ import annotations
 
+import base64
 import io
+import os
 from typing import Optional
 from urllib.parse import urlsplit
 
+from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from minio import Minio
 from minio.error import S3Error
+
+
+_ENCRYPTED_MAGIC = b"CVENC1\x00"
+_NONCE_BYTES = 12
+
+
+def decode_encryption_key(value: str | bytes | None) -> bytes:
+    """Decode and validate a base64-encoded 256-bit storage key."""
+    if isinstance(value, bytes):
+        key = value
+    elif value:
+        try:
+            key = base64.b64decode(value, validate=True)
+        except (ValueError, TypeError) as exc:
+            raise ValueError(
+                "object-storage encryption key is not valid base64"
+            ) from exc
+    else:
+        raise ValueError("object-storage encryption key is required")
+    if len(key) != 32:
+        raise ValueError("object-storage encryption key must decode to 32 bytes")
+    return key
 
 
 def _split_endpoint(endpoint: str) -> tuple[str, bool]:
@@ -53,6 +77,8 @@ class MinioObjectStorage:
         secret_key: str,
         bucket: str,
         secure: Optional[bool] = None,
+        encryption_key: str | bytes | None = None,
+        allow_legacy_plaintext_reads: bool = False,
     ):
         host_port, inferred_secure = _split_endpoint(endpoint)
         self._bucket = bucket
@@ -63,6 +89,32 @@ class MinioObjectStorage:
             secure=inferred_secure if secure is None else secure,
         )
         self._bucket_ready = False
+        self._encryption_key = decode_encryption_key(encryption_key)
+        self._allow_legacy_plaintext_reads = allow_legacy_plaintext_reads
+
+    def _encrypt(self, key: str, data: bytes) -> bytes:
+        nonce = os.urandom(_NONCE_BYTES)
+        ciphertext = AESGCM(self._encryption_key).encrypt(
+            nonce, data, key.encode("utf-8")
+        )
+        return _ENCRYPTED_MAGIC + nonce + ciphertext
+
+    def _decrypt(self, key: str, payload: bytes) -> bytes:
+        if not payload.startswith(_ENCRYPTED_MAGIC):
+            if self._allow_legacy_plaintext_reads:
+                return payload
+            raise ValueError("unencrypted legacy object is blocked by storage policy")
+        offset = len(_ENCRYPTED_MAGIC)
+        nonce = payload[offset : offset + _NONCE_BYTES]
+        ciphertext = payload[offset + _NONCE_BYTES :]
+        if len(nonce) != _NONCE_BYTES or not ciphertext:
+            raise ValueError("encrypted object envelope is malformed")
+        try:
+            return AESGCM(self._encryption_key).decrypt(
+                nonce, ciphertext, key.encode("utf-8")
+            )
+        except InvalidTag as exc:
+            raise ValueError("encrypted object authentication failed") from exc
 
     def _ensure_bucket(self) -> None:
         """Creates the configured bucket if it doesn't already exist.
@@ -87,13 +139,15 @@ class MinioObjectStorage:
         needed without changing this signature.
         """
         self._ensure_bucket()
-        stream = io.BytesIO(data)
+        encrypted = self._encrypt(key, data)
+        stream = io.BytesIO(encrypted)
         self._client.put_object(
             self._bucket,
             key,
             stream,
-            length=len(data),
+            length=len(encrypted),
             content_type=content_type or "application/octet-stream",
+            metadata={"context-vault-encryption": "aes-256-gcm-v1"},
         )
         return key
 
@@ -102,7 +156,17 @@ class MinioObjectStorage:
         self._ensure_bucket()
         response = self._client.get_object(self._bucket, key)
         try:
-            return response.read()
+            return self._decrypt(key, response.read())
+        finally:
+            response.close()
+            response.release_conn()
+
+    def is_encrypted(self, key: str) -> bool:
+        """Read-only audit probe for the Context Vault envelope marker."""
+        self._ensure_bucket()
+        response = self._client.get_object(self._bucket, key)
+        try:
+            return response.read(len(_ENCRYPTED_MAGIC)) == _ENCRYPTED_MAGIC
         finally:
             response.close()
             response.release_conn()
@@ -123,3 +187,30 @@ class MinioObjectStorage:
             if exc.code in ("NoSuchKey", "NoSuchObject"):
                 return False
             raise
+
+    def list_keys(self, prefix: str = "") -> list[str]:
+        """Return a deterministic key inventory for reconciliation tooling."""
+        return sorted(self.iter_keys(prefix=prefix))
+
+    def iter_keys(self, prefix: str = ""):
+        """Stream object keys for bounded observers without materializing a bucket."""
+        self._ensure_bucket()
+        return (
+            obj.object_name
+            for obj in self._client.list_objects(
+                self._bucket, prefix=prefix, recursive=True
+            )
+        )
+
+    def list_entries(self, prefix: str = "") -> list[tuple[str, object]]:
+        """Return `(key, last_modified)` pairs for grace-period sweepers."""
+        self._ensure_bucket()
+        return sorted(
+            (
+                (obj.object_name, obj.last_modified)
+                for obj in self._client.list_objects(
+                    self._bucket, prefix=prefix, recursive=True
+                )
+            ),
+            key=lambda item: item[0],
+        )

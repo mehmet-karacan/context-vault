@@ -63,9 +63,10 @@ def build_pdf(pages):
     for num in range(1, last_obj + 1):
         out.extend(("%010d 00000 n \n" % offsets[num]).encode("latin-1"))
     out.extend(
-        ("trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n" % (last_obj + 1, xref)).encode(
-            "latin-1"
-        )
+        (
+            "trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n"
+            % (last_obj + 1, xref)
+        ).encode("latin-1")
     )
     out.extend(b"%%EOF\n")
     return bytes(out)

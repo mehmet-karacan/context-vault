@@ -12,11 +12,15 @@ Uses an injected fake ``git`` runner — no real network clone happens. Verifies
 
 from __future__ import annotations
 
-import os
 
 import pytest
 
-from src.infrastructure.repositories.git_source import GitRepositorySource, GitRunner
+from src.infrastructure.repositories.git_source import (
+    GitRepositorySource,
+    GitRunner,
+    RepositoryUrlRejected,
+    validate_repository_url,
+)
 from src.infrastructure.repositories.scan_result import ScannedFile
 
 
@@ -38,10 +42,18 @@ def _stub_discovery():
     ]
 
 
+def _public_resolver(*args, **kwargs):
+    return [(None, None, None, None, ("93.184.216.34", 443))]
+
+
 def test_scan_captures_metadata_and_flags(tmp_path):
     fake = FakeGitRunner()
     src = GitRepositorySource(
-        git_runner=fake, sandbox_factory=lambda: str(tmp_path / "sbx"), discovery=_stub_discovery()
+        git_runner=fake,
+        sandbox_factory=lambda: str(tmp_path / "sbx"),
+        discovery=_stub_discovery(),
+        allowed_hosts={"github.com"},
+        resolver=_public_resolver,
     )
     scan = src.scan("https://github.com/org/repo.git", ref="main")
 
@@ -60,7 +72,9 @@ def test_scan_captures_metadata_and_flags(tmp_path):
     assert "--config" in clone
     assert "core.autocrlf=false" in clone
     assert "filter.lfs.required=false" in clone
-    assert next(c for c in clone if c.startswith("core.hooksPath=")).startswith("core.hooksPath=")
+    assert next(c for c in clone if c.startswith("core.hooksPath=")).startswith(
+        "core.hooksPath="
+    )
     assert "git" in clone
     assert "rev-parse" in [a for c in fake.calls for a in c["argv"]]
 
@@ -68,18 +82,26 @@ def test_scan_captures_metadata_and_flags(tmp_path):
 def test_no_ref_is_full_clone_without_branch_flag(tmp_path):
     fake = FakeGitRunner()
     src = GitRepositorySource(
-        git_runner=fake, sandbox_factory=lambda: str(tmp_path / "sbx"), discovery=_stub_discovery()
+        git_runner=fake,
+        sandbox_factory=lambda: str(tmp_path / "sbx"),
+        discovery=_stub_discovery(),
+        allowed_hosts={"github.com"},
+        resolver=_public_resolver,
     )
     src.scan("https://github.com/org/repo.git")
     clone = [c["argv"] for c in fake.calls if c["argv"][:2] == ["git", "clone"]][0]
     assert "--branch" not in clone
-    assert "--depth" not in clone
+    assert clone[clone.index("--depth") + 1] == "1"
 
 
 def test_no_forbidden_command_is_ever_invoked(tmp_path):
     fake = FakeGitRunner()
     src = GitRepositorySource(
-        git_runner=fake, sandbox_factory=lambda: str(tmp_path / "sbx"), discovery=_stub_discovery()
+        git_runner=fake,
+        sandbox_factory=lambda: str(tmp_path / "sbx"),
+        discovery=_stub_discovery(),
+        allowed_hosts={"github.com"},
+        resolver=_public_resolver,
     )
     src.scan("https://github.com/org/repo.git", ref="main")
 
@@ -90,7 +112,10 @@ def test_no_forbidden_command_is_ever_invoked(tmp_path):
     for call in fake.calls:
         assert call["argv"][0] == "git", f"non-git executable invoked: {call['argv']}"
         # Submodules are never pulled automatically.
-        assert "submodule" not in call["argv"] and "submodule" not in " ".join(call["argv"]).lower()
+        assert (
+            "submodule" not in call["argv"]
+            and "submodule" not in " ".join(call["argv"]).lower()
+        )
 
 
 def test_real_runner_is_non_shell_and_safe_env(monkeypatch):
@@ -101,7 +126,7 @@ def test_real_runner_is_non_shell_and_safe_env(monkeypatch):
         stdout = "ok"
         stderr = ""
 
-    def fake_run(args, cwd, env, capture_output, text, shell):
+    def fake_run(args, cwd, env, capture_output, text, shell, timeout):
         captured["args"] = args
         captured["env"] = env
         captured["shell"] = shell
@@ -117,3 +142,36 @@ def test_real_runner_is_non_shell_and_safe_env(monkeypatch):
     assert captured["env"]["GIT_TERMINAL_PROMPT"] == "0"
     assert captured["env"]["GIT_LFS_SKIP_SMUDGE"] == "1"
     assert captured["env"]["GIT_CONFIG_NOSYSTEM"] == "1"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://github.com/org/repo.git",
+        "https://user:secret@github.com/org/repo.git",
+        "file:///etc/passwd",
+        "git@github.com:org/repo.git",
+    ],
+)
+def test_repository_url_rejects_unsafe_protocol_or_credentials(url):
+    with pytest.raises(RepositoryUrlRejected):
+        validate_repository_url(url, {"github.com"}, _public_resolver)
+
+
+@pytest.mark.parametrize(
+    "address",
+    ["127.0.0.1", "169.254.169.254", "10.0.0.1", "172.16.0.1", "192.168.1.1", "::1"],
+)
+def test_repository_url_rejects_non_public_dns_results(address):
+    def resolver(*args, **kwargs):
+        return [(None, None, None, None, (address, 443))]
+
+    with pytest.raises(RepositoryUrlRejected, match="non-public"):
+        validate_repository_url("https://github.com/o/r.git", {"github.com"}, resolver)
+
+
+def test_repository_url_rejects_host_outside_allowlist():
+    with pytest.raises(RepositoryUrlRejected, match="allow-listed"):
+        validate_repository_url(
+            "https://example.com/o/r.git", {"github.com"}, _public_resolver
+        )

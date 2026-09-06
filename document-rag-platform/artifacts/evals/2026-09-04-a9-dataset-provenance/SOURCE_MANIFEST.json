@@ -1,0 +1,34 @@
+[
+  {
+    "path": "AKTIF_GOREV.md",
+    "sha256": "3192f3ac5e0784621f1ab2d1edbe68942fbda6080e325d61c3fbcbc728c0e612"
+  },
+  {
+    "path": "scripts/run_eval.py",
+    "sha256": "9a25610ab24d07a483143e3b48daddab74472a2eff31640f0f07b82038c2519a"
+  },
+  {
+    "path": ".github/workflows/ci-rag-eval.yml",
+    "sha256": "376322e0ad9db119ff3c8ceca4b6038a7aa534ec35120f06493a14a7bd36f628"
+  },
+  {
+    "path": "document-rag-platform/services/backend/tests/evals/test_tier_contracts.py",
+    "sha256": "e729988cc6bcd849f655c387c459d6be8ab102b67de5cb90115e73f0151c6698"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/datasets/README.md",
+    "sha256": "0534e2288ea37eee1965c9a234880c72c74acbc826fb0f0cbfc3158c72680847"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/datasets/public-dataset-manifest.schema.json",
+    "sha256": "072d180988d93c89f7a4bd0890e5a942f2797362349c063f120323010b5d89a9"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/datasets/public-synthetic-v2.manifest.json",
+    "sha256": "f0313ac0fd75b2cccc959c429ba1c1211118ccdc4d18e8baaffcb1063b37f94e"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/datasets/public-synthetic-v2.jsonl",
+    "sha256": "cb313befd19228e934fda53f3f57d92452e403daeec654b0a8773591b0395523"
+  }
+]

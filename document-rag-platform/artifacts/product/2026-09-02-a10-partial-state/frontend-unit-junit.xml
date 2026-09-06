@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="26" failures="0" errors="0" time="0.038771291">
+    <testsuite name="lib/api.test.ts" timestamp="2026-09-02T19:25:29.712Z" hostname="redacted-local" tests="2" failures="0" errors="0" skipped="0" time="0.001926833">
+        <testcase classname="lib/api.test.ts" name="apiUrl &gt; uses same-origin during server-side rendering" time="0.000934583">
+        </testcase>
+        <testcase classname="lib/api.test.ts" name="apiUrl &gt; uses deployment runtime configuration" time="0.000156333">
+        </testcase>
+    </testsuite>
+    <testsuite name="features/conversations/components.test.tsx" timestamp="2026-09-02T19:25:29.712Z" hostname="redacted-local" tests="5" failures="0" errors="0" skipped="0" time="0.012913209">
+        <testcase classname="features/conversations/components.test.tsx" name="product semantic components &gt; does not silently preselect the first project" time="0.002842875">
+        </testcase>
+        <testcase classname="features/conversations/components.test.tsx" name="product semantic components &gt; renders each no-answer reason distinctly" time="0.000642875">
+        </testcase>
+        <testcase classname="features/conversations/components.test.tsx" name="product semantic components &gt; renders only supplied used citations and warns on changed version" time="0.000498291">
+        </testcase>
+        <testcase classname="features/conversations/components.test.tsx" name="product semantic components &gt; does not render raw HTML, scripts, javascript links or remote images" time="0.007321167">
+        </testcase>
+        <testcase classname="features/conversations/components.test.tsx" name="product semantic components &gt; keeps failed terminal jobs visible and never fabricates percent" time="0.0008315">
+        </testcase>
+    </testsuite>
+    <testsuite name="features/documents/documentState.test.ts" timestamp="2026-09-02T19:25:29.713Z" hostname="redacted-local" tests="9" failures="0" errors="0" skipped="0" time="0.003998333">
+        <testcase classname="features/documents/documentState.test.ts" name="scoped document snapshot lifecycle &gt; distinguishes unselected, first loading and confirmed empty" time="0.001454875">
+        </testcase>
+        <testcase classname="features/documents/documentState.test.ts" name="scoped document snapshot lifecycle &gt; retains only an existing validated snapshot on an outage" time="0.000435">
+        </testcase>
+        <testcase classname="features/documents/documentState.test.ts" name="scoped document snapshot lifecycle &gt; invalidates cached rows on HTTP 401" time="0.000138209">
+        </testcase>
+        <testcase classname="features/documents/documentState.test.ts" name="scoped document snapshot lifecycle &gt; invalidates cached rows on HTTP 403" time="0.000089459">
+        </testcase>
+        <testcase classname="features/documents/documentState.test.ts" name="scoped document snapshot lifecycle &gt; invalidates cached rows on HTTP 404" time="0.000077042">
+        </testcase>
+        <testcase classname="features/documents/documentState.test.ts" name="scoped document snapshot lifecycle &gt; does not accept a delayed response after a newer request" time="0.000085709">
+        </testcase>
+        <testcase classname="features/documents/documentState.test.ts" name="scoped document snapshot lifecycle &gt; never carries a snapshot or delayed result across scope" time="0.000166875">
+        </testcase>
+        <testcase classname="features/documents/documentState.test.ts" name="scoped document snapshot lifecycle &gt; does not resurrect a successfully deleted row when refresh fails" time="0.000130917">
+        </testcase>
+        <testcase classname="features/documents/documentState.test.ts" name="scoped document snapshot lifecycle &gt; retains denial until an explicit successful revalidation" time="0.000262375">
+        </testcase>
+    </testsuite>
+    <testsuite name="lib/api/client.test.ts" timestamp="2026-09-02T19:25:29.714Z" hostname="redacted-local" tests="10" failures="0" errors="0" skipped="0" time="0.019932916">
+        <testcase classname="lib/api/client.test.ts" name="fail-closed API boundary &gt; preserves HTTP denial even with a non-problem response body: { body: null }" time="0.015787416">
+        </testcase>
+        <testcase classname="lib/api/client.test.ts" name="fail-closed API boundary &gt; preserves HTTP denial even with a non-problem response body: { body: &apos;denied&apos; }" time="0.00041075">
+        </testcase>
+        <testcase classname="lib/api/client.test.ts" name="fail-closed API boundary &gt; preserves HTTP denial even with a non-problem response body: { body: [] }" time="0.000263166">
+        </testcase>
+        <testcase classname="lib/api/client.test.ts" name="fail-closed API boundary &gt; preserves HTTP denial even with a non-problem response body: { body: {} }" time="0.0003165">
+        </testcase>
+        <testcase classname="lib/api/client.test.ts" name="fail-closed API boundary &gt; does not send a request before workspace/auth admission" time="0.000347583">
+        </testcase>
+        <testcase classname="lib/api/client.test.ts" name="fail-closed API boundary &gt; sends explicit headers without cookies and validates response" time="0.00069175">
+        </testcase>
+        <testcase classname="lib/api/client.test.ts" name="fail-closed API boundary &gt; rejects malformed successful payloads" time="0.000306">
+        </testcase>
+        <testcase classname="lib/api/client.test.ts" name="fail-closed API boundary &gt; never displays arbitrary server exceptions" time="0.0001805">
+        </testcase>
+        <testcase classname="lib/api/client.test.ts" name="fail-closed API boundary &gt; rejects insecure non-loopback transport before transmitting a key" time="0.000379625">
+        </testcase>
+        <testcase classname="lib/api/client.test.ts" name="fail-closed API boundary &gt; validates generated request limits and enum values" time="0.00017775">
+        </testcase>
+    </testsuite>
+</testsuites>

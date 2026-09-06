@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "verify",
+  "operation_id": "cv3-a9-review-admission-hardening-20260905-001",
+  "work_item_id": "CV3-A9-EVAL",
+  "actor": "codex-local-agent",
+  "tool_adapter": "local-cli-git-pytest",
+  "finished_at_utc": "2026-09-05T05:04:30Z",
+  "baseline_revision": "b017846099f2647e957e7dd0f19e21e435b4fe2f",
+  "result_revision": "8e9700a90219055bce3fb1893a45b35b246d776b",
+  "result_tree": "5e78ece6c7dc403e718bfe90837c97910b8d9663",
+  "scope_manifest_sha256": "82f5de7d83e25594832cf25f2aa8f7ca7dbd2d3128bee48cf98aa58c40b724f2",
+  "post_commit_checks": [
+    {
+      "name": "focused A9 tier contracts",
+      "result": "232 passed in 2.78s"
+    },
+    {
+      "name": "Ruff check",
+      "result": "PASS"
+    },
+    {
+      "name": "source manifest exact hashes",
+      "result": "PASS",
+      "files": 10
+    },
+    {
+      "name": "evidence package checksums",
+      "result": "PASS"
+    }
+  ],
+  "independent_review_sha256": "2820bb232292efa07082cafd5ea653ea88f9405d3576271d677a40689dc30578",
+  "precommit_receipt_sha256": "a4f1711af73198fe2855bda4e6891ab22b1f508241f02b347be11d2e5a3843c9",
+  "human_or_owner_authority": false,
+  "a9_closed": false,
+  "limitations": [
+    "This receipt binds the tested implementation commit only.",
+    "It is not private-pack owner review, execution approval, non-transfer proof, baseline seal or release authorization."
+  ]
+}

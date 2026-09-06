@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "unsupported_before_implementation": {
+    "arguments": ["--public-dataset-status", "--public-review-receipt"],
+    "exit_code": 2,
+    "result": "ARGUMENT_UNRECOGNIZED",
+    "provider_invoked": false
+  },
+  "pending_without_receipt": {
+    "exit_code": 0,
+    "integrity": "PASS",
+    "review_status": "pending",
+    "review_claim_status": "manifest-declared-pending",
+    "receipt_binding_verified": false,
+    "review_authority_verified": false,
+    "approval_evidence_verified": false,
+    "review_complete": false,
+    "release_gate_eligible": false,
+    "provider_invoked": false
+  },
+  "synthetic_exact_binding_in_test_harness": {
+    "result": "PASS",
+    "receipt_binding_verified": true,
+    "review_authority_verified": false,
+    "approval_evidence_verified": false,
+    "review_complete": false,
+    "release_gate_eligible": false,
+    "provider_invoked": false
+  },
+  "wrong_mode": {
+    "mode": "contract-smoke",
+    "exit_code": 3,
+    "result": "ENVIRONMENT_UNAVAILABLE",
+    "reason": "public review receipt requires public dataset status",
+    "provider_invoked": false
+  },
+  "provider_invocations": 0
+}

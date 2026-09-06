@@ -17,14 +17,14 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import text
-
 from src.config import settings
 from src.infrastructure.retrieval.base import (
     FilterTerm,
     RetrievalCandidate,
     filter_spec,
+    execute_retrieval_query,
     render_where,
+    require_scoped_filters,
     to_candidates,
 )
 
@@ -39,16 +39,65 @@ DEFAULT_TEXT_SEARCH_CONFIG: str = "simple"
 #: appear in Turkish content, so the meaningful term "stp" never matches even
 #: though it is present in the corpus. Dropping the fillers keeps the remaining
 #: significant terms (here just "stp") as the FTS query.
-LEXICAL_STOPWORDS: frozenset = frozenset({
-    # English function / question / auxiliary filler words.
-    "a", "an", "and", "are", "as", "at", "be", "by", "did", "do", "does",
-    "for", "from", "how", "in", "into", "is", "it", "its", "of", "on", "or",
-    "that", "the", "this", "to", "was", "were", "what", "when", "where",
-    "which", "who", "why", "with",
-    # Turkish question / connector / filler words.
-    "nedir", "nasil", "nasıl", "neler", "nelerdir", "neden", "hangi", "kac", "kaç",
-    "icin", "için", "ile", "ve", "bir", "bu", "su", "şu", "ne",
-})
+LEXICAL_STOPWORDS: frozenset = frozenset(
+    {
+        # English function / question / auxiliary filler words.
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "by",
+        "did",
+        "do",
+        "does",
+        "for",
+        "from",
+        "how",
+        "in",
+        "into",
+        "is",
+        "it",
+        "its",
+        "of",
+        "on",
+        "or",
+        "that",
+        "the",
+        "this",
+        "to",
+        "was",
+        "were",
+        "what",
+        "when",
+        "where",
+        "which",
+        "who",
+        "why",
+        "with",
+        # Turkish question / connector / filler words.
+        "nedir",
+        "nasil",
+        "nasıl",
+        "neler",
+        "nelerdir",
+        "neden",
+        "hangi",
+        "kac",
+        "kaç",
+        "icin",
+        "için",
+        "ile",
+        "ve",
+        "bir",
+        "bu",
+        "su",
+        "şu",
+        "ne",
+    }
+)
 
 
 def filter_query_terms(query_text: str) -> str:
@@ -63,7 +112,8 @@ def filter_query_terms(query_text: str) -> str:
     if not query_text:
         return query_text
     tokens = [
-        t for t in re.findall(r"\w+", query_text)
+        t
+        for t in re.findall(r"\w+", query_text)
         if len(t) > 1 and t.lower() not in LEXICAL_STOPWORDS
     ]
     if not tokens:
@@ -84,7 +134,8 @@ def significant_query_terms(query_text: str) -> "List[str]":
     if not query_text:
         return []
     tokens = [
-        t for t in re.findall(r"\w+", query_text.lower())
+        t
+        for t in re.findall(r"\w+", query_text.lower())
         if len(t) > 1 and t not in LEXICAL_STOPWORDS
     ]
     if not tokens:
@@ -131,7 +182,9 @@ class LexicalRetriever:
         session: Any = None,
         scope_key: str = "scope",
     ):
-        self.candidate_k = candidate_k if candidate_k is not None else settings.LEXICAL_CANDIDATE_K
+        self.candidate_k = (
+            candidate_k if candidate_k is not None else settings.LEXICAL_CANDIDATE_K
+        )
         self.ts_config = ts_config
         self.session = session
         self.scope_key = scope_key
@@ -155,10 +208,18 @@ class LexicalRetriever:
         text-search config would otherwise AND into the query and block.
         """
         cleaned = filter_query_terms(query_text)
+        if '"' in query_text:
+            query_function = "phraseto_tsquery"
+        elif re.search(r"\bOR\b", query_text, re.IGNORECASE):
+            query_function = "websearch_to_tsquery"
+        else:
+            query_function = "websearch_to_tsquery"
         return {
             "kind": "lexical",
             "ts_config": self.ts_config,
             "query_text": cleaned,
+            "query_function": query_function,
+            "search_profile": "simple-websearch-v1",
             "chunk_table": "chunks",
             "search_vector_column": "search_vector",
             "candidate_k": self.resolve_k(top_k),
@@ -172,13 +233,20 @@ class LexicalRetriever:
         filters: Optional[dict] = None,
         session: Any = None,
     ) -> List[RetrievalCandidate]:
+        filters = require_scoped_filters(filters)
         spec = self.build_spec(query_text, top_k, filters)
         sql, params = lexical_sql_from_spec(spec)
         session = session or self.session
         if session is None:
             raise ValueError("no database session available for lexical search")
         if hasattr(session, "execute"):
-            result = session.execute(text(sql), params).fetchall()
+            result = execute_retrieval_query(
+                session,
+                sql,
+                params,
+                stage="lexical",
+                expected_index="ix_chunks_search_vector_gin",
+            )
         else:
             result = session(sql, params)
         return to_candidates(result, source="lexical")
@@ -186,25 +254,47 @@ class LexicalRetriever:
 
 def lexical_sql_from_spec(spec: Dict[str, Any]) -> "tuple[str, Dict[str, Any]]":
     """Build (sql, params) for a lexical spec (pure, deterministic)."""
-    c = spec["chunk_table"]
+    chunk_table = spec["chunk_table"]
+    c = "c"
     sv = spec["search_vector_column"]
     ts_cfg = spec["ts_config"]
+    query_function = spec.get("query_function", "websearch_to_tsquery")
     terms = [FilterTerm(**t) for t in spec["filters"]]
     where_sql, params = render_where(terms, prefix="f")
-    clauses = [f"query @@ {c}.{sv}"]
+    clauses = [f"q.query @@ {c}.{sv}", "d.deleted_at IS NULL"]
     if where_sql:
         clauses.append(where_sql)
     params["query_text"] = spec["query_text"]
     params["candidate_k"] = int(spec["candidate_k"])
+    params["search_profile"] = spec["search_profile"]
 
     sql = (
         f"SELECT {c}.id AS chunk_id,\n"
-        f"       ts_rank_cd({c}.{sv}, query) AS score\n"
-        f"FROM {c}\n"
-        f"JOIN documents AS d ON d.id = {c}.document_id,\n"
-        f"     plainto_tsquery('{ts_cfg}', :query_text) AS query\n"
+        f"       ts_rank_cd({c}.{sv}, q.query) AS score,\n"
+        f"       jsonb_build_object(\n"
+        f"         'document_id', {c}.document_id, 'version_id', {c}.version_id,\n"
+        f"         'source_file_id', {c}.source_file_id, 'workspace_id', p.workspace_id,\n"
+        f"         'project_id', d.project_id, 'embedding_profile_id', v.embedding_profile_id,\n"
+        f"         'content_hash', {c}.content_hash, 'classification', d.data_classification,\n"
+        f"         'search_profile', {c}.search_profile, 'match_type', :query_form,\n"
+        f"         'matched_terms', to_jsonb(regexp_split_to_array(:query_text, '\\s+')),\n"
+        f"         'locator', jsonb_strip_nulls(jsonb_build_object(\n"
+        f"           'page_start', {c}.page_start, 'page_end', {c}.page_end,\n"
+        f"           'line_start', {c}.line_start, 'line_end', {c}.line_end,\n"
+        f"           'symbol_name', {c}.symbol_name))) AS metadata\n"
+        f"FROM {chunk_table} AS {c}\n"
+        f"JOIN documents AS d ON d.id = {c}.document_id\n"
+        f"JOIN projects AS p ON p.id = d.project_id\n"
+        f"JOIN document_versions AS v ON v.id = {c}.version_id\n"
+        f"JOIN content_policy_decisions AS cp ON cp.id = v.content_policy_decision_id\n"
+        f"CROSS JOIN LATERAL {query_function}('{ts_cfg}', :query_text) AS q(query)\n"
         f"WHERE {' AND '.join(clauses)}\n"
+        f"  AND d.active_version_id = {c}.version_id\n"
+        f"  AND v.status IN ('ready','completed')\n"
+        f"  AND {c}.search_profile = :search_profile\n"
+        f"  AND cp.permit_local_generation IS TRUE\n"
         f"ORDER BY score DESC, {c}.id\n"
         f"LIMIT :candidate_k"
     )
+    params["query_form"] = query_function.removesuffix("_to_tsquery")
     return sql, params

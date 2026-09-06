@@ -19,7 +19,10 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Iterable, List, Optional, Sequence
+import stat
+from typing import List, Optional, Sequence
+
+MAX_IGNORE_FILE_BYTES = 1024 * 1024
 
 # --- Default system ignore list (AKTIF_GOREV.md §7.3) -----------------------
 DEFAULT_IGNORE_PATTERNS: tuple[str, ...] = (
@@ -39,7 +42,7 @@ DEFAULT_IGNORE_PATTERNS: tuple[str, ...] = (
     "*.lock",
     "*.png",
     "*.jpg",
-    "*.pdf",   # repo-code scans route PDFs to the document parser instead
+    "*.pdf",  # repo-code scans route PDFs to the document parser instead
     "*.exe",
     "*.dll",
     "*.so",
@@ -81,7 +84,7 @@ DEFAULT_SENSITIVE_PATTERNS: tuple[str, ...] = (
     "*secret*",
     "*secrets*",
     "*password*",
-    ".npmrc",   # often carries auth tokens
+    ".npmrc",  # often carries auth tokens
     ".pypirc",
     "*.pem.my.cnf",
 )
@@ -156,7 +159,7 @@ def _compile_glob(pattern: str) -> re.Pattern:
             while j < n and pattern[j] != "]":
                 j += 1
             if j < n:
-                cls = pattern[i:j + 1]
+                cls = pattern[i : j + 1]
                 if cls.startswith("[!"):
                     cls = "[^" + cls[2:]
                 out.append(cls)
@@ -202,12 +205,27 @@ class GitignoreMatcher:
     @classmethod
     def from_file(cls, filename: str, base: str = "", allow_negation: bool = True):
         patterns: List[str] = []
-        if filename and os.path.isfile(filename):
+        descriptor = -1
+        nofollow = getattr(os, "O_NOFOLLOW", None)
+        if filename and nofollow is not None:
             try:
-                with open(filename, "r", encoding="utf-8", errors="replace") as fh:
+                descriptor = os.open(filename, os.O_RDONLY | nofollow)
+                opened = os.fstat(descriptor)
+                if (
+                    not stat.S_ISREG(opened.st_mode)
+                    or opened.st_size > MAX_IGNORE_FILE_BYTES
+                ):
+                    return cls(patterns, base=base, allow_negation=allow_negation)
+                with os.fdopen(
+                    descriptor, "r", encoding="utf-8", errors="replace"
+                ) as fh:
+                    descriptor = -1
                     patterns = fh.read().splitlines()
             except OSError:
                 patterns = []
+            finally:
+                if descriptor >= 0:
+                    os.close(descriptor)
         return cls(patterns, base=base, allow_negation=allow_negation)
 
     def _strip_base(self, rel: str) -> str:
@@ -217,7 +235,7 @@ class GitignoreMatcher:
             return ""
         prefix = self.base + "/"
         if rel.startswith(prefix):
-            return rel[len(prefix):]
+            return rel[len(prefix) :]
         # Rule not in scope for this path.
         return None
 
@@ -329,7 +347,9 @@ def build_ignore_rules(
 
     return IgnoreRules(
         system_patterns=(
-            list(system_ignore) if system_ignore is not None else DEFAULT_IGNORE_PATTERNS
+            list(system_ignore)
+            if system_ignore is not None
+            else DEFAULT_IGNORE_PATTERNS
         ),
         contextvault_patterns=contextvault_ignore or (),
         gitignore_patterns=gitignore or (),

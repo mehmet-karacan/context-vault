@@ -105,8 +105,6 @@ def binarize(image, threshold: int = 127):
     if _pil_image(image) is None:
         return image
     try:
-        from PIL import Image
-
         gray = image.convert("L")
         return gray.point(lambda p: 255 if p > threshold else 0)
     except Exception:

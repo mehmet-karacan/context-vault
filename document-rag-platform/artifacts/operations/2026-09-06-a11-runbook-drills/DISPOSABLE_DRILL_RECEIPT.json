@@ -1,0 +1,38 @@
+{
+  "cleanup": {
+    "container_removed": true,
+    "remaining_owned_container_count": 0,
+    "remaining_owned_volume_count": 0,
+    "volume_removed": true
+  },
+  "completed_at_utc": "2026-09-06T00:03:11Z",
+  "container_id_sha256": "6a91112ea12eed9deafc6d9f184084d41b1462eb7167e00996504638a4d4c168",
+  "credential_values_retained": false,
+  "database_post_test_counts": {
+    "ingestion_jobs": 0,
+    "projects_total": 0,
+    "principals_total": 1,
+    "storage_gc_receipts": 0
+  },
+  "disposable_owner_label_sha256": "12c8f410021893e3f043403f07e3dfda2c407c2d2c765c96ff7104940133cd0b",
+  "migration_head": "cv3_00000006",
+  "production_effects_performed": false,
+  "raw_resource_names_retained": false,
+  "receipt_type": "a11-disposable-runbook-drills",
+  "release_gate_eligible": false,
+  "runtime_image_digest": "sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b",
+  "schema_version": "1.0",
+  "source_base_revision": "b6d368c4ba75afee5630251e5c0f3649d1c9c920",
+  "source_bytes_aggregate_sha256": "0ca9a1909e0ea71a672a686d36b37dc747a82e9e601e3ce5b991ccfedf4275f0",
+  "status": "PASS",
+  "superseded_fixture_attempt_count": 2,
+  "superseded_fixture_resources_cleaned": true,
+  "tests": {
+    "gc_retention_citation_hold": true,
+    "outbox_stale_lease_quarantine": true,
+    "profile_database_invariants": true,
+    "reindex_failure_preserves_active_version": true
+  },
+  "user_resources_targeted": false,
+  "volume_identity_sha256": "3adb39c3c4d86bb68e52a7feb46a8f3633e75130dfbdb54d75b062b7e650581d"
+}

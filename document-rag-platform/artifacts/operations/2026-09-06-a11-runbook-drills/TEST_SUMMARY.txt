@@ -1,0 +1,36 @@
+A11 AUTOMATIC BACKUP + RUNBOOK DRILL SUMMARY
+
+Base repository revision:
+b6d368c4ba75afee5630251e5c0f3649d1c9c920
+
+Automatic backup scheduler:
+- pytest test_backup_scheduler.py + test_backup_restore_ops.py: 33 passed in 1.67s
+- scheduler-only tests: 15 passed
+- ruff check: PASS
+- ruff format: PASS
+- py_compile: PASS
+- actual scheduler CLI dry-run: exit 0, status DRY_RUN
+- backup_invoked=false, credential_values_retained=false
+- configured backup root remained absent; no DB/object-store effect
+- production scheduler execution and alert delivery: NOT RUN / NOT CLAIMED
+
+Executable no-effect runbook drills:
+- reindex/profile in-memory: 2 passed in 0.99s
+- repository SSRF/network admission: 12 passed in 0.16s
+- degraded mandatory/optional provider readiness: 3 passed in 1.06s
+- secret redaction/error containment: 12 passed in 1.02s
+- release candidate fail-closed/no-deployment: 3 passed in 0.41s
+
+Disposable PostgreSQL runbook drills:
+- exact pinned pgvector image; new labelled container/database only
+- Alembic migration from blank to cv3_00000006: PASS
+- outbox/stale lease/quarantine, retention/citation-hold/GC,
+  reindex failure preservation and profile invariants: 4 passed in 1.96s
+- final rerun source/test SHA-256 values were identical before and after execution
+- post-test principals/projects/jobs/GC receipts: 1/0/0/0; the principal is the
+  migration-seeded inactive legacy owner, not synthetic or user data
+- exact container and anonymous volume cleanup: PASS; remaining 0/0
+
+No provider call, hostile network call, MinIO deletion, credential rotation or
+revocation, release, rollback, deployment, traffic shift, remote mutation or user
+data access was performed.

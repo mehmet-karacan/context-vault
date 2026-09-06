@@ -202,9 +202,7 @@ def test_markdown_encoding_fallback(tmp_path):
 
 def test_markdown_multi_hyphen_separator(tmp_path):
     p = tmp_path / "t.md"
-    p.write_text(
-        "| A | B |\n|----|:---:|\n| 1 | 2 |\n", encoding="utf-8"
-    )
+    p.write_text("| A | B |\n|----|:---:|\n| 1 | 2 |\n", encoding="utf-8")
     result = MarkdownParser().parse(str(p), "t.md")
     tables = [u for u in result.units if u.unit_type == UnitType.TABLE]
     assert len(tables) == 1

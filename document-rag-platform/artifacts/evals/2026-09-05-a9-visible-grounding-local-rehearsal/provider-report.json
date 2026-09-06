@@ -1,0 +1,139 @@
+{
+  "config_hash": "a10edc1b346864c10548edd0659d7e726e5854a30944b895ad38075c231c3096",
+  "embedding_model": "BAAI/bge-m3@5617a9f61b028005a4858fdac845db406aefb181",
+  "embedding_profile_hash": "f3b2a37211c10b09521c0b1a36ddf2a52e45ec66cf25f82c8c55a30f5cdbf1e2",
+  "embedding_provider": "local-sentence-transformers",
+  "environment_hash": "533f8164550c9281345341768b41afacafd7ee3e3368e2a3c4e4a2c6ac72e6ef",
+  "generation_model": "Qwen/Qwen2.5-1.5B-Instruct@989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+  "generation_provider": "local-transformers",
+  "golden_results_sent_to_provider": false,
+  "metrics": {
+    "active_version_leakage": 0.0,
+    "answer_sufficiency": 1.0,
+    "answerability_false_negative_rate": 0.0,
+    "answerability_false_positive_rate": 0.0,
+    "citation_coverage": 1.0,
+    "citation_precision": 1.0,
+    "citation_recall": 1.0,
+    "context_precision": 0.8333333333333334,
+    "context_recall": 1.0,
+    "contradiction_handling": 1.0,
+    "critical_high_security_findings": 0,
+    "cross_project_leakage": 0.0,
+    "cross_workspace_leakage": 0.0,
+    "duplicate_count": 0,
+    "duplicate_rate": 0.0,
+    "error_code_distribution": {
+      "answer_validation.answerable_claims_empty": 1
+    },
+    "fabricated_no_answer_responses": 0,
+    "first_relevant_rank": 1.0,
+    "identifier_exact_success_rate": 0.0,
+    "identifier_fuzzy_success_rate": 0.0,
+    "invalid_citation_labels": 0,
+    "latency_ms": {
+      "end_to_end": {
+        "p50": 83784.76464550477,
+        "p95": 118273.8294689334,
+        "p99": 123448.15222731559
+      },
+      "ingestion": {
+        "p50": 1916.4229789748788,
+        "p95": 3219.6145515481476,
+        "p99": 3271.8626431480516
+      },
+      "retrieval": {
+        "p50": 125.03991700941697,
+        "p95": 817.4383433070034,
+        "p99": 985.4781015310438
+      }
+    },
+    "mrr@10": 0.8333333333333334,
+    "ndcg@10": 0.8333333333333334,
+    "orphan_count": 0,
+    "permission_version_leakage": 0,
+    "profile_leakage": 0.0,
+    "prompt_injection_success_rate": 0.0,
+    "queue_wait_ms": {
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0
+    },
+    "recall@1": 0.8333333333333334,
+    "recall@10": 0.8333333333333334,
+    "recall@3": 0.8333333333333334,
+    "recall@5": 0.8333333333333334,
+    "retry_count": 0,
+    "source_label_invalidity_rate": 0.0,
+    "stage_duration_ms": {
+      "answer": {
+        "p50": 12773.13556248555,
+        "p95": 37263.4379377123,
+        "p99": 39728.31752109341
+      },
+      "ingestion": {
+        "p50": 1916.4229789748788,
+        "p95": 3219.6145515481476,
+        "p99": 3271.8626431480516
+      },
+      "retrieval": {
+        "p50": 125.03991700941697,
+        "p95": 817.4383433070034,
+        "p99": 985.4781015310438
+      }
+    },
+    "unsupported_claim_rate": 0.0
+  },
+  "prompt_hash": "a5f127604b30c10bc4987261519f52fd7d2623aba906b91e679b1e3580230b45",
+  "query_type_breakdown": {
+    "cross-project-seed": {
+      "answerability_false_negative_rate": 0.0,
+      "answerability_false_positive_rate": 0.0,
+      "citation_coverage": 1.0,
+      "citation_precision": 1.0,
+      "records": 1
+    },
+    "cross-workspace-seed": {
+      "answerability_false_negative_rate": 0.0,
+      "answerability_false_positive_rate": 0.0,
+      "citation_coverage": 1.0,
+      "citation_precision": 1.0,
+      "records": 1
+    },
+    "no-answer": {
+      "answerability_false_negative_rate": 0.0,
+      "answerability_false_positive_rate": 0.0,
+      "citation_coverage": 1.0,
+      "citation_precision": 1.0,
+      "records": 1
+    },
+    "permission-cross-scope": {
+      "answerability_false_negative_rate": 0.0,
+      "answerability_false_positive_rate": 0.0,
+      "citation_coverage": 1.0,
+      "citation_precision": 1.0,
+      "records": 1
+    },
+    "prompt-injection-citation": {
+      "answerability_false_negative_rate": 0.0,
+      "answerability_false_positive_rate": 0.0,
+      "citation_coverage": 1.0,
+      "citation_precision": 1.0,
+      "records": 1
+    },
+    "temporal-version": {
+      "answerability_false_negative_rate": 0.0,
+      "answerability_false_positive_rate": 0.0,
+      "citation_coverage": 1.0,
+      "citation_precision": 1.0,
+      "records": 1
+    }
+  },
+  "schema_version": "2.0",
+  "usage": {
+    "cost_usd": 0.0,
+    "input_tokens": 10078,
+    "output_tokens": 713,
+    "provider_calls": 22
+  }
+}

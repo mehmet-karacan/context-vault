@@ -1,0 +1,23 @@
+{
+  "files": {
+    "document-rag-platform/docs/runbooks/a11-backup-restore.md": "b7e8fc4a657e47e930f79ea26ff49b5852fe9c6a0d938471a39a8ccdbb9c6f34",
+    "document-rag-platform/docs/runbooks/a11-operations-index.md": "4a6ea27998a327e2f507272b2b5a27b19968053ee1a021c9baaab7a0e8bcc270",
+    "document-rag-platform/docs/runbooks/degraded-readiness.md": "8195983eb95607aea30fbd3e12bb00d8c34dad6c391b24b1bfadf705d0240869",
+    "document-rag-platform/docs/runbooks/installation-first-boot.md": "8db5de04b074dbe79f8402812710166793f6cef7c097338ec3754136404c2386",
+    "document-rag-platform/docs/runbooks/migration-lineage-recovery.md": "5058630decb410b08e7d1808c87485ab9ca4da3c340060d6dc7eb0296be97226",
+    "document-rag-platform/docs/runbooks/object-gc-quarantine.md": "50ac8be4888a7f6ae4304e15d9c7afd2adc3239927e866f1609787864f350dca",
+    "document-rag-platform/docs/runbooks/provider-ca-key-rotation.md": "07f590c770c629fe9a7b237cba6b399014354e92af377493ed942bc07565d9fb",
+    "document-rag-platform/docs/runbooks/reindex-profile-change.md": "685d6c35eda6ccf5b890ad88661c18564bf12653f456e8e00464075e44bde71a",
+    "document-rag-platform/docs/runbooks/release-rollback.md": "7b33d1713b30066866782aeee873774cd6883bb4e25e404d42fd70c133bcbf12",
+    "document-rag-platform/docs/runbooks/repository-ingestion-incident.md": "5a34a911f3ac8afbcfebd2ec6ac15595c639bb1af9384bb124d4169e5ade56c7",
+    "document-rag-platform/docs/runbooks/security-incident.md": "896406e354e31960c664c5ee0d18e9ea6b75ccc6ee46af8b7d4f7ccfab77e0b9",
+    "document-rag-platform/docs/runbooks/stuck-job-outbox-lease.md": "474fbb09cec411f1ed301fcc2473042344b57ef20f0151f87bc8dac10aa724d9",
+    "document-rag-platform/services/backend/tests/test_backup_restore_ops.py": "81309c7d932a83be3be1eafc7e9591320b7dcbe218fdf25e528f92d153b04ae0",
+    "document-rag-platform/services/backend/tests/test_ops_doctor.py": "362737be1cf5bb6b5d8f747860407ef2321d31ed7a7dac9df3eae16c3f6823a7",
+    "scripts/backup_restore.py": "6fc5fa08f15e83687ff8bb30e6b8d2e4db06ed8827bfe26d91dd82b8bd27abb8",
+    "scripts/ops_doctor.py": "a53816e53202356710080df128576c2a123d7f5403be8581f0dc098b3e74150d"
+  },
+  "hardened_test_base_revision": "398b503ade63aea7d97fda29ac60dc6924de406a",
+  "superseded_runtime_base_revision": "fcddb4a49e99c05e7f225fff64c56c0a778fb970",
+  "schema_version": "1.0"
+}

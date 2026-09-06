@@ -60,8 +60,13 @@ def ensure_allowed_scan_path(
             allowed_roots = roots
         elif roots and allowed_roots:
             # Merge config roots with any explicitly-supplied ones.
-            merged = list((allowed_roots if not isinstance(allowed_roots, str)
-                           else [r for r in allowed_roots.split(",") if r]))
+            merged = list(
+                (
+                    allowed_roots
+                    if not isinstance(allowed_roots, str)
+                    else [r for r in allowed_roots.split(",") if r]
+                )
+            )
             merged.extend(r for r in str(roots).split(",") if r.strip())
             allowed_roots = merged
     if is_path_blocked(requested_path, allowed_roots):

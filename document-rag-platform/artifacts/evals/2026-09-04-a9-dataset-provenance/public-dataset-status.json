@@ -1,0 +1,22 @@
+{
+  "approval_evidence_verified": false,
+  "classification": "public-synthetic",
+  "dataset_manifest_sha256": "f0313ac0fd75b2cccc959c429ba1c1211118ccdc4d18e8baaffcb1063b37f94e",
+  "dataset_sha256": "cb313befd19228e934fda53f3f57d92452e403daeec654b0a8773591b0395523",
+  "dataset_version": "2.0.0",
+  "integrity": "PASS",
+  "provider_invoked": false,
+  "records": 16,
+  "release_gate_eligible": false,
+  "repository_revision": "e5116c441f54e79207b94bc95611dc6c4612af52",
+  "request_type": "public-dataset-review-status",
+  "review_claim_status": "manifest-declared-pending",
+  "review_complete": false,
+  "review_status": "pending",
+  "schema_version": "1.0",
+  "splits": [
+    "holdout",
+    "train"
+  ],
+  "tool_version": "1.4.0"
+}

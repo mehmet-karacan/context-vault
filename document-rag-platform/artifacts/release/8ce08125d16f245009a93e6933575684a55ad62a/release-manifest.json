@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "release-verification",
+  "candidate_sha": "8ce08125d16f245009a93e6933575684a55ad62a",
+  "report_commit_role": "documentation-and-authority-successor",
+  "observed_at_utc": "2026-09-06T05:38:02Z",
+  "decision": "GO_APPROVED_LOCAL_MACBOOK_SCOPE",
+  "machine_verification": "PASS",
+  "independent_verifier": "PASS",
+  "existing_user_data_deleted": false,
+  "remote_branch_and_pr_updated": true,
+  "merge_tag_or_release_performed": false,
+  "public_safe": true,
+  "pull_request": "https://github.com/mehmet-karacan/context-vault/pull/1",
+  "required_files": [
+    "SHA256SUMS",
+    "context-vault-protocol-summary.json",
+    "known-risks.md",
+    "migration-summary.json",
+    "rag-eval-summary.json",
+    "release-manifest.json",
+    "restore-summary.json",
+    "security-summary.json",
+    "test-summary.json",
+    "verification-report.md"
+  ],
+  "remaining_blocking_gates": [],
+  "open_nonblocking_risks": [
+    "A11-RISK-002",
+    "A11-RISK-003",
+    "A9-RISK-005"
+  ],
+  "evidence_hashes": {
+    "verified_status_report": "d52b2af8d198c2c17b128bb8ef35ad33f7394b91f174faf01e5036e9f84a9766",
+    "remote_ci_receipt": "30cfe6401ae99efc5d561e2113c45419752b9e2351afc736e4d259ef73d9946b",
+    "main_ruleset_receipt": "d93f547d9b2663f81c521f6ebd48416fc31417dffbcc7563962d9454ff295cb0",
+    "aggregate_release_verifier": "c7f30def0b3bbac601f2c701c956b704dc99efaf562a294258ac0cfa093f601a",
+    "real_benchmark_regression": "79f7c24e2cddc32507f50917b494671b50b26544809b924ac4b3600fcaad6a94",
+    "non_transfer_check": "7b8c0b646517624c637943a0225075b443be46d70f6a8f16879b864d98d2d9e7",
+    "benchmark_approval_manifest": "e823ff1a64c163d5ca7e156f29d91f3147ad1df62afc370007e7411e30a43611",
+    "benchmark_baseline_seal": "44bdc3020c471c8eb750240cc4e884f5eef9e3065c187a428f7038678276b9ae",
+    "restore_receipt": "577661f67a3daa756e27bf6274d6e311f81a5f8f3774749fefd4d1c1a81185f5",
+    "restore_verifier": "c263a5dd6efa37fea89d2daf173d9a670a6c6b8948bdf9cf6a369eebffcc36c7",
+    "slo_baseline_receipt": "5ce366549091597cc4bacd47339f4a946d3e2e1987c3e36e6a91d1ae3dcb868a",
+    "slo_evaluation_receipt": "110b0416d7b845cb3dc18265e13e135bb6b3e93f4b74f3f621c3bb9f3b465c2c",
+    "alert_delivery_receipt": "8a36aa2a063622ca4cdb5f1b45fbd91b7e30ecc6699e90649d77022c58521f6f"
+  }
+}

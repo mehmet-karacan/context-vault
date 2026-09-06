@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "verify",
+  "operation_id": "cv3-a9-local-generation-20260905-002",
+  "work_item_id": "CV3-A9-EVAL",
+  "attempt_id": "post-commit-binding-001",
+  "actor": "codex-local-agent",
+  "tool_adapter": "local-cli-git-pytest",
+  "started_at": "2026-09-04T21:48:50Z",
+  "finished_at": "2026-09-04T21:48:52Z",
+  "time_scope": "Evidence-binding interval; post-commit focused pytest and source verification completed immediately before receipt assembly.",
+  "baseline_revision": "54d95d4cd43f1ff9eb9b06063a67ab757c8e4bb4",
+  "result_revision": "ef0a59c9adf8fbe3e4ea9ad1fa07290cd9f3944b",
+  "scope_hash": "f4f738cc0ef5f1e0e42448b40c53283b5c04f825b389ac4de143927ea31086e1",
+  "idempotency_key_hash": null,
+  "commands": [
+    {
+      "command": "pytest -q document-rag-platform/services/backend/tests/evals/test_local_generation_runtime.py",
+      "exit_code": 0,
+      "result": "42 passed"
+    },
+    {
+      "command": "Verify six SOURCE_MANIFEST hashes against checked-out files and implementation commit; git status --short",
+      "exit_code": 0,
+      "result": "PASS; worktree clean before this receipt"
+    }
+  ],
+  "exit_status": 0,
+  "tests": [
+    {"name": "post-commit local generation contracts", "passed": 42, "failed": 0},
+    {"name": "source fingerprint binding", "result": "PASS", "files": 6},
+    {
+      "name": "full backend, real MPS and independent review gates",
+      "source": "PRECOMMIT_RECEIPT.json",
+      "binding": "Exact tested source bytes match implementation commit ef0a59c9adf8fbe3e4ea9ad1fa07290cd9f3944b."
+    }
+  ],
+  "artifacts": [
+    {"path": "INDEPENDENT_REVIEW.json", "sha256": "69008fffc67b41f5130bfd8e10e8f7fdaafc6c7efdcc0e1ea4bfdc11b3fc1f04", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "LOCAL_GENERATION_MPS.json", "sha256": "dc98fec90be1e9edf53b134536e73febf7d0134d224faef0344bc129255df9cf", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "PRECOMMIT_RECEIPT.json", "sha256": "b2952afdcebaa7ed91b400b18a2615e6b0fead816229f0ca782259625aebcc3e", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "SOURCE_MANIFEST.json", "sha256": "f4f738cc0ef5f1e0e42448b40c53283b5c04f825b389ac4de143927ea31086e1", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "BACKEND_JUNIT.xml", "sha256": "2f2faf261ebe5b4489bee499b9867c75f5029f4c714697e8e7bcc07766492c9b", "classification": "public-synthetic", "retention": "versioned evidence"},
+    {"path": "TIER_JUNIT.xml", "sha256": "f7a9cbe27e923c90fcd3945dea287fbc0f1c61f71c744aca0db666d72b75eadc", "classification": "public-synthetic", "retention": "versioned evidence"}
+  ],
+  "security_redactions": [
+    "JUnit local hostname and absolute paths removed",
+    "No private benchmark data, credential value, model weight, prompt or generation text recorded",
+    "Synthetic isolated infrastructure and local model cache only"
+  ],
+  "rollback": {
+    "schema_change": false,
+    "data_reset_required": false,
+    "instruction": "Revert this receipt-only commit if needed; preserve application data, local model cache and prior receipts."
+  },
+  "result": "PASS",
+  "phase_closed": false,
+  "independent_review": true,
+  "scope": "Exact local generation runtime and implementation-revision binding only; not human approval, private benchmark review, baseline seal or A9 closure.",
+  "open_gates": [
+    "Human owner-reviewed private candidate pack",
+    "Production-path benchmark with exact local BGE and generation models",
+    "Independent request/non-transfer evidence",
+    "Human baseline seal",
+    "A11-A13, remote CI and final independent verification"
+  ],
+  "remote_actions": {"provider_call": false, "push": false, "pull_request": false, "merge": false, "release": false}
+}

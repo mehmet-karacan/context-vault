@@ -1,0 +1,30 @@
+[
+  {
+    "path": "AKTIF_GOREV.md",
+    "sha256": "cbfca52d128343246a9128ce85af247b67c4450fc66fdb069231b21db3d1f0cd"
+  },
+  {
+    "path": "scripts/run_eval.py",
+    "sha256": "20db5917837ebfa5c740aa4be4ada8d2b8bf4101926de4cd78eafcb38eb46557"
+  },
+  {
+    "path": "document-rag-platform/services/backend/tests/evals/test_tier_contracts.py",
+    "sha256": "ad464d7f1a3936ffbfae1f635de1f877106281bd5273586d1ae9a8d848ca18ca"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/datasets/private-pack-manifest.schema.json",
+    "sha256": "a0bcfadce37b5425989877ab4c28786232edb0f450fc863ffc5ff618ee585a55"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/datasets/benchmark-approval-manifest.schema.json",
+    "sha256": "a071586bc85dcbede58185d7ba7a4b843df4a823aefd167a5d4efab5a4d2f6f6"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/datasets/benchmark-baseline-seal.schema.json",
+    "sha256": "6a18222393fe66a7d62bbcaf974357aa2e60172b41c94d1d04f35f47e565b255"
+  },
+  {
+    "path": "document-rag-platform/tests/evals/real_benchmark/README.md",
+    "sha256": "aa3bbb8bf17009e8e99569eb9d20b90d7b0bb72e44961a0dc9189771efd3dea5"
+  }
+]

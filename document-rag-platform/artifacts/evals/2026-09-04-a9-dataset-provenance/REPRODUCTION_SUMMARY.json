@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0",
+  "scope": "A9 executed-dataset provenance and public synthetic manifest integrity",
+  "baseline_revision": "e5116c441f54e79207b94bc95611dc6c4612af52",
+  "initial_findings": [
+    "Contract-smoke reported the unexecuted public synthetic dataset hash instead of its executed backend golden dataset hash.",
+    "Offline-e2e reported the same unrelated public dataset hash while executing inline pytest fixtures.",
+    "The public dataset manifest had no enforced schema/hash/version/record/split/review-status consumer."
+  ],
+  "test_first_result": {"passed": 94, "failed": 12},
+  "independent_review_cycles": [
+    {
+      "result": "REJECT",
+      "findings": [
+        "Self-asserted approved manifest fields were elevated to completed human review.",
+        "Offline source bundle omitted pytest support/config and recursively discovered tests."
+      ]
+    },
+    {
+      "result": "REJECT",
+      "finding": "Top-level glob still omitted nested directory tests and nested conftest files."
+    },
+    {
+      "result": "APPROVE_LOCAL_PATCH_ONLY",
+      "tier_tests": {"passed": 115, "failed": 0}
+    }
+  ],
+  "fixes": [
+    "Removed the public-dataset SHA fallback and bound contract-smoke to the exact executed golden file.",
+    "Represented offline fixtures with dataset_sha256=null and a deterministic scoped source-bundle hash.",
+    "Matched pytest directory recursion and bound fixed targets, dynamically relevant conftest files and pyproject configuration.",
+    "Added a versioned public manifest schema plus hash, count, row-version, split and review-state validation consumed by CI.",
+    "Kept pending review explicit and prevented arbitrary approved manifest fields from becoming verified human review."
+  ],
+  "final_result": {
+    "backend_tests": {"passed": 731, "skipped": 2, "failed": 0, "warnings": 1},
+    "tier_tests": {"passed": 115, "failed": 0},
+    "offline_e2e": {"passed": 42, "failed": 0},
+    "contract_smoke": "PASS",
+    "public_dataset_integrity": "PASS",
+    "public_dataset_review": "PENDING_UNVERIFIED",
+    "independent_review": "APPROVE_LOCAL_PATCH_ONLY",
+    "provider_invoked": false,
+    "user_data_mutated": false
+  },
+  "phase_closed": false,
+  "remaining_external_gates": [
+    "Human owner review and bound independent receipt for the public corpus",
+    "Owner-reviewed real private pack",
+    "Human provider/model/credential-name/provider-side-budget approval",
+    "Real provider run and independent request/non-transfer evidence",
+    "Human baseline seal"
+  ]
+}

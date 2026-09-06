@@ -1,3 +1,5 @@
+import pytest
+
 from golden_spec import (
     DEFAULT_DATASET_PATH,
     REQUIRED_CATEGORIES,
@@ -7,11 +9,13 @@ from golden_spec import (
     validate_dataset,
 )
 
+pytestmark = pytest.mark.evals
+
 
 def test_dataset_exists():
-    assert DEFAULT_DATASET_PATH.is_file(), (
-        f"golden dataset bulunamadi: {DEFAULT_DATASET_PATH}"
-    )
+    assert (
+        DEFAULT_DATASET_PATH.is_file()
+    ), f"golden dataset bulunamadi: {DEFAULT_DATASET_PATH}"
 
 
 def test_dataset_has_at_least_50_items():

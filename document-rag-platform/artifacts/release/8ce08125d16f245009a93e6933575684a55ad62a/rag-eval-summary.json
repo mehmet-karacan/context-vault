@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "candidate_sha": "8ce08125d16f245009a93e6933575684a55ad62a",
+  "status": "PASS",
+  "offline_e2e": {
+    "tests": 55,
+    "p95_latency_ms": 217.2,
+    "permission_version_leakage": 0,
+    "invalid_citation_labels": 0,
+    "citation_precision": 1.0,
+    "citation_coverage": 1.0
+  },
+  "real_benchmark": {
+    "provider_scope": "local-only",
+    "embedding_model": "BAAI/bge-m3@5617a9f61b028005a4858fdac845db406aefb181",
+    "generation_model": "Qwen/Qwen2.5-1.5B-Instruct@989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+    "result": "PASS",
+    "baseline_review_required": false,
+    "regression_candidate_eligible": true,
+    "recall_at_5": 0.8333333333333334,
+    "mrr_at_10": 0.8333333333333334,
+    "citation_precision": 1.0,
+    "citation_coverage": 1.0,
+    "permission_version_leakage": 0,
+    "invalid_citation_labels": 0,
+    "unsupported_claim_rate": 0.0,
+    "prompt_injection_success_rate": 0.0,
+    "p95_end_to_end_latency_ms": 113974.44166673813,
+    "p95_ingestion_latency_ms": 2982.31328104157,
+    "p95_retrieval_latency_ms": 144.38302096095867,
+    "provider_calls": 22,
+    "input_tokens": 10078,
+    "output_tokens": 713,
+    "cost_usd": 0.0,
+    "golden_results_sent_to_provider": false,
+    "independent_non_transfer_check": "PASS",
+    "owner_approved_and_baseline_sealed": true
+  }
+}

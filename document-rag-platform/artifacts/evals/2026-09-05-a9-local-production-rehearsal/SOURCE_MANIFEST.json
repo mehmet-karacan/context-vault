@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "source_revision": "b9155103e952401550ebc7f81cfcae7bfafb9039",
+  "runner_bundle_sha256": "9bfbb788a3733e179f6fbd55d8d7699ce0236662a77b3751bf060aa261f082d6",
+  "files": {
+    "scripts/run_eval.py": "dd6b61b31ef7d035c165d51d8cb99358a0a4a349fe6e5f73296714b1d1d98539",
+    "scripts/local_benchmark_pack.py": "65fdb215d72e88cd23fef5efe594ae5ada8eb624e7f38d5efa81e9d4db99d2f2",
+    "scripts/local_benchmark_providers.py": "a9e0631dba6b7482deb03e7964404a042e855308cd3ce9315af0632e9329810d",
+    "scripts/local_production_case_executor.py": "fb963526b7905ad4906ad30c0948abdc5ebc0ec3d66afba99a91d2652b7af890",
+    "scripts/run_local_production_benchmark.py": "ad03bba86dd6f412559abddcefa9cc4230e9bcd7dbff22c3d37d901ff7582b2d",
+    "scripts/run_local_production_benchmark.py.sources.json": "832585ac8cbac60798326349358adb43bc3e1f0e02e468ddb7b340c9fdce6203",
+    "document-rag-platform/services/backend/tests/evals/test_tier_contracts.py": "e34c196cfe56bee3690199e8c6ff19d72a832668bafc55ec8b9b5e3d551d0213",
+    "document-rag-platform/services/backend/tests/evals/test_local_benchmark_pack.py": "15576c6b6f8d4ca8c4d67cbeab8a622dcd0e2f427d4716beb0a230bfa7f70e2e",
+    "document-rag-platform/services/backend/tests/evals/test_local_benchmark_providers.py": "39059ebf16d4193c85b1dfbc351269a455ef589b790336bc393436ebdca7bdd0",
+    "document-rag-platform/services/backend/tests/evals/test_local_production_benchmark.py": "9a4a430c423ed15272e96cfb267ca8a64a26e652ea8a5c1b8b23a3ec85b1375d",
+    "document-rag-platform/services/backend/tests/evals/test_local_production_case_executor.py": "c546d4a11a727888f0b46518abd0d4b6e32d903f0a50a2c7ed254ea8e83fdc4d"
+  }
+}

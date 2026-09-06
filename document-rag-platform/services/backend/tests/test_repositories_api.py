@@ -13,7 +13,6 @@ dependency overridden by an in-memory fake (pattern from
 
 from __future__ import annotations
 
-import os
 import uuid
 from contextlib import contextmanager
 
@@ -23,9 +22,13 @@ from fastapi.testclient import TestClient
 from src.api.v1 import repositories as repo_mod
 from src.config import settings
 from src.db import get_db
+from src.domain.identity import LOCAL_WORKSPACE_ID
 from src.infrastructure.repositories.scan_result import ScanResult
 from src.main import app
 from src.models import Document, Project
+
+API = "/api/v1"
+PROJECT_ID = uuid.UUID("33333333-3333-4333-8333-333333333333")
 
 
 class FakeAPIDB:
@@ -43,12 +46,17 @@ class FakeAPIDB:
         return None
 
     def query(self, model):
+        self._query_model = model
         return self
 
     def filter(self, *a, **k):
         return self
 
     def first(self):
+        if getattr(self, "_query_model", None) is Project:
+            return self.project
+        if getattr(self, "_query_model", None) is Document:
+            return next(iter(self.documents.values()), None)
         return None
 
     def all(self):
@@ -71,7 +79,9 @@ def client(monkeypatch):
     monkeypatch.setattr(settings, "FEATURE_REPOSITORY_INGESTION", True)
 
     def _get_db():
-        yield FakeAPIDB(project=Project(id=uuid.uuid4(), name="p"))
+        yield FakeAPIDB(
+            project=Project(id=PROJECT_ID, workspace_id=LOCAL_WORKSPACE_ID, name="p")
+        )
 
     app.dependency_overrides[get_db] = _get_db
     try:
@@ -99,14 +109,25 @@ def _gate_off_client(monkeypatch):
 
 def test_feature_gate_returns_403_when_disabled(monkeypatch):
     with _gate_off_client(monkeypatch) as c:
-        resp = c.post("/directories/scan", json={"project_id": "x", "allowed_root_alias": "a", "relative_path": "b"})
+        resp = c.post(
+            f"{API}/directories/scan",
+            json={
+                "project_id": str(PROJECT_ID),
+                "allowed_root_alias": "a",
+                "relative_path": "b",
+            },
+        )
         assert resp.status_code == 403
 
 
 def test_directory_scan_rejects_absolute_path(client):
     resp = client.post(
-        "/directories/scan",
-        json={"project_id": "p", "allowed_root_alias": "workspace", "relative_path": "C:/Windows/system"},
+        f"{API}/directories/scan",
+        json={
+            "project_id": str(PROJECT_ID),
+            "allowed_root_alias": "workspace",
+            "relative_path": "C:/Windows/system",
+        },
     )
     assert resp.status_code == 400
     assert "Absolute paths" in resp.json()["detail"]
@@ -114,8 +135,12 @@ def test_directory_scan_rejects_absolute_path(client):
 
 def test_directory_scan_rejects_unknown_root_alias(client):
     resp = client.post(
-        "/directories/scan",
-        json={"project_id": "p", "allowed_root_alias": "nope", "relative_path": "sub"},
+        f"{API}/directories/scan",
+        json={
+            "project_id": str(PROJECT_ID),
+            "allowed_root_alias": "nope",
+            "relative_path": "sub",
+        },
     )
     assert resp.status_code == 403
     assert "Unknown allowed root alias" in resp.json()["detail"]
@@ -124,11 +149,55 @@ def test_directory_scan_rejects_unknown_root_alias(client):
 def test_directory_scan_rejects_path_escaping_root(client, tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "CODE_ALLOWED_ROOTS", str(tmp_path))
     resp = client.post(
-        "/directories/scan",
-        json={"project_id": "p", "allowed_root_alias": tmp_path.name, "relative_path": "../escape"},
+        f"{API}/directories/scan",
+        json={
+            "project_id": str(PROJECT_ID),
+            "allowed_root_alias": tmp_path.name,
+            "relative_path": "../escape",
+        },
     )
     assert resp.status_code == 403
     assert "escapes" in resp.json()["detail"]
+
+
+def test_directory_scan_rejects_symlink_into_a_different_allowed_alias(
+    client, tmp_path, monkeypatch
+):
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    link = first / "jump"
+    try:
+        link.symlink_to(second, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlink creation not permitted in this environment")
+    monkeypatch.setattr(
+        settings,
+        "CODE_ALLOWED_ROOTS",
+        f"{first},{second}",
+    )
+
+    resp = client.post(
+        f"{API}/directories/scan",
+        json={
+            "project_id": str(PROJECT_ID),
+            "allowed_root_alias": "first",
+            "relative_path": "jump",
+        },
+    )
+
+    assert resp.status_code == 403
+    assert "escapes" in resp.json()["detail"]
+
+
+def test_directory_path_accepts_an_explicit_alias_mapping(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    target = root / "project"
+    target.mkdir(parents=True)
+    monkeypatch.setattr(settings, "CODE_ALLOWED_ROOTS", f"source={root}")
+
+    assert repo_mod.resolve_allowed_scan_path("source", "project") == str(target)
 
 
 def test_directory_scan_accepts_allowed_relative_path(client, tmp_path, monkeypatch):
@@ -138,23 +207,36 @@ def test_directory_scan_accepts_allowed_relative_path(client, tmp_path, monkeypa
     monkeypatch.setattr(settings, "CODE_ALLOWED_ROOTS", str(root))
 
     fake_doc = Document(id=uuid.uuid4(), project_id=uuid.uuid4(), name="d", size=0)
-    dummy_scan = ScanResult(source_type="directory", source_revision="m", root_dir=str(sub), files=[])
-
-    class _FakeService:
-        def run(self, db, doc, scan):
-            return {"version_id": None, "version_no": 1, "files_count": 0,
-                    "files_processed": 0, "files_copied": 0, "chunks": 0, "deleted_files": []}
+    dummy_scan = ScanResult(
+        source_type="directory", source_revision="m", root_dir=str(sub), files=[]
+    )
 
     monkeypatch.setattr(repo_mod, "_discover_directory", lambda *a, **k: dummy_scan)
-    monkeypatch.setattr(repo_mod, "_build_reindex_service", lambda: _FakeService())
     monkeypatch.setattr(
-        repo_mod, "_get_or_create_source_document",
-        lambda db, proj, st, uri, name: fake_doc,
+        repo_mod,
+        "_find_source_document",
+        lambda db, proj, st, uri: fake_doc,
+    )
+    monkeypatch.setattr(
+        repo_mod,
+        "_reindex",
+        lambda *args, **kwargs: {
+            "document_id": str(fake_doc.id),
+            "version_id": str(uuid.uuid4()),
+            "version_no": 1,
+            "job_id": str(uuid.uuid4()),
+            "status": "queued",
+            "files_count": 0,
+        },
     )
 
     resp = client.post(
-        "/directories/scan",
-        json={"project_id": "p", "allowed_root_alias": root.name, "relative_path": "project-a"},
+        f"{API}/directories/scan",
+        json={
+            "project_id": str(PROJECT_ID),
+            "allowed_root_alias": root.name,
+            "relative_path": "project-a",
+        },
     )
     assert resp.status_code == 200
     body = resp.json()
@@ -164,12 +246,17 @@ def test_directory_scan_accepts_allowed_relative_path(client, tmp_path, monkeypa
 
 
 def test_document_files_404_for_unknown_document(client):
-    resp = client.get(f"/documents/{uuid.uuid4()}/files")
+    resp = client.get(
+        f"{API}/documents/{uuid.uuid4()}/files", params={"project_id": str(PROJECT_ID)}
+    )
     assert resp.status_code == 404
 
 
 def test_document_versions_404_for_unknown_document(client):
-    resp = client.get(f"/documents/{uuid.uuid4()}/versions")
+    resp = client.get(
+        f"{API}/documents/{uuid.uuid4()}/versions",
+        params={"project_id": str(PROJECT_ID)},
+    )
     assert resp.status_code == 404
 
 
@@ -183,8 +270,11 @@ def test_repository_ingest_404_for_missing_project(client):
     try:
         with TestClient(app) as c:
             resp = c.post(
-                "/repositories/ingest",
-                json={"project_id": str(uuid.uuid4()), "repository_url": "https://github.com/o/r.git"},
+                f"{API}/repositories/ingest",
+                json={
+                    "project_id": str(uuid.uuid4()),
+                    "repository_url": "https://github.com/o/r.git",
+                },
             )
             assert resp.status_code == 404
     finally:

@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "candidate_sha": "91b9bc6d9ffa89351dd557c4e6c36cdc5156b245",
+  "status": "PASS_LOCAL_UNSIGNED",
+  "public_tree_files_checked": 729,
+  "gitleaks_findings": 0,
+  "python_dependencies_audited": 141,
+  "python_vulnerabilities": 0,
+  "node_packages_audited": 548,
+  "node_vulnerabilities": 0,
+  "license_packages_checked": 665,
+  "container_image_digest": "sha256:81c39dcfe85bbda20eb8d61508785d23545bd281ad8bd5509ead4bcea3e7f105",
+  "container_user": "10001:10001",
+  "container_high_vulnerabilities": 0,
+  "container_critical_vulnerabilities": 0,
+  "container_sbom_components": 122,
+  "container_sbom_dependencies": 123,
+  "read_only_tmpfs_smoke": "PASS",
+  "provenance_binding": "PASS",
+  "cosign_oidc_signature": "NOT_RUN_EXTERNAL_GATE"
+}

@@ -25,17 +25,33 @@ context:
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 from ...config import settings
+from ...domain.retrieval import (
+    ContextBundle,
+    ContextItem,
+    RejectedContextItem,
+    ScopedNeighborKey,
+)
+from ...domain.retrieval_scope import RetrievalScope
 from ..chunkers.base import NaiveTokenCounter
 
-__all__ = ["ContextItem", "ContextBuildResult", "ContextBuilder", "context_item_from"]
+ContextBuildResult = ContextBundle
+
+__all__ = [
+    "ContextItem",
+    "ContextBundle",
+    "ContextBuildResult",
+    "ContextBuilder",
+    "context_item_from",
+]
 
 # A neighbour resolver returns the chunk that precedes/follows ``sequence_no``
 # within ``source_id``, or None when there is no such chunk.
-NeighborResolver = Callable[[str, int], Optional[Any]]
+NeighborResolver = Callable[[RetrievalScope | None, ScopedNeighborKey], Optional[Any]]
+ParentResolver = Callable[[RetrievalScope | None, str], Optional[Any]]
 
 
 def _get(obj: Any, name: str, default: Any = None) -> Any:
@@ -79,62 +95,6 @@ def _locator(chunk: Any) -> Dict[str, Any]:
     return dict(_get(chunk, "locator") or {})
 
 
-@dataclass(frozen=True)
-class ContextItem:
-    """A single context unit handed to the model with citation metadata."""
-
-    chunk_id: str
-    source_id: str
-    chunk_type: str
-    content: str
-    heading_path: List[str] = field(default_factory=list)
-    locator: Dict[str, Any] = field(default_factory=dict)
-    content_hash: str = ""
-    token_count: int = 0
-    rank: int = 0
-    sequence_no: int = 0
-    relation: str = "selected"  # selected | parent | adjacent | table_header | code_signature
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "chunk_id": self.chunk_id,
-            "source_id": self.source_id,
-            "chunk_type": self.chunk_type,
-            "content": self.content,
-            "heading_path": list(self.heading_path),
-            "locator": dict(self.locator),
-            "content_hash": self.content_hash,
-            "token_count": self.token_count,
-            "rank": self.rank,
-            "sequence_no": self.sequence_no,
-            "relation": self.relation,
-        }
-
-
-@dataclass
-class ContextBuildResult:
-    """Final RAG context: ordered items + accounting within budget."""
-
-    items: List[ContextItem] = field(default_factory=list)
-    total_tokens: int = 0
-    max_tokens: int = 0
-    max_chunks: int = 0
-    truncated: bool = False
-    selected_chunk_ids: List[str] = field(default_factory=list)
-    expanded_chunk_ids: List[str] = field(default_factory=list)
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "items": [item.to_dict() for item in self.items],
-            "total_tokens": self.total_tokens,
-            "max_tokens": self.max_tokens,
-            "max_chunks": self.max_chunks,
-            "truncated": self.truncated,
-            "selected_chunk_ids": list(self.selected_chunk_ids),
-            "expanded_chunk_ids": list(self.expanded_chunk_ids),
-        }
-
-
 class ContextBuilder:
     """Builds the final RAG context from fused/reranked candidates."""
 
@@ -149,10 +109,16 @@ class ContextBuilder:
         include_adjacent: bool = True,
     ):
         self.token_counter: Callable[[str], int] = token_counter or NaiveTokenCounter()
-        self.max_chunks = int(max_chunks if max_chunks is not None else settings.CONTEXT_MAX_CHUNKS)
-        self.max_tokens = int(max_tokens if max_tokens is not None else settings.CONTEXT_MAX_TOKENS)
+        self.max_chunks = int(
+            max_chunks if max_chunks is not None else settings.CONTEXT_MAX_CHUNKS
+        )
+        self.max_tokens = int(
+            max_tokens if max_tokens is not None else settings.CONTEXT_MAX_TOKENS
+        )
         self.adjacent_window = int(
-            adjacent_window if adjacent_window is not None else settings.CONTEXT_ADJACENT_WINDOW
+            adjacent_window
+            if adjacent_window is not None
+            else settings.CONTEXT_ADJACENT_WINDOW
         )
         self.include_parents = include_parents
         self.include_adjacent = include_adjacent
@@ -165,6 +131,11 @@ class ContextBuilder:
         *,
         chunk_pool: Optional[Dict[str, Any]] = None,
         neighbor_resolver: Optional[NeighborResolver] = None,
+        parent_resolver: Optional[ParentResolver] = None,
+        scope: RetrievalScope | None = None,
+        query_id: str = "",
+        retrieval_run_id: str = "",
+        reranker_profile: str = "none",
     ) -> ContextBuildResult:
         """Builds the context from ``candidates`` (in fused/reranked order).
 
@@ -173,27 +144,43 @@ class ContextBuilder:
         chunks for controlled expansion. Both are optional and keep the builder
         DB-free and deterministic.
         """
-        result = ContextBuildResult(
-            max_tokens=self.max_tokens,
-            max_chunks=self.max_chunks,
-        )
+        items: List[ContextItem] = []
+        rejected: List[RejectedContextItem] = []
+        total_tokens = 0
+        truncated = False
         seen_hashes: set = set()
         remaining_chunks = self.max_chunks
 
         def add(item: ContextItem) -> bool:
             """Adds ``item`` respecting dedup + budgets. Returns True if it
             belongs to the context (either newly added or already present)."""
-            nonlocal remaining_chunks
+            nonlocal remaining_chunks, total_tokens, truncated
             if item.content_hash in seen_hashes:
-                return True
-            if remaining_chunks <= 0:
+                rejected.append(
+                    RejectedContextItem(
+                        item.chunk_id, item.rank, "duplicate_content", item.content_hash
+                    )
+                )
                 return False
-            if result.total_tokens + item.token_count > self.max_tokens:
-                result.truncated = True
+            if remaining_chunks <= 0:
+                truncated = True
+                rejected.append(
+                    RejectedContextItem(
+                        item.chunk_id, item.rank, "chunk_budget", item.content_hash
+                    )
+                )
+                return False
+            if total_tokens + item.token_count > self.max_tokens:
+                truncated = True
+                rejected.append(
+                    RejectedContextItem(
+                        item.chunk_id, item.rank, "token_budget", item.content_hash
+                    )
+                )
                 return False
             seen_hashes.add(item.content_hash)
-            result.items.append(item)
-            result.total_tokens += item.token_count
+            items.append(item)
+            total_tokens += item.token_count
             remaining_chunks -= 1
             return True
 
@@ -201,14 +188,38 @@ class ContextBuilder:
 
         for rank, candidate in enumerate(candidates or [], start=1):
             chunk = _chunk_of(candidate)
+            if scope is not None and not self._in_scope(chunk, scope):
+                rejected.append(
+                    RejectedContextItem(
+                        str(_get(chunk, "chunk_id") or ""),
+                        rank,
+                        "scope_mismatch",
+                        _hash_of(chunk),
+                    )
+                )
+                continue
             base = self._base_item(chunk, rank)
             if not base.content:
+                rejected.append(
+                    RejectedContextItem(
+                        base.base.chunk_id,
+                        rank,
+                        "empty_content",
+                        base.base.content_hash,
+                    )
+                )
                 continue
 
             added_any = False
-            if base.row_group_header is not None and base.row_group_header.content.strip() not in base.content:
+            if (
+                base.row_group_header is not None
+                and base.row_group_header.content.strip() not in base.content
+            ):
                 added_any = add(base.row_group_header) or added_any
-            if base.signature is not None and base.signature.content.strip() not in base.content:
+            if (
+                base.signature is not None
+                and base.signature.content.strip() not in base.content
+            ):
                 added_any = add(base.signature) or added_any
             added_any = add(base.base) or added_any
 
@@ -216,39 +227,154 @@ class ContextBuilder:
                 continue
 
             if remaining_chunks <= 0:
-                result.truncated = True
+                truncated = True
                 break
 
             parent = pool.get(str(_get(chunk, "parent_chunk_id") or ""))
+            if (
+                parent is None
+                and parent_resolver is not None
+                and _get(chunk, "parent_chunk_id")
+            ):
+                parent = parent_resolver(scope, str(_get(chunk, "parent_chunk_id")))
             if self.include_parents and parent is not None:
-                parent_item = self._item_from(parent, rank, relation="parent")
-                if add(parent_item):
-                    result.expanded_chunk_ids.append(parent_item.chunk_id)
+                if scope is None or self._in_scope(parent, scope):
+                    add(self._item_from(parent, rank, relation="parent"))
 
             if self.include_adjacent and neighbor_resolver is not None:
                 seq = int(_get(chunk, "sequence_no") or 0)
-                source_id = str(_get(chunk, "source_id") or "")
+                key = self._neighbor_key(chunk, scope, seq)
                 for offset in range(1, self.adjacent_window + 1):
-                    for neighbor in (
-                        neighbor_resolver(source_id, seq - offset),
-                        neighbor_resolver(source_id, seq + offset),
-                    ):
+                    for neighbor_seq in (seq - offset, seq + offset):
+                        neighbor = neighbor_resolver(
+                            scope,
+                            ScopedNeighborKey(
+                                workspace_id=key.workspace_id,
+                                project_id=key.project_id,
+                                document_id=key.document_id,
+                                version_id=key.version_id,
+                                source_file_id=key.source_file_id,
+                                sequence_no=neighbor_seq,
+                            ),
+                        )
                         if neighbor is None:
                             continue
-                        n_item = self._item_from(neighbor, rank, relation="adjacent")
-                        if add(n_item):
-                            result.expanded_chunk_ids.append(n_item.chunk_id)
+                        if scope is not None and not self._matches_neighbor_key(
+                            neighbor, key
+                        ):
+                            rejected.append(
+                                RejectedContextItem(
+                                    str(_get(neighbor, "chunk_id") or ""),
+                                    rank,
+                                    "neighbor_boundary_mismatch",
+                                    _hash_of(neighbor),
+                                )
+                            )
+                            continue
+                        if scope is not None and not self._in_scope(neighbor, scope):
+                            rejected.append(
+                                RejectedContextItem(
+                                    str(_get(neighbor, "chunk_id") or ""),
+                                    rank,
+                                    "scope_mismatch",
+                                    _hash_of(neighbor),
+                                )
+                            )
+                            continue
+                        add(self._item_from(neighbor, rank, relation="adjacent"))
 
             if remaining_chunks <= 0:
-                result.truncated = True
+                truncated = True
                 break
 
-        return result
+        reason_counts: Dict[str, int] = {}
+        for item in rejected:
+            reason_counts[item.reason] = reason_counts.get(item.reason, 0) + 1
+        return ContextBundle(
+            query_id=query_id,
+            scope=scope,
+            retrieval_run_id=retrieval_run_id,
+            embedding_profile_id=str(scope.embedding_profile_id) if scope else None,
+            reranker_profile=reranker_profile,
+            selected_items=tuple(items),
+            rejected_items=tuple(rejected),
+            token_budget=self.max_tokens,
+            chunk_budget=self.max_chunks,
+            total_tokens=total_tokens,
+            truncated=truncated,
+            truncation_summary=reason_counts,
+            provenance={"token_counter": type(self.token_counter).__name__},
+        )
 
     # --- helpers ---------------------------------------------------------
 
     def _count(self, text: str) -> int:
         return max(0, int(self.token_counter.count(text or "")))
+
+    @staticmethod
+    def _identity(chunk: Any, name: str) -> str | None:
+        value = _get(chunk, name)
+        if value is None:
+            value = dict(_get(chunk, "metadata") or {}).get(name)
+        return str(value) if value not in (None, "") else None
+
+    def _in_scope(self, chunk: Any, scope: RetrievalScope) -> bool:
+        expected = {
+            "workspace_id": str(scope.workspace_id),
+            "project_id": str(scope.project_id),
+        }
+        for name, value in expected.items():
+            actual = self._identity(chunk, name)
+            if actual is None or actual != value:
+                return False
+        document_id = self._identity(chunk, "document_id")
+        if scope.allowed_document_ids is not None and document_id not in {
+            str(value) for value in scope.allowed_document_ids
+        }:
+            return False
+        return True
+
+    def _neighbor_key(
+        self, chunk: Any, scope: RetrievalScope | None, sequence_no: int
+    ) -> ScopedNeighborKey:
+        return ScopedNeighborKey(
+            workspace_id=self._identity(chunk, "workspace_id")
+            or (str(scope.workspace_id) if scope else ""),
+            project_id=self._identity(chunk, "project_id")
+            or (str(scope.project_id) if scope else ""),
+            document_id=self._identity(chunk, "document_id") or "",
+            version_id=self._identity(chunk, "version_id") or "",
+            source_file_id=self._identity(chunk, "source_file_id"),
+            sequence_no=sequence_no,
+        )
+
+    def _context_identity(self, chunk: Any) -> Dict[str, Any]:
+        metadata = dict(_get(chunk, "metadata") or {})
+        return {
+            "workspace_id": self._identity(chunk, "workspace_id"),
+            "project_id": self._identity(chunk, "project_id"),
+            "document_id": self._identity(chunk, "document_id"),
+            "version_id": self._identity(chunk, "version_id"),
+            "source_file_id": self._identity(chunk, "source_file_id"),
+            "policy_classification": str(
+                self._identity(chunk, "classification")
+                or metadata.get("data_classification")
+                or "internal"
+            ),
+            "metadata": metadata,
+        }
+
+    def _matches_neighbor_key(self, chunk: Any, key: ScopedNeighborKey) -> bool:
+        expected = {
+            "workspace_id": key.workspace_id,
+            "project_id": key.project_id,
+            "document_id": key.document_id,
+            "version_id": key.version_id,
+            "source_file_id": key.source_file_id,
+        }
+        return all(
+            self._identity(chunk, name) == value for name, value in expected.items()
+        )
 
     def _base_item(self, chunk: Any, rank: int) -> "_BaseItem":
         content = _text_of(chunk)
@@ -256,6 +382,7 @@ class ContextBuilder:
         chunk_type = str(_get(chunk, "chunk_type") or "document")
         source_id = str(_get(chunk, "source_id") or "")
         metadata = dict(_get(chunk, "metadata") or {})
+        identity = self._context_identity(chunk)
 
         row_group_header: Optional[ContextItem] = None
         if chunk_type == "table" and metadata.get("header"):
@@ -271,6 +398,7 @@ class ContextBuilder:
                 rank=rank,
                 sequence_no=int(_get(chunk, "sequence_no") or 0),
                 relation="table_header",
+                **identity,
             )
 
         signature: Optional[ContextItem] = None
@@ -287,6 +415,7 @@ class ContextBuilder:
                 rank=rank,
                 sequence_no=int(_get(chunk, "sequence_no") or 0),
                 relation="code_signature",
+                **identity,
             )
 
         base = self._make_item(
@@ -300,8 +429,11 @@ class ContextBuilder:
             rank=rank,
             sequence_no=int(_get(chunk, "sequence_no") or 0),
             relation="selected",
+            **identity,
         )
-        return _BaseItem(base=base, row_group_header=row_group_header, signature=signature)
+        return _BaseItem(
+            base=base, row_group_header=row_group_header, signature=signature
+        )
 
     def _item_from(self, chunk: Any, rank: int, *, relation: str) -> ContextItem:
         return self._make_item(
@@ -315,6 +447,7 @@ class ContextBuilder:
             rank=rank,
             sequence_no=int(_get(chunk, "sequence_no") or 0),
             relation=relation,
+            **self._context_identity(chunk),
         )
 
     def _make_item(self, **kwargs: Any) -> ContextItem:
@@ -325,6 +458,15 @@ class ContextBuilder:
         return ContextItem(
             content=content,
             content_hash=content_hash,
+            evidence_hash=hashlib.sha256(
+                (content_hash + "|" + str(kwargs.get("chunk_id", ""))).encode("utf-8")
+            ).hexdigest(),
+            workspace_id=kwargs.pop("workspace_id", None),
+            project_id=kwargs.pop("project_id", None),
+            document_id=kwargs.pop("document_id", None),
+            version_id=kwargs.pop("version_id", None),
+            source_file_id=kwargs.pop("source_file_id", None),
+            policy_classification=kwargs.pop("policy_classification", "internal"),
             token_count=self._count(content),
             **kwargs,
         )
@@ -346,6 +488,14 @@ def context_item_from(chunk: Any) -> ContextItem:
     content = _text_of(chunk)
     return ContextItem(
         chunk_id=str(_get(chunk, "chunk_id") or ""),
+        workspace_id=None,
+        project_id=None,
+        document_id=None,
+        version_id=str(_get(chunk, "version_id"))
+        if _get(chunk, "version_id")
+        else None,
+        source_file_id=None,
+        metadata=dict(_get(chunk, "metadata") or {}),
         source_id=str(_get(chunk, "source_id") or ""),
         chunk_type=str(_get(chunk, "chunk_type") or "document"),
         content=content,

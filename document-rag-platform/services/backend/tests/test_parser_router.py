@@ -6,6 +6,7 @@ and the per-file timeout + max-output-size enforcement.
 """
 
 import time
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -48,6 +49,22 @@ def test_router_selects_parser_by_mime_type():
         == "docx"
     )
     assert router.detect_source_type(mime_type="image/png") == "image"
+
+
+def test_extensionless_docx_is_detected_from_package_structure(tmp_path):
+    path = tmp_path / "extensionless"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("[Content_Types].xml", "<Types/>")
+        archive.writestr("word/document.xml", "<w:document/>")
+    assert ParserRouter().detect_source_type(file_path=str(path)) == "docx"
+
+
+def test_generic_zip_renamed_docx_is_not_trusted(tmp_path):
+    path = tmp_path / "renamed.docx"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("payload.txt", "not an Office package")
+    with pytest.raises(AmbiguousSourceTypeError):
+        ParserRouter().detect_source_type(filename=path.name, file_path=str(path))
 
 
 def test_magic_bytes_override_claimed_extension_and_mime(tmp_path):

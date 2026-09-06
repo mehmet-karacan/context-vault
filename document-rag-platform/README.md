@@ -13,25 +13,40 @@ Kanonik uygulama dizini: **`document-rag-platform/`** (repo kökü, `AKTIF_GOREV
 | Vektör deposu | PostgreSQL + pgvector (`Vector(1024)`), dense + lexical (tsvector) + identifier GIN |
 | Retrieval | dense + lexical + identifier → **RRF** → dedupe → opsiyonel reranker → context → LLM |
 | Embedding / chat | OpenAI uyumlu LiteLLM gateway (`LITELLM_BASE_URL` / `LITELLM_API_KEY`) üzerinden, tamamen **config ile** (`EMBEDDING_MODEL`, `CHAT_MODEL`) — kodda sabit model adı yok |
-| Async ingestion | Celery worker + Redis broker; `FEATURE_ASYNC_INGESTION` ile senkron fallback |
+| Ingestion | Tek durable job/outbox yolu; Celery worker + Redis broker |
 | Migration | Alembic — `alembic upgrade head` (bkz. `services/backend/MIGRATION_RUNBOOK.md`) |
-| Dağıtım | Docker Compose — `postgres` · `redis` · `minio` · `backend` (uvicorn :8000) · `worker` (celery) + `apps/web` (Next.js) |
+| Dağıtım | Docker Compose — `postgres` · `redis` · `minio` · `backend` (uvicorn :8000) · `worker`/`scheduler` (Celery); `apps/web` (Next.js) ayrı çalışır |
 
-> Eşikler ve top-k değerleri kodda **sabit değildir**; `services/backend/src/config.py` üzerinden ortam değişkeniyle yönetilir ve `GET /debug/retrieval` ile görüntülenebilir. Aşağıdaki tüm sayılar o dosyadaki **varsayılanlardır** ve `.env` ile değiştirilebilir.
+> Eşikler ve top-k değerleri kodda **sabit değildir**; `services/backend/src/config.py` üzerinden ortam değişkeniyle yönetilir ve admin/feature-gated `POST /api/v1/debug/retrieval` ile görüntülenebilir. Aşağıdaki tüm sayılar o dosyadaki **varsayılanlardır** ve `.env` ile değiştirilebilir.
 
 ## Servisler
 
-`docker-compose.yml` aşağıdakileri ayağa kaldırır:
+Güvenli ortak taban `compose.yaml`'dır. `compose.override.yaml` geliştirme
+overlay'ini varsayılan olarak yükler; CI ve production açıkça kendi overlay
+dosyalarını seçer. Legacy `docker-compose.yml` geçiş süresince korunur.
+
+Varsayılan development Compose aşağıdakileri ayağa kaldırır:
 
 | Servis | Image / komut | Port | Rol |
 |---|---|---|---|
-| `postgres` | `pgvector/pgvector:pg16` | 5432 | Veri + pgvector + full-text index |
-| `redis` | `redis:7-alpine` | 6379 | Celery broker + result backend |
-| `minio` | `minio/minio` | 9000 / 9001 (konsol) | Orijinal dosya + artifact object storage |
+| `postgres` | `pgvector/pgvector:pg16` + digest | 5432 | Veri + pgvector + full-text index |
+| `redis` | `redis:7-alpine` + digest | 6379 | Celery broker + result backend |
+| `minio` | `minio/minio` + digest | 9000 / 9001 (konsol) | Orijinal dosya + artifact object storage |
 | `backend` | `src` build → uvicorn | 8000 | FastAPI API + (`/docs` Swagger) |
 | `worker` | `src` build → `celery -A src.workers.celery_app worker -l info` | — | Ingestion job'ları (parse → chunk → embed → index) |
+| `scheduler` | `src` build → `celery -A src.workers.celery_app beat -l info` | — | Periyodik outbox/retention işleri |
 
 Frontend (`apps/web`, Next.js) compose'un dışında `npm run dev` ile ayrı çalışır (varsayılan `http://localhost:3000`).
+
+## Runtime ve kilitli kurulum
+
+- Python sürümünün tek kaynağı repo kökündeki `.python-version`
+  (`3.12`); backend `pyproject.toml`, Docker ve CI bu sürümle sınırlıdır.
+- Node sürümünün tek kaynağı `apps/web/.nvmrc` (`24.18.0`);
+  `package.json` Node 24/npm 11 aralığını, CI de aynı `.nvmrc` dosyasını
+  kullanır.
+- Backend kurulumu `uv.lock` ile `uv sync --frozen`, frontend kurulumu
+  `package-lock.json` ile `npm ci` kullanır.
 
 ## Hızlı başlangıç
 
@@ -41,7 +56,11 @@ Frontend (`apps/web`, Next.js) compose'un dışında `npm run dev` ile ayrı ça
    cp .env.example .env
    ```
 
-   Zorunlu alanlar: `DATABASE_URL` (compose tarafından `POSTGRES_*`'den üretilir), `LITELLM_API_KEY`, `LITELLM_BASE_URL`. Model/eşik/güvenlik ayarları `services/backend/src/config.py`'deki varsayılanlarla çalışır.
+   `replace-with-*` değerlerini ve örnek image digest'ini gerçek local
+   değerlerle değiştir. Production'da `DATABASE_MIGRATION_URL` ayrı migration
+   owner'ını, `DATABASE_RUNTIME_URL` ise least-privilege application rolünü
+   göstermelidir. Redis URL'sindeki parola `REDIS_PASSWORD` ile; MinIO app
+   credential'ı bootstrap için verilen app credential ile aynı olmalıdır.
 
 2. Servisleri ayağa kaldır:
 
@@ -49,50 +68,46 @@ Frontend (`apps/web`, Next.js) compose'un dışında `npm run dev` ile ayrı ça
    docker compose up -d --build
    ```
 
-3. Migration'ı uygula (bkz. `services/backend/MIGRATION_RUNBOOK.md`):
-
-   ```bash
-   docker compose exec backend alembic upgrade head
-   ```
+3. `migration` one-shot servisi başarıyla bitmeden backend başlamaz. Durumu
+   `docker compose ps --all` ile doğrula; manuel `alembic upgrade` çalıştırma.
 
 4. Frontend'i başlat:
 
    ```bash
    cd apps/web
-   npm install
+   npm ci
    npm run dev
    ```
 
    Tarayıcıda `http://localhost:3000`. Backend tek başına `http://localhost:8000`, Swagger `http://localhost:8000/docs`.
 
-> Backend'e veritabanı tarafında erişim için: `docker exec -it rag-postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'`.
+> Backend'e veritabanı tarafında erişim için: `docker compose exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'`.
 
 ## API uçları
 
-Router'lar `src/api/v1/` altındadır ve kök üzerinden (`/api/v1` ön eki YOK) bağlanır:
+Uygulama router'ları `src/api/v1/` altındadır ve `/api/v1` ön ekiyle
+bağlanır. Yalnız anonim liveness/readiness probe'ları kökte kalır:
 
 | Metot | Uç | Modül |
 |---|---|---|
-| GET | `/` , `/health`, `/health/live`, `/health/readiness`, `/ready` | `health.py` |
-| GET/POST | `/projects` · `DELETE /projects/{id}` | `projects.py` |
-| POST | `/documents/upload` (multipart) | `documents.py` |
-| GET | `/documents` · `/documents/{id}` · `/documents/{id}/status` | `documents.py` |
-| POST | `/documents/{id}/delete` | `documents.py` |
-| POST/GET | repo/archive/directory + refresh + files/versions (feature-gated) | `repositories.py` |
-| GET | `/ingestion-jobs/{id}` · `/ingestion-jobs/{id}/events` | `ingestion_jobs.py` |
-| POST/GET | `/chat/query` · `/chat/models` | `chat.py` |
-| POST | `/debug/retrieval` (production'da kapalı) | `debug.py` |
+| GET | `/health/live` · `/health/readiness` · `/ready` | `health.py` probe router |
+| GET | `/api/v1/` · `/api/v1/health` · `/api/v1/session` | `health.py`, `session.py` |
+| GET/POST | `/api/v1/projects` · `DELETE /api/v1/projects/{id}` | `projects.py` |
+| POST | `/api/v1/documents/upload` (multipart) | `documents.py` |
+| GET/DELETE | `/api/v1/documents` · `/api/v1/documents/{id}` · `/api/v1/documents/{id}/status` | `documents.py` |
+| POST/GET | repository ingest, archive upload, directory scan ve document refresh/files/versions uçları (`/api/v1/...`) | `repositories.py` |
+| GET/POST | `/api/v1/ingestion-jobs/{id}` + events/cancel | `ingestion_jobs.py` |
+| POST/GET | `/api/v1/chat/query` · `/api/v1/chat/models` | `chat.py` |
+| POST | `/api/v1/debug/retrieval` (admin + feature gate) | `debug.py` |
 
 ## Yükleme → ingestion akışı
 
-Varsayılan (asenkron — `FEATURE_ASYNC_INGESTION=true`):
+Yükleme tek durable job/outbox yolunu kullanır:
 
-1. `POST /documents/upload` anında `Document` + ilk `DocumentVersion` + `IngestionJob` (`status=queued`) kaydeder, orijinal dosyayı MinIO'ya (`object_keys.original_key`) yazar ve Celery task'ını kuyruğa atar; **parse/chunk/embed'ü beklemez** (`documents.py:_upload_document_async`).
+1. `POST /api/v1/documents/upload` anında `Document` + ilk `DocumentVersion` + `IngestionJob` (`status=queued`) kaydeder, orijinal dosyayı MinIO'ya (`object_keys.original_key`) yazar ve Celery task'ını kuyruğa atar; **parse/chunk/embed'ü beklemez** (`documents.py:_upload_document_async`).
 2. `worker` (`src/workers/ingestion_tasks.py:process_ingestion_job`) job'ı `validating → storing → parsing → chunking → embedding → indexing → activating` aşamalarından geçirir.
-3. Her aşama `ingestion_events`'e yazılır; durum `GET /ingestion-jobs/{id}` (+ `/events`) ve `GET /documents/{id}/status` ile izlenir.
+3. Her aşama `ingestion_events`'e yazılır; durum `GET /api/v1/ingestion-jobs/{id}` (+ `/events`) ve `GET /api/v1/documents/{id}/status` ile izlenir.
 4. Tüm chunk/embedding hazır olduktan sonra version `ready` olur ve `documents.active_version_id` atomik olarak değiştirilir (`activating`); yeni version hazır olana dek eski aktif version okumaya devam eder.
-
-Fallback (senkron): `FEATURE_ASYNC_INGESTION=false` ayarlanırsa upload aynı istek içinde parse → chunk → embed → index yapar (rollback/debug için korunmuştur).
 
 Worker güvenliği (Aşama 2 kabul kriterleri): `task_acks_late=True`, `task_reject_on_worker_lost=True`, `worker_prefetch_multiplier=1`; geçici hatalar `INGESTION_MAX_RETRIES` (varsayılan 3) kez üstel backoff ile yeniden denenir, kalıcı doğrulama hataları asla yeniden denenmez. Aynı job yeniden alınırsa idempotent "wipe + rewrite" sayesinde duplicate chunk oluşmaz.
 
@@ -100,7 +115,7 @@ Bu akış ve job yönetimi için bkz. `docs/runbooks/upload-and-ingestion-jobs.m
 
 ## Retrieval pipeline (sohbet)
 
-`POST /chat/query` (`src/application/retrieval_service.py`):
+`POST /api/v1/chat/query` (`src/application/retrieval_service.py`):
 
 ```
 sorgu + filtreler
@@ -127,13 +142,16 @@ Retrieval aday/eşikleri (varsayılanlar): `VECTOR_CANDIDATE_K=40`, `LEXICAL_CAN
 
 | Kaynak | Uç | Adaptör |
 |---|---|---|
-| Belge (PDF/DOCX/TXT/MD) | `POST /documents/upload` | `parsers` (`pdf_parser`, `docx_parser`, `plain_text_parser`) |
+| Belge (PDF/DOCX/TXT/MD) | `POST /api/v1/documents/upload` | `parsers` (`pdf_parser`, `docx_parser`, `plain_text_parser`) |
 | Görsel / OCR | görsel parser + OCR | `ocr` (`docling` / `tesseract`) |
-| Git repository | `POST /repositories/ingest` | `repositories/git_source.py` |
-| ZIP/TAR arşiv | `POST /archives/upload` | `repositories/archive_source.py` |
-| Klasör | `POST /directories/scan` | `repositories/discovery.py` |
+| Git repository | `POST /api/v1/repositories/ingest` | `repositories/git_source.py` |
+| ZIP/TAR arşiv | `POST /api/v1/archives/upload` | `repositories/archive_source.py` |
+| Klasör | `POST /api/v1/directories/scan` | `repositories/discovery.py` |
 
-Repository/arşiv/klasör taraması `FEATURE_REPOSITORY_INGESTION` arkasındadır (varsayılan `true`); isterseniz `.env`'de `false` yaparak kapatabilirsiniz. Tarama güvenlik sınırları `CODE_*` değişkenleriyle yönetilir (bkz. `docs/runbooks/repository-scan-limits.md`), kod hiçbir koşulda çalıştırılmaz.
+Repository/arşiv/klasör taraması `FEATURE_REPOSITORY_INGESTION` arkasındadır
+(varsayılan `false`). Yalnız izinli deployment'ta açılır. Tarama güvenlik
+sınırları `CODE_*` değişkenleriyle yönetilir (bkz.
+`docs/runbooks/repository-scan-limits.md`); kaynak kod çalıştırılmaz.
 
 ## Ortam değişkenleri (özet)
 
@@ -147,7 +165,7 @@ Genel değişkenler `.env.example`'da; gerçek tipler ve **tüm** varsayılanlar
 - **Retrieval:** `VECTOR_CANDIDATE_K`, `LEXICAL_CANDIDATE_K`, `IDENTIFIER_CANDIDATE_K`, `FUSION_CANDIDATE_K`, `RRF_K`, `RERANK_TOP_K`, `CONTEXT_MAX_CHUNKS`, `CONTEXT_MAX_TOKENS`, `NO_ANSWER_*`, `LEXICAL_STRONG_SCORE`, `SMALLTALK_MIN_CONTENT_LEN`
 - **Reranker:** `FEATURE_RERANKER`, `RERANKER_ENABLED`, `RERANKER_PROVIDER`, `RERANKER_MODEL`
 - **OCR:** `FEATURE_OCR`, `OCR_ENABLED`, `OCR_PROVIDER`, `OCR_FALLBACK_PROVIDER`, `OCR_LANGUAGES=tur+eng`, `OCR_MIN_TEXT_COVERAGE`, `OCR_MIN_CONFIDENCE`
-- **Ingestion worker:** `FEATURE_ASYNC_INGESTION`, `INGESTION_MAX_RETRIES`, `INGESTION_RETRY_BACKOFF_SECONDS`, `INGESTION_TASK_SOFT_TIME_LIMIT_SECONDS`, `INGESTION_TASK_TIME_LIMIT_SECONDS`
+- **Ingestion worker:** `INGESTION_MAX_RETRIES`, `INGESTION_RETRY_BACKOFF_SECONDS`, `INGESTION_TASK_SOFT_TIME_LIMIT_SECONDS`, `INGESTION_TASK_TIME_LIMIT_SECONDS`
 - **Repository scan:** `FEATURE_REPOSITORY_INGESTION`, `CODE_ALLOWED_ROOTS`, `CODE_MAX_FILES`, `CODE_MAX_TOTAL_BYTES`, `CODE_MAX_FILE_BYTES`, `CODE_SCAN_TIMEOUT_SECONDS`, `CODE_FOLLOW_SYMLINKS`, `CODE_ALLOW_SUBMODULES`, `CODE_ALLOW_GIT_LFS`, `CODE_SECRET_POLICY`, `CODE_ARCHIVE_*`
 - **Güvenlik:** `MAX_DOCUMENT_BYTES` (20 MB), `MAX_TOTAL_INGESTION_BYTES` (1 GB), `MAX_INGESTION_FILES`, `PARSER_TIMEOUT_SECONDS`, `PARSER_MEMORY_LIMIT_MB`, `MIME_VALIDATION_STRICT`, `SECRET_PATTERNS`
 - **Diğer feature'lar:** `FEATURE_NEW_CITATIONS`, `FEATURE_RETRIEVAL_DEBUG`, `RATE_LIMIT_*`
@@ -156,11 +174,11 @@ Genel değişkenler `.env.example`'da; gerçek tipler ve **tüm** varsayılanlar
 
 ```
 document-rag-platform/
-├─ docker-compose.yml           postgres · redis · minio · backend · worker
+├─ docker-compose.yml           postgres · redis · minio · backend · worker · scheduler
 ├─ .env.example
 ├─ docs/
-│  ├─ adr/                        mimari karar kayıtları (ADR-001..006)
-│  └─ runbooks/                   operasyon runbook'ları (6 adet)
+│  ├─ adr/                        mimari karar kayıtları (index kanoniktir)
+│  └─ runbooks/                   operasyon runbook'ları (index kanoniktir)
 └─ services/backend/
    ├─ alembic/                    migration zinciri (baseline → şema → backfill)
    ├─ MIGRATION_RUNBOOK.md        migration komutları
@@ -178,10 +196,11 @@ Ayrıntılı iç yapı için `AKTIF_GOREV.md` Bölüm 7 (hedef dizin) ve 8 (veri
 
 ## Operasyon runbook'ları
 
-`docs/runbooks/` altında gerçek kod/komutlarla eşleşen altı operasyon dokümanı:
+`docs/runbooks/` altındaki kanonik envanter `docs/runbooks/README.md` içindedir.
+Başlıca operasyon dokümanları:
 
 - `upload-and-ingestion-jobs.md` — asenkron yükleme, job yaşam döngüsü, worker yeniden başlatma ve retry
-- `reindex.md` — orijinal artifact'tan re-index (`POST /documents/{id}/refresh`, `ReindexService`)
+- `reindex.md` — orijinal artifact'tan re-index (`POST /api/v1/documents/{id}/refresh`, `ReindexService`)
 - `embedding-model-change.md` — embedding modeli/profil değişimi ve kontrollü re-index
 - `ocr-models.md` — OCR provider'ları, dil profili ve language pack kurulumu
 - `repository-scan-limits.md` — `CODE_*` scan limitleri ve güvenlik kuralları
@@ -189,8 +208,12 @@ Ayrıntılı iç yapı için `AKTIF_GOREV.md` Bölüm 7 (hedef dizin) ve 8 (veri
 
 ## Bilinen sınırlamalar
 
-- Tek-kullanıcılı yerel sunum; kimlik doğrulama/user ayrımı yoktur.
-- `FEATURE_REPOSITORY_INGESTION` varsayılan `true`'dur; isterseniz `.env`'de `false` yaparak kapatabilirsiniz.
+- Yerel varsayılan `AUTH_MODE=disabled` deterministik local principal/workspace
+  kullanır. Paylaşılan ortamda API-key modu fail-closed kapsam uygular; OIDC modu
+  yapılandırma sözleşmesinde vardır ancak harici IdP entegrasyonu ayrı deployment
+  işidir.
+- `FEATURE_REPOSITORY_INGESTION` varsayılan `false`'dur; açıldığında
+  allowlist ve scan limitleri deployment tarafından verilmelidir.
 - Opsiyonel ağır bağımlılıklar (Docling OCR, Tesseract) API image'ına zorunlu değildir; varsa `available` olarak devreye girer, yoksa fallback/`needs_review` ile degrade olur (bkz. `docs/runbooks/ocr-models.md`).
 
 ## Geliştirici

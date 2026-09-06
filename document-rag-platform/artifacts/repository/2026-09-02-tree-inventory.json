@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "observed_at_utc": "2026-09-02T00:00:00Z",
+  "canonical_application_root": "document-rag-platform",
+  "classifications": {
+    "canonical_application": [
+      "document-rag-platform/apps/web",
+      "document-rag-platform/services/backend",
+      "document-rag-platform/docs",
+      "document-rag-platform/tests"
+    ],
+    "historical_non_canonical_views": [
+      "active",
+      "done",
+      "plan",
+      "context-summary.md",
+      "IMPLEMENTATION_CHECKLIST.md",
+      "DOCUMENT_RAG_PLATFORM_ARCHITECTURE_AND_ROADMAP.md"
+    ],
+    "reviewed_noncanonical_payloads": [
+      "docs/operations/2026-08-31-claude-removal.md -> sanitized canonical operations record",
+      "new 1.txt -> removed duplicate local launch note"
+    ],
+    "removed_empty_root_skeletons": [
+      "apps",
+      "services",
+      "tests",
+      "packages",
+      "infra",
+      "docs/adr"
+    ]
+  },
+  "safety": {
+    "non_gitkeep_payload_deleted": false,
+    "runtime_data_touched": false,
+    "remote_mutation_performed": false
+  }
+}

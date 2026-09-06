@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "base_revision": "b017846099f2647e957e7dd0f19e21e435b4fe2f",
+  "files": {
+    "scripts/run_eval.py": "bc26700ec13403582100a057a37a9e634f2da5f8edff20bcd9a6a39a4790409d",
+    "document-rag-platform/services/backend/tests/evals/test_tier_contracts.py": "3f5f5af3b29fed0129f1484d2c9b4e79d82e5ad39b1a23a4bf64b83381d55462",
+    "document-rag-platform/tests/evals/datasets/private-pack-manifest-v2.schema.json": "74118e068f81ad332158bf6b377d841665e496cf7b6a359b5e50bb4a21a99e4e",
+    "document-rag-platform/tests/evals/datasets/benchmark-approval-manifest-v3.schema.json": "82475d5b70634ea9dbfef14e33ba2cba8c8a27b9a480d40e56ce7bf74492e5e0",
+    "document-rag-platform/tests/evals/datasets/benchmark-baseline-seal-v2.schema.json": "cedf948e64839a422e055a5c714d80683238f21458635626db01d53481400b6f",
+    "document-rag-platform/tests/evals/datasets/benchmark-golden-non-transfer-receipt-v1.schema.json": "55f831724112ad3feb530e915ad1652b015b59e9bac789e97e100473f6349fb6",
+    "document-rag-platform/tests/evals/datasets/public-synthetic-v2.manifest.json": "ddfc9bd0765703e1c6345f1945399c48058015865456cebfd747653212890c7e",
+    "document-rag-platform/tests/evals/datasets/public-dataset-manifest.schema.json": "02f9527b217baf5669509e75328d462bc126cc1f60be8e4702124f72e93e57b9",
+    "document-rag-platform/tests/evals/real_benchmark/README.md": "8f3aa19ba8d81c330582ea3d4fade2cc73fe92af1e5013b4340afd53ac754f2f",
+    "document-rag-platform/tests/evals/datasets/README.md": "7bc5a703de364ab326fe039110d5d9e4c1e80a1c5bac9d80814f30f78b455992"
+  },
+  "scope": "Explicit human-review final-state schemas and pre-dispatch sealed-baseline binding only",
+  "authority_granted": false,
+  "a9_closed": false
+}

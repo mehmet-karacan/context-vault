@@ -8,7 +8,7 @@ reading order and per-page bounding-box information into the shared
 Docling is a heavy optional dependency and is imported lazily at call time.
 When it is not installed, ``parse`` raises :class:`DoclingUnavailableError`;
 the ``PdfParser`` dispatcher (``pdf_parser``) catches that and degrades to the
-limited PyPDF2 fallback.
+limited pypdf fallback.
 
 The Docling document model is introspected defensively: structural conversion
 is best-effort, and any Docling failure is surfaced as :class:`PdfParseError`

@@ -1,0 +1,150 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "verify",
+  "operation_id": "cv3-a9-admission-20260902-001",
+  "work_item_id": "CV3-A9-EVAL",
+  "attempt_id": "local-regression-001",
+  "actor": "codex-local-agent",
+  "tool_adapter": "local-cli-pytest",
+  "started_at": "2026-09-02T19:40:21.225Z",
+  "finished_at": "2026-09-02T19:40:21.225Z",
+  "time_scope": "Evidence collection timestamp; exact test times in JUnit.",
+  "baseline_revision": "c25bebcdeb92d70ba0d6ba8d4fd05a06c247d944",
+  "result_revision": null,
+  "revision_note": "Pre-commit source hashes bind tested bytes; follow-up binding records exact implementation SHA.",
+  "scope_hash": "3487a796e4c54a583696aa61cfeacb97d1f2949dfb202293f0ae141ffcff75af",
+  "context_manifest_hash": "56c83e443bce4e9656ec8fbaa22ebedfb512dd9dfc10d326a213f289f3d4639e",
+  "idempotency_key_hash": null,
+  "commands": [
+    {
+      "command": "pytest tests/evals/test_tier_contracts.py before implementation",
+      "exit_code": 1,
+      "result": "17 failed, 4 passed; new regressions reproduced"
+    },
+    {
+      "command": "uv lock --offline; uv lock --check --offline",
+      "exit_code": 0,
+      "result": "122 packages; only explicit existing jsonschema dev dependency references changed"
+    },
+    {
+      "command": "pytest tests/evals (without isolated dependency variables)",
+      "exit_code": 1,
+      "result": "2 failed, 75 passed; fixture database unavailable under default test settings"
+    },
+    {
+      "command": "pytest -q --junitxml=reports/a9-admission-backend.xml (explicit isolated DB/Redis/MinIO)",
+      "exit_code": 0
+    },
+    {
+      "command": "ruff check . ../../../scripts/run_eval.py; check_mypy_ratchet.py; generate_openapi.py --check; pytest tests/evals/test_tier_contracts.py",
+      "exit_code": 0
+    },
+    {
+      "command": "unapproved real-benchmark CLI probe",
+      "exit_code": 3,
+      "result": "expected fail-closed before provider execution"
+    },
+    {
+      "command": "check_public_tree.py --json-output <supplement>/public-tree.json",
+      "exit_code": 0
+    }
+  ],
+  "exit_status": 0,
+  "tests": [
+    {
+      "name": "full backend",
+      "passed": 657,
+      "skipped": 2,
+      "failed": 0,
+      "warnings": 1,
+      "report": "backend-junit.xml"
+    },
+    {
+      "name": "tier admission/regression contracts",
+      "passed": 41,
+      "failed": 0,
+      "report": "tier-junit.xml"
+    },
+    {
+      "name": "strict MyPy",
+      "result": "PASS",
+      "source_files": 14
+    },
+    {
+      "name": "Ruff/OpenAPI/lock/public tree",
+      "result": "PASS"
+    },
+    {
+      "name": "CLI no-approval refusal",
+      "result": "PASS",
+      "expected_exit": 3
+    }
+  ],
+  "result": "PASS",
+  "phase_closed": false,
+  "scope": "Local evidence-admission correctness only. A9 benchmark and release gates remain BLOCKED.",
+  "source_manifest": "SOURCE_MANIFEST.json",
+  "artifacts": [
+    {
+      "path": "CLI_ADMISSION_PROBE.json",
+      "sha256": "52f93ac50c1fd1fac7ae54d1c592740b9146a3ccd52fa5574ff45ab308a72668",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "REPRODUCTION_SUMMARY.json",
+      "sha256": "4769fa91780f215218a56a571bfa6a105d1ca8caa9ef9b8688e1439805afe837",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "backend-junit.xml",
+      "sha256": "74d874008a257b269676fc90d59868ae96aa23974448822c1189533eac5e803b",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "public-tree.json",
+      "sha256": "4f9f648c2125a2a63f7b361b0f5ac7cfc8200d323fb3b0a90a19803cacf990d0",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "tier-junit.xml",
+      "sha256": "15c5598376d6a15b08e8aeaa76485d5cf2715bbcbac003eb12264050bd0ceb54",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    }
+  ],
+  "security_redactions": [
+    "JUnit local hostname and absolute paths removed",
+    "Before-fix and environment failure summaries preserve names/outcomes, omit raw tracebacks and local paths",
+    "Only public synthetic stub runner data"
+  ],
+  "supersedes_claim": "A9 runner shape/counter checks did not prove real provider execution, golden-data non-transfer or an owner-sealed baseline. Earlier receipts unchanged; eligibility and observed-non-transfer claims removed.",
+  "rollback": {
+    "schema_change": false,
+    "data_reset_required": false,
+    "instruction": "Revert only this evaluator patch if needed; preserve all DBs, objects, old evidence and fail-closed release decisions."
+  },
+  "data_safety": {
+    "user_data_mutated": false,
+    "isolated_test_infrastructure_used": true,
+    "real_provider_calls": 0
+  },
+  "open_gates": [
+    "Dataset owner review",
+    "Explicit provider/model/private-pack/budget approval",
+    "Audited real provider execution and request/data-policy evidence",
+    "Human baseline seal and final quality/release admission",
+    "Remote CI",
+    "A11-A13 and independent final verification"
+  ],
+  "remote_actions": {
+    "provider_call": false,
+    "push": false,
+    "pull_request": false,
+    "merge": false,
+    "release": false
+  }
+}

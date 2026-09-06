@@ -36,8 +36,7 @@ from ...domain.normalized_content import (
     SourceLocator,
     UnitType,
 )
-from ...domain.ports import DocumentParser
-from ..repositories.language_detection import EXTENSION_TO_LANGUAGE, detect_language
+from ..repositories.language_detection import EXTENSION_TO_LANGUAGE
 from ..chunkers.plsql_chunker import strip_plsql_lines
 
 __all__ = ["CodeParser"]
@@ -87,7 +86,9 @@ _PY_RE = re.compile(r"^(?:async\s+)?(def|class)\s+([A-Za-z_][A-Za-z0-9_]*)")
 _JS_FUNC_RE = re.compile(
     r"^(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+([A-Za-z_$][A-Za-z0-9_$]*)"
 )
-_JS_CLASS_RE = re.compile(r"^(?:export\s+)?(?:default\s+)?class\s+([A-Za-z_$][A-Za-z0-9_$]*)")
+_JS_CLASS_RE = re.compile(
+    r"^(?:export\s+)?(?:default\s+)?class\s+([A-Za-z_$][A-Za-z0-9_$]*)"
+)
 _JAVA_TYPE_RE = re.compile(
     r"^\s*(?:(?:public|private|protected|static|final|abstract|sealed|non-sealed|strictfp)\s+)*"
     r"(?:class|interface|enum|record|@interface)\s+([A-Za-z_][A-Za-z0-9_]*)"
@@ -110,7 +111,9 @@ def _detect_python(lines: List[str]) -> List[Tuple[int, str, str]]:
     for i, line in enumerate(lines):
         m = _PY_RE.match(line)
         if m:
-            out.append((i, m.group(2), "class" if m.group(1) == "class" else "function"))
+            out.append(
+                (i, m.group(2), "class" if m.group(1) == "class" else "function")
+            )
     return out
 
 
@@ -222,7 +225,9 @@ class CodeParser:
         text, encoding, enc_info = _decode(raw)
 
         ext = os.path.splitext(filename)[1].lower().lstrip(".")
-        language = str(options["language"]) if options.get("language") else _EXT_LANG.get(ext)
+        language = (
+            str(options["language"]) if options.get("language") else _EXT_LANG.get(ext)
+        )
         if language is None:
             language = "plaintext"
         # Normalise PL/SQL-ish sql family for the parser layer.
@@ -260,7 +265,10 @@ class CodeParser:
                 order=order,
                 hierarchy=Hierarchy(heading_path=[filename], depth=1),
                 locator=SourceLocator(
-                    file_path=file_path, line_start=1, line_end=1, block_index=block_index
+                    file_path=file_path,
+                    line_start=1,
+                    line_end=1,
+                    block_index=block_index,
                 ),
                 metadata={
                     "file_path": file_path,

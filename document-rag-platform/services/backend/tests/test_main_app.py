@@ -14,34 +14,35 @@ from fastapi.testclient import TestClient
 from src.main import app
 
 
-def test_startup_event_calls_init_db(monkeypatch):
-    """The FastAPI startup hook must still call `init_db()` — this is the
-    "backend startup testi" itself, exercised with a stubbed init_db so no
-    real database connection happens in the test suite."""
+def test_startup_event_checks_schema_admission(monkeypatch):
+    """Startup must perform the read-only schema admission check."""
     calls = []
     monkeypatch.setattr("src.main.init_db", lambda: calls.append(True))
 
     with TestClient(app) as client:
         # Entering the TestClient context runs the app's lifespan/startup.
-        response = client.get("/")
+        response = client.get("/api/v1/")
         assert response.status_code == 200
 
     assert calls == [True], "startup hook did not call init_db()"
 
 
 def test_all_expected_routers_are_mounted():
-    paths = {route.path for route in app.routes}
+    # OpenAPI is the public route contract. FastAPI may add internal router
+    # sentinel objects to ``app.routes`` that intentionally have no ``path``.
+    paths = set(app.openapi()["paths"])
     expected = {
-        "/",
-        "/health",
-        "/projects",
-        "/documents",
-        "/documents/upload",
-        "/documents/{doc_id}",
-        "/documents/{doc_id}/status",
-        "/documents/{doc_id}/delete",
-        "/chat/query",
-        "/chat/models",
+        "/api/v1/",
+        "/api/v1/health",
+        "/health/live",
+        "/health/readiness",
+        "/api/v1/projects",
+        "/api/v1/documents",
+        "/api/v1/documents/upload",
+        "/api/v1/documents/{doc_id}",
+        "/api/v1/documents/{doc_id}/status",
+        "/api/v1/chat/query",
+        "/api/v1/chat/models",
     }
     missing = expected - paths
     assert not missing, f"routes missing from the mounted app: {missing}"
@@ -65,14 +66,23 @@ def test_main_module_contains_no_business_logic():
     # No route decorators directly on `app` (e.g. @app.get, @app.post) other
     # than the startup event registration.
     disallowed_decorator_attrs = {
-        "get", "post", "put", "delete", "patch", "options", "head",
+        "get",
+        "post",
+        "put",
+        "delete",
+        "patch",
+        "options",
+        "head",
     }
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef):
             for decorator in node.decorator_list:
                 # decorator is e.g. `app.get("/")` -> Call(func=Attribute(...))
                 func = decorator.func if isinstance(decorator, ast.Call) else decorator
-                if isinstance(func, ast.Attribute) and func.attr in disallowed_decorator_attrs:
+                if (
+                    isinstance(func, ast.Attribute)
+                    and func.attr in disallowed_decorator_attrs
+                ):
                     raise AssertionError(
                         f"main.py defines a route handler directly "
                         f"({func.attr}) — business logic belongs in api/v1/*"

@@ -22,9 +22,10 @@ from __future__ import annotations
 import hashlib
 import mimetypes
 import os
+import stat
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterator, List, Optional, Sequence, Tuple
+from typing import Callable, Iterator, List, Optional, Tuple
 
 from ...config import Settings, settings as default_settings
 from .ignore_rules import (
@@ -63,9 +64,7 @@ class ScanConfig:
             max_files=int(getattr(s, "CODE_MAX_FILES", 20000)),
             max_total_bytes=int(getattr(s, "CODE_MAX_TOTAL_BYTES", 1073741824)),
             max_file_bytes=int(getattr(s, "CODE_MAX_FILE_BYTES", 2097152)),
-            scan_timeout_seconds=float(
-                getattr(s, "CODE_SCAN_TIMEOUT_SECONDS", 900)
-            ),
+            scan_timeout_seconds=float(getattr(s, "CODE_SCAN_TIMEOUT_SECONDS", 900)),
             follow_symlinks=bool(getattr(s, "CODE_FOLLOW_SYMLINKS", False)),
             allow_submodules=bool(getattr(s, "CODE_ALLOW_SUBMODULES", False)),
             allow_git_lfs=bool(getattr(s, "CODE_ALLOW_GIT_LFS", False)),
@@ -117,9 +116,7 @@ Walker = Callable[[str], Iterator[Tuple[str, List[str], List[str]]]]
 
 
 def _default_walker(root: str) -> Iterator[Tuple[str, List[str], List[str]]]:
-    for dirpath, dirnames, filenames in os.walk(
-        root, topdown=True, followlinks=False
-    ):
+    for dirpath, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
         dirnames.sort()
         filenames.sort()
         yield dirpath, dirnames, filenames
@@ -131,17 +128,27 @@ def _guess_mime(rel: str) -> Optional[str]:
 
 
 def _read_file_metadata(abs_path: str, max_bytes: int) -> Optional[dict]:
-    """Hash a file and probe its first bytes. Returns None if not readable."""
+    """Hash a regular file without following a last-moment symlink swap."""
+    nofollow = getattr(os, "O_NOFOLLOW", None)
+    if nofollow is None:
+        # A platform without no-follow open cannot uphold the web-ingestion
+        # contract, so refuse the file instead of silently weakening it.
+        return None
     try:
-        size = os.path.getsize(abs_path)
+        descriptor = os.open(abs_path, os.O_RDONLY | nofollow)
     except OSError:
         return None
-    if size > max_bytes:
-        return {"skipped_large": True, "size_bytes": size}
-    sha = hashlib.sha256()
-    first_bytes = b""
     try:
-        with open(abs_path, "rb") as fh:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode):
+            return None
+        size = opened.st_size
+        if size > max_bytes:
+            return {"skipped_large": True, "size_bytes": size}
+        sha = hashlib.sha256()
+        first_bytes = b""
+        with os.fdopen(descriptor, "rb", closefd=True) as fh:
+            descriptor = -1
             while True:
                 chunk = fh.read(CHUNK_SIZE)
                 if not chunk:
@@ -149,9 +156,12 @@ def _read_file_metadata(abs_path: str, max_bytes: int) -> Optional[dict]:
                 hasher_local = sha
                 hasher_local.update(chunk)
                 if len(first_bytes) < _PROBE_SIZE:
-                    first_bytes += chunk[:_PROBE_SIZE - len(first_bytes)]
+                    first_bytes += chunk[: _PROBE_SIZE - len(first_bytes)]
     except OSError:
         return None
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
     return {
         "size_bytes": size,
         "content_hash": sha.hexdigest(),
@@ -172,6 +182,9 @@ def discover_directory(
     discovered descriptors plus truncation metadata; the descriptors never list
     ignored, sensitive, oversize, or symlinked files.
     """
+    # Normalize before any filesystem sink. Request-facing callers additionally
+    # enforce their selected allowed-root boundary before reaching this layer.
+    path = os.path.realpath(os.path.abspath(path))
     cfg = config or ScanConfig.from_settings()
     if ignore is None:
         ignore = build_ignore_rules(root_path=path)

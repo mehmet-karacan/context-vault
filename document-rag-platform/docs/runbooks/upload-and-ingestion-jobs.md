@@ -1,126 +1,123 @@
-# Runbook — Upload ve Ingestion Job Yönetimi
+# Runbook — Upload, ingestion job, recovery ve GC
 
-Bu runbook, belge yüklemeden (`POST /documents/upload`) asenkron ingestion job'ının
-tamamlanmasına kadar olan süreci, job yaşam döngüsünü, izlemeyi, retry ve worker
-yeniden başlatma davranışını gerçek kod/modüllerle eşleşerek anlatır.
+Bu runbook belge, repository, archive ve directory kaynaklarının tek üretim
+hattındaki işletim kurallarını açıklar. Kanonik servis
+`src/application/ingestion_orchestrator.py`; API route'ları parse, chunk,
+embedding veya index işlemi yapmaz.
 
-İlgili kod:
-- `services/backend/src/api/v1/documents.py` — upload endpoint'i (`_upload_document_async`)
-- `services/backend/src/workers/ingestion_tasks.py` — `process_ingestion_job` ve `run_ingestion_job`
-- `services/backend/src/workers/celery_app.py` — worker-safety konfigürasyonu
-- `services/backend/src/config.py` — `FEATURE_ASYNC_INGESTION`, `INGESTION_*`
-- `services/backend/src/api/v1/ingestion_jobs.py` — `GET /ingestion-jobs/{id}` + `/events`
+## Kabul ve teslim
 
----
+1. Kaynak MIME/magic/structure, boyut ve içerik politikasıyla doğrulanır.
+2. Riskli credential/private-key içeriği object storage veya remote provider'a
+   gönderilmeden quarantine edilir.
+3. Kabul edilen object deterministic `staging/` anahtarına AES-256-GCM ile
+   şifrelenerek yazılır ve okunarak checksum doğrulanır.
+4. `Document`, immutable `DocumentVersion`, policy, `IngestionJob`, artifact,
+   storage registry ve `OutboxEvent` aynı PostgreSQL transaction'ında yazılır.
+5. Commit sonrasında dispatcher outbox kaydını queue'ya teslim eder. Publish
+   hatası event'i `failed` bırakır; stale claim veya normal retry yeniden teslim
+   eder.
 
-## 1. Asenkron yükleme nasıl çalışır
+Varsayılan ve tek ürün davranışı asenkron job'dır. Sync parser/chunker fallback
+ve `FEATURE_ASYNC_INGESTION` dual path'i yoktur.
 
-Varsayılan davranış `FEATURE_ASYNC_INGESTION=true`'dır (config.py + `.env.example`).
-Bu modda `POST /documents/upload` isteği anında döner ve uzun parse/chunk/embed
-sürecini beklemez:
+## Job ve attempt yaşam döngüsü
 
-1. `_upload_document_async` (documents.py:178) `guard_upload` ile MIME/magic/size
-   doğrulaması yapar (`src/infrastructure/security/file_validation.py`).
-2. Aynı transaction'da `Document` (`status=uploaded`), ilk `DocumentVersion`
-   (`version_no=1`, `status=pending`) ve `IngestionJob` (`status=queued`,
-   `stage=validating`) kaydı oluşturulur.
-3. Orijinal dosya MinIO'ya yazılır: `object_keys.original_key(...)` →
-   `projects/{project_id}/documents/{document_id}/versions/{version_id}/original/{safe_filename}`
-   (src/infrastructure/storage/object_keys.py).
-4. Commit sonrası `process_ingestion_job.delay(job_id)` ile Celery task'ı kuyruğa
-   atılır (commit düşerse orphan job üretilmez).
-5. Yanıt `job_id`, `document_id`, `version_id`, `status: "queued"` içerir ve
-   `GET /documents` listesinde belge hemen görünür; `job_status`/`job_stage` alanları
-   ilerlemeyi yansıtır.
+Job durumları:
 
-Senkron fallback: `FEATURE_ASYNC_INGESTION=false` ayarlanırsa aynı istek içinde
-parse → chunk → embed → index yapılır (documents.py `upload_document`'ın alt dalı).
-Bu, yalnızca geçiş/rollback/debug için korunmuştur.
-
-## 2. Job yaşam döngüsü ve aşamalar
-
-`IngestionJob` (models.py) şu durumlara sahiptir: `queued | running | completed |
-failed | cancelled`. `process_ingestion_job` aşağıdaki aşamaları sırayla işletir:
-
+```text
+queued -> running -> completed
+                  -> retrying -> running
+                  -> failed
+                  -> cancelled
 ```
+
+Stage sırası:
+
+```text
 validating -> storing -> parsing -> chunking -> embedding -> indexing -> activating
 ```
 
-(stage sırası `ingestion_tasks.py:STAGES`; `models.py`'de daha geniş enum — `ocr`,
-`normalizing` — Aşama 3+ parser katmanı içindir.)
+Worker etki öncesi atomik claim alır. `lease_owner`, `lease_expires_at`,
+heartbeat, attempt ve stage receipt PostgreSQL'dedir; Celery task id yalnız
+attempt metadata'sıdır. Süresi dolan lease `reconcile_stale_leases` ile
+`retrying` durumuna alınır. Aynı inbox/outbox idempotency key unique constraint
+ile korunur.
 
-- `validating`: `DocumentVersion.storage_key` dolu mu kontrol edilir.
-- `storing`: orijinal dosya MinIO'dan çekilir, `document_artifacts`'a `original`
-  artifact'ı yazılır.
-- `parsing`: geçici dosyadan metin çıkarılır, `normalized_md` artifact'ı saklanır.
-- `chunking`: `chunk_text` ile parçalanır, credential değerleri redact edilir
-  (`src/infrastructure/security/redaction.py`).
-- `embedding`: `embed_texts(..., instruction=PASSAGE_INSTRUCTION)` çağrılır.
-- `indexing`: version'ın chunk'ları idempotent "wipe + rewrite" ile yeniden yazılır,
-  `embedding_profiles`'daki aktif profile bağlanır, `search_vector`/`identifiers`
-  kurulur.
-- `activating`: version `ready` olur, `documents.active_version_id` atomik değişir,
-  job `completed`.
+Cancellation için:
 
-Her aşama `ingestion_events`'e bir `IngestionEvent` (stage, status, message) yazar
-(`_emit_event`). Redis yalnız canlı-iletim katmanıdır; **kalıcı kayıt PostgreSQL'dedir.**
-
-## 3. İzleme
-
-```powershell
-# Job genel durumu
-curl.exe http://localhost:8000/ingestion-jobs/<job_id>
-
-# Job olay/ilerleme geçmişi
-curl.exe http://localhost:8000/ingestion-jobs/<job_id>/events
-
-# Belge + en son job durumu
-curl.exe http://localhost:8000/documents
-curl.exe http://localhost:8000/documents/<document_id>/status
+```text
+POST /api/v1/ingestion-jobs/{job_id}/cancel?project_id={project_id}
 ```
 
-`GET /documents` yanıtı `job_id`, `job_status`, `job_stage`, `job_error` alanlarını
-içerir (`documents.py:serialize_document`; yalnızca asenkron geçmişi olan belgelerde).
+Queued/retrying job hemen terminal `cancelled` olur. Running job cancel isteğini
+kaydeder ve yalnız güvenli stage sınırında durur. Completed/failed job yeniden
+başlatılmaz.
 
-## 4. Worker yeniden başlatma güvenliği
+## Artifact ve aktivasyon
 
-`celery_app.py` şu ayarları kullanır (Aşama 2 kabul kriteri: "worker yeniden
-başlatılsa job verisi kaybolmaz"):
+Staging original, checksum doğrulamasından sonra version/artifact/checksum'dan
+türetilen immutable final anahtara taşınır. Yeni version bağımsız candidate
+olarak normalize edilir, chunk/embedding/index invariant'ları sağlanır ve
+`documents.active_version_id` yalnız compare-and-swap transaction'ında değişir.
+Başarısız candidate eski active version'ı değiştirmez.
 
-- `task_acks_late=True` — mesaj yalnızca görev başarılı olduktan sonra ack'lenir.
-- `task_reject_on_worker_lost=True` — çöken worker'ın görevi kuyruğa geri döner.
-- `task_acks_on_failure_or_timeout=True` — max_retries tükenince final hata ack'lenir.
-- `worker_prefetch_multiplier=1` — tek uzun job diğer kuyruktakileri kilitlemez.
-- `task_soft_time_limit` / `task_time_limit` → `INGESTION_TASK_SOFT_TIME_LIMIT_SECONDS`
-  (3600) / `INGESTION_TASK_TIME_LIMIT_SECONDS` (3700).
+Uzak embedding yalnız policy izin verirse ve job attributable actor/workspace
+taşıyorsa çağrılır. Çağrıdan önce içeriksiz
+`ingestion.remote_embedding_authorized` audit event'i commit edilir.
 
-Ayrıca `run_ingestion_job` idempotenttir: `indexing` aşaması önce version'ın eski
-chunk'larını siler (`_clear_existing_chunks_for_version`), sonra yeniden yazar; bu
-sayede aynı job yeniden alınsa bile duplicate chunk/embedding oluşmaz. Job zaten
-`completed` gelirse no-op döner (`skipped=true`).
+## Encryption-at-rest
 
-## 5. Retry davranışı (INGESTION_*)
+Her yeni MinIO object'i uygulama katmanında AES-256-GCM envelope ile
+şifrelenir. `OBJECT_STORAGE_ENCRYPTION_KEY`, deployment secret store'dan gelen
+base64 kodlu 32-byte anahtardır; eksik veya bozuk anahtar startup'ı durdurur.
+Nonce her write için rastgele 12 byte'tır ve storage key AAD olarak bağlanır.
 
-`process_ingestion_job` (ingestion_tasks.py:486) `autoretry` kullanır:
+`OBJECT_STORAGE_ALLOW_LEGACY_PLAINTEXT_READS` varsayılan `false` olmalıdır.
+Yalnız doğrulanmış eski object geçişinde süreli olarak açılabilir; yeni write'lar
+bu durumda da şifreli kalır. Anahtar rotasyonu ayrı backup/restore ve re-encrypt
+planı gerektirir.
 
-- `retry_kwargs={"max_retries": INGESTION_MAX_RETRIES}` — varsayılan `3`.
-- `retry_backoff=INGESTION_RETRY_BACKOFF_SECONDS` (10s) , `retry_backoff_max=300`,
-  `retry_jitter=True` — üstel backoff.
-- **Kalıcı hatalar** (`IngestionJobError`, `StageTransitionError`) asla yeniden
-  denenmez: `validating`'deki doğrulama hatası (bulunamayan job/version/document,
-  boş içerik, sıfır chunk, embedding sayısı uyuşmazlığı).
-- **Geçici (transient) hatalar** (gateway timeout, MinIO/DB kıpırtısı)
-  `RetryableIngestionError` ile sarılıp retry edilir. Her denemede job geçici olarak
-  `failed` işaretlenir, sonra retry `validating`'e geri sarar.
+## Silme, retention ve legal hold
 
-## 6. Sorun giderme
+`DELETE /api/v1/documents/{id}` fiziksel silme yapmaz. Belgeyi soft-delete eder
+ve bağlı referenced object'lere `STORAGE_RETENTION_DAYS` sonrasını
+`retention_until` olarak yazar. Tekrarlanan delete idempotent success döner.
 
-- Job `failed` kaldıysa: `GET /ingestion-jobs/{id}` → `error_code`/`error_message`,
-  `GET /ingestion-jobs/{id}/events` son olayı inceleyin.
-- Embedding gateway'den 401/404: `LITELLM_BASE_URL`/`LITELLM_API_KEY`/`EMBEDDING_MODEL`
-  kontrol edin (config.py + `docker compose logs worker`).
-- Worker hiç devreye girmiyorsa: `docker compose ps`'de `worker` "Up" olmalı;
-  `celery -A src.workers.celery_app worker -l info` komutunun bootstrap hatasız
-  bittiğini loglardan doğrulayın.
-- Esnek aşama sırası ihlali `StageTransitionError` → kod seviyesi state hatası,
-  otomatik düzeltme yapmayın, rapor edin.
+GC için üç kapı birlikte geçmelidir:
+
+- retention süresi dolmuş olmalı;
+- object `legal_hold=false` olmalı;
+- version'a bağlı hiçbir `message_citation` bulunmamalı.
+
+Her citation, konuşma/citation retention kararı kaldırılana kadar version için
+referans hold sayılır. Herhangi bir version object'i hold altında kalıyorsa o
+version'ın chunk/vector/artifact kayıtları korunur. Son object güvenle
+silindiğinde chunk embedding'leri FK cascade ile, chunk ve artifact'ler aynı GC
+transaction'ında temizlenir. `dry_run=true` byte silmez ve planned receipt
+üretir; tekrar çalıştırma deleted kayıtları seçmez.
+
+## Recovery komutları
+
+Uygulama servisleri Python çağrısı olarak çalışır:
+
+- `reconcile_stale_leases(db)` — expired attempt/job lease'lerini retryable yapar.
+- `sweep_orphan_staging(db, storage, dry_run=True)` — grace süresi dolmuş,
+  registry dışı `staging/` object'lerini raporlar.
+- `storage_reconciliation_report(db, storage)` — missing/orphan anahtar farkını
+  salt okunur üretir.
+- `run_storage_gc(db, storage, dry_run=True)` — retention/citation/legal-hold
+  kapılarını geçebilen object'leri receipt ile planlar.
+
+Önce dry-run çalıştırılır ve yalnız receipt/key hash incelenir. Public loga raw
+storage key, belge içeriği, secret veya connection string yazılmaz. Fiziksel GC
+ancak doğru environment, doğrulanmış backup/restore ve açık operasyon planıyla
+`dry_run=False` çalıştırılır.
+
+## Doğrulama
+
+A6 regression kanıtı şu davranışları kapsar: upload idempotency, outbox publish
+recovery, stale lease, safe cancellation, staging orphan sweep, her kritik
+stage sonrası fault/retry yakınsaması, reindex active-version koruması,
+extension'sız source routing, secret quarantine, encrypted real-MinIO E2E,
+delete retention, citation/legal hold ve idempotent GC.

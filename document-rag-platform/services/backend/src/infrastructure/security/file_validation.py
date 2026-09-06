@@ -24,6 +24,8 @@ can map a failure to a safe 400 with no stack trace.
 from __future__ import annotations
 
 import os
+import io
+import zipfile
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -133,9 +135,8 @@ def _mime_category(mime_type: Optional[str]) -> Optional[str]:
     mime = mime_type.split(";", 1)[0].strip().lower()
     if mime == "application/pdf":
         return "pdf"
-    if (
-        "openxmlformats-officedocument" in mime
-        and any(t in mime for t in ("wordprocessingml", "spreadsheetml", "presentationml"))
+    if "openxmlformats-officedocument" in mime and any(
+        t in mime for t in ("wordprocessingml", "spreadsheetml", "presentationml")
     ):
         return "office"
     if mime.startswith("image/"):
@@ -148,6 +149,7 @@ def _mime_category(mime_type: Optional[str]) -> Optional[str]:
 
 
 # --- Magic-byte sniffer ------------------------------------------------------
+
 
 def detect_magic_type(file_bytes: bytes) -> Optional[str]:
     """Return the detected content category from magic bytes, else ``None``.
@@ -162,8 +164,24 @@ def detect_magic_type(file_bytes: bytes) -> Optional[str]:
     if head.startswith(b"%PDF-"):
         return "pdf"
     if head.startswith(b"PK\x03\x04"):
-        return "office"  # ZIP container (DOCX/XLSX/PPTX)
-    if head.startswith(b"\x89PNG") or head.startswith(b"\xff\xd8\xff") or head.startswith(b"GIF8"):
+        # A ZIP signature alone is not an Office-document signal. Inspect the
+        # central directory without extracting anything and accept only an
+        # OOXML package with a known application root.
+        try:
+            with zipfile.ZipFile(io.BytesIO(file_bytes)) as archive:
+                names = set(archive.namelist())
+        except (OSError, zipfile.BadZipFile):
+            return None
+        if "[Content_Types].xml" in names and names.intersection(
+            {"word/document.xml", "xl/workbook.xml", "ppt/presentation.xml"}
+        ):
+            return "office"
+        return None
+    if (
+        head.startswith(b"\x89PNG")
+        or head.startswith(b"\xff\xd8\xff")
+        or head.startswith(b"GIF8")
+    ):
         return "image"
     if head.startswith(b"II*\x00") or head.startswith(b"MM\x00*"):
         return "image"  # TIFF
@@ -193,7 +211,7 @@ def _try_libmagic(file_bytes: bytes) -> Optional[str]:
     label = str(label).lower()
     if "pdf" in label:
         return "pdf"
-    if "zip" in label or "officedocument" in label:
+    if "officedocument" in label:
         return "office"
     if label.startswith("image/"):
         return "image"

@@ -1,0 +1,24 @@
+{
+  "completed_at_utc": "2026-09-05T22:31:39.726876Z",
+  "container_id_hashes": [
+    "4c268e756fe7c60bdf37605ed2c9bb7d19f80754e11a1fa65a7531b53d1bbb7b",
+    "d20416ab57ce32975eb3cff64a8ba68c487a0c25e2c0a77bcdd6f8aeafae2b7a",
+    "b935ddca600805cae2ef6b133946530539c77dad3b2d47a3ca906f23d6829a1b",
+    "4b9a2a87152145f7097aede8eb5880197e503730235d166ae345a32b7b9e5e19"
+  ],
+  "disposable_container_count": 4,
+  "disposable_volume_count": 4,
+  "evidence_type": "disposable-cleanup",
+  "remaining_container_count": 0,
+  "remaining_volume_count": 0,
+  "repository_revision": "bde49aca525f7ccc40b21c039af003413621223c",
+  "schema_version": "1.0",
+  "status": "PASS",
+  "user_resources_targeted": false,
+  "volume_identity_hashes": [
+    "cc4bf59b32bdd7cd7b287cb0a9160ba8d664feaea5138c7ba23a88dfa4890489",
+    "09e94219f1974f5e8c876b48e68f2a36d286d94aafce328ab8e44475d867baf6",
+    "9bc4966bd5e29178a6b88a6147c15472b29350d8842c4363d81cc31cb75abdeb",
+    "d46bc4a6c2eb68acb7c0706c3811899e50654a8dc0bf02c23eeb11db2049c767"
+  ]
+}

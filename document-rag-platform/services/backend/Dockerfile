@@ -1,31 +1,44 @@
-FROM python:3.11-slim
+ARG PYTHON_IMAGE=python:3.12-alpine@sha256:b64631e04e4920160c50fbe8d8df828f7f35f06f425cb44aa09bca53e708a35a
+FROM ${PYTHON_IMAGE} AS builder
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    libmagic1 \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# Install the exact locked runtime dependency graph.
+COPY pyproject.toml uv.lock ./
+RUN pip install --no-cache-dir uv==0.12.5 \
+    && uv sync --frozen --no-dev --no-install-project
 
-# Trust the corporate root CA so the AI gateway's TLS-intercepted
-# certificate chain (aihub-api.turktelekom.com.tr) verifies correctly.
-COPY ttroot-g3.crt /usr/local/share/ca-certificates/ttroot-g3.crt
-RUN update-ca-certificates
+FROM ${PYTHON_IMAGE} AS runtime
 
-# Copy requirements
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+ARG SOURCE_REVISION
 
-# httpx/requests use certifi's bundled CA file, not the OS trust store —
-# append the corporate root there too so outbound TLS to the gateway verifies.
-RUN cat /usr/local/share/ca-certificates/ttroot-g3.crt >> "$(python -c 'import certifi; print(certifi.where())')"
+LABEL org.opencontainers.image.source="https://github.com/mehmet-karacan/context-vault" \
+      org.opencontainers.image.revision="${SOURCE_REVISION}"
 
-# Copy application
-COPY . .
+WORKDIR /app
 
-# Expose port
+# Keep compilers and uv out of the runtime image. The numeric identity makes
+# the non-root contract stable even when the image is run without /etc/passwd.
+# The base digest is immutable and the vulnerable transitive libuuid package is
+# upgraded to the exact fixed Alpine revision during the runtime build.
+RUN apk add --no-cache ca-certificates git libmagic libuuid=2.42.3-r1 \
+    && addgroup -S -g 10001 app \
+    && adduser -S -D -H -u 10001 -G app app
+
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HOME=/tmp
+
+COPY --from=builder --chown=10001:10001 /app/.venv /app/.venv
+
+COPY --chown=10001:10001 . .
+
+USER 10001:10001
+
 EXPOSE 8000
 
-# Run application
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2)"]
+
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

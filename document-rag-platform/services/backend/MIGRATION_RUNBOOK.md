@@ -1,350 +1,197 @@
-# Aşama 2 — Alembic Migration Runbook
+# Context Vault V3 Migration Runbook
 
-> **Durum notu (2026-08-19):** Bu migration zinciri gerçek ortamda başarıyla
-> uygulandı ve doğrulandı: veritabanı tamamen sıfırlanıp `alembic upgrade
-> head` ile baştan kuruldu, ardından `alembic downgrade base` ile tüm şema
-> geri alınıp `alembic upgrade head` ile tekrar ileri alındı — hepsi
-> hatasız. Bu süreçte `src/db.py`'deki `init_db()` fonksiyonunun her
-> başlangıçta `Base.metadata.create_all()` çağırarak Alembic ile çakıştığı
-> tespit edildi ve düzeltildi (artık şema oluşturma tamamen Alembic'e ait);
-> baseline migration da artık gerçek DDL içeriyor, bu yüzden **aşağıdaki
-> "stamp" adımı (Adım 3) yalnızca daha önce create_all ile oluşturulmuş,
-> Alembic'e hiç geçmemiş eski bir veritabanı için gereklidir** — sıfırdan
-> kurulan bir veritabanında `alembic upgrade head` tek başına yeterlidir,
-> stamp adımını atlayabilirsiniz. Bu doküman gelecekte tekrar migration
-> yazılırsa referans olarak kalıyor.
+Status: verified through the durable-ingestion migration on 2026-09-02.
 
-Bu doküman, `alembic/versions/` altındaki üç migration'ı gerçek Postgres
-container'ına uygulamak için **kullanıcının kendi terminalinde sırayla**
-çalıştırması gereken komutları içerir. Bu dosyayı yazan otomasyon adımı
-hiçbir DB komutu çalıştırmadı — aşağıdaki her komut sizin tarafınızdan,
-kontrollü biçimde, sırayla çalıştırılmalıdır.
+Operational head: `cv3_00000004`
+Configured versions directory: `alembic/versions_v3/`
 
-Tüm komutlar repository kökünden değil, **`document-rag-platform/` dizininden**
-çalıştırılmak üzere yazılmıştır (docker-compose.yml'nin bulunduğu yer).
-Komutlar **yalnızca Windows PowerShell** için yazılmıştır (PS ile başlayan
-mavi terminal). Her komutu TEK BAŞINA, tek satır halinde kopyalayıp
-Enter'a basın — birden fazla satıra yayılan hiçbir komut yok, bu yüzden
-kopyala-yapıştırda satır sonu/backtick sorunu yaşamamalısınız. Aynı
-PowerShell penceresini adım 1'den 8'e kadar KAPATMADAN kullanın (Adım 1'de
-tanımlanan `$stamp` değişkeni sonraki adımlarda da kullanılıyor).
+The files under `alembic/versions/` are legacy incident evidence. They are not
+an operational migration source and must not be copied, stamped or combined
+with the V3 graph.
 
-Aşağıdaki komutlarda DB kullanıcı adı/veritabanı adı doğrudan `raguser` /
-`rag_platform` olarak yazıldı (bunlar `.env.example`'daki ve gerçek
-`.env`'deki mevcut değerler — daha önce bu ortamda çalıştırılan `pg_dump`
-komutuyla teyit edildi). `$POSTGRES_USER`/`$POSTGRES_DB` gibi container-içi
-ortam değişkenlerini `sh -c '...'` üzerinden PowerShell'den genişletmeye
-ÇALIŞMIYORUZ artık — bu, iç içe tırnaklarda (PowerShell → sh → psql) hataya
-yol açıyordu (bir önceki denemede aldığınız `option requires an argument
--- 'c'` hatası buradan kaynaklandı). Eğer `.env` dosyanızda bu isimleri
-değiştirdiyseniz, aşağıdaki komutlarda `raguser`/`rag_platform`'u kendi
-değerlerinizle değiştirin.
+## Safety rules
 
-Migration zinciri (`alembic/versions/`):
+- Never run `alembic stamp`, edit `alembic_version`, or guess missing legacy
+  revisions.
+- Never migrate a database whose identity and backup provenance are unknown.
+- Never run downgrade against a database containing retained user data.
+- Application startup is read-only: it checks the exact revision and performs
+  no DDL or repair.
+- Production rollback uses verified restore/cutover. Downgrade is limited to a
+  disposable empty test database.
+- LLM, embedding, Redis and MinIO credentials are not migration inputs.
+
+## Configuration
+
+The deployment supplies two distinct URLs:
 
 ```text
-b2f1c0a10001  baseline (DDL yok, marker)
-      ↓
-b2f1c0a10002  şema migration'ı (yeni tablolar + nullable kolonlar, additive)
-      ↓
-b2f1c0a10003  backfill (document_versions / embedding_profiles / chunk_embeddings verisi)
+DATABASE_MIGRATION_URL  migration owner; one-shot only
+DATABASE_RUNTIME_URL    backend, worker and scheduler only
 ```
 
----
+Compose maps `DATABASE_MIGRATION_URL` to `DATABASE_URL` only inside the
+migration one-shot. Alembic reads only these variables through
+`MigrationSettings`:
 
-## 0. Ön koşul: backend image'ını yeniden build et
-
-`requirements.txt`'ye `alembic==1.13.1` eklendi. Container içinde `alembic`
-komutunun çalışabilmesi için image yeniden build edilmeli.
-
-Önce `document-rag-platform/` dizinine geçin (docker-compose.yml orada,
-repo kökünde DEĞİL):
-
-```powershell
-cd C:\innova\projeler\context-vault\document-rag-platform
+```text
+DATABASE_URL                   required
+DATABASE_SCHEMA                default: public
+MIGRATION_LOCK_TIMEOUT_MS      default: 5000
+MIGRATION_STATEMENT_TIMEOUT_MS default: 300000
 ```
 
-```powershell
-docker compose build backend worker
-docker compose up -d backend worker
+Do not print or persist either URL. Public receipts contain only an opaque
+environment reference, non-secret role names and hashes. Runtime services must
+never receive the migration-owner URL.
+
+## Admission before any migration
+
+1. Resolve the exact database identity and confirm it is the intended target.
+2. Confirm the target is new/empty, or stop and use the restore/import process.
+3. Pin the PostgreSQL/pgvector image by digest.
+4. Capture a custom-format dump and object inventory when a source exists.
+5. Restore both into separate isolated targets and verify checksums.
+6. Run the migration verifier without `--upgrade` first.
+
+The 2026-09-02 legacy source was unavailable. The owner authorized a new empty
+lineage; this is not permission to overwrite a legacy source found later.
+
+## Blank database upgrade
+
+For a brand-new empty PostgreSQL volume, the image evaluates
+`infra/docker/postgres/10-runtime-role.sql`. It creates a distinct login role
+with `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOINHERIT`,
+`NOREPLICATION` and `NOBYPASSRLS`, and revokes schema creation. This initializer
+does not rerun for an existing cluster. Never erase a volume to force it to run;
+provision the role through an approved database-administration procedure
+instead.
+
+From `document-rag-platform/services/backend/`, with `DATABASE_URL` supplied by
+the deployment secret mechanism:
+
+```sh
+python -m alembic heads
+python -m alembic upgrade head
+python -m alembic current
+python -m alembic upgrade head
 ```
 
-**Beklenen çıktı:** build başarıyla biter, `rag-backend` ve `rag-worker`
-container'ları `Up` durumuna geçer.
+Expected head/current: `cv3_00000004`. The second upgrade must be a no-op.
 
-**Sorun olursa:** `pip install` hatası varsa `requirements.txt`'yi kontrol
-edin; `alembic==1.13.1`, mevcut `sqlalchemy==2.0.25` ile uyumludur.
+Immediately after `upgrade head`, the Compose migration one-shot runs
+`infra/docker/postgres/apply_runtime_grants.py` with the migration-owner URL.
+It applies current table/sequence/function grants, installs owner-scoped
+default privileges for future migration objects, and fails unless the runtime
+role remains unable to create temporary objects, create in the application
+schema, or own the database/schema. Require exactly `runtime database grants:
+PASS` before starting runtime services.
 
----
+The isolated regression drill uses a unique disposable container and volume:
 
-## 1. Yedek al (pg_dump)
-
-Repo dışı/gitignore'lu bir konuma tam backup alın. `.local-backups/` zaten
-`document-rag-platform/.gitignore`'a eklendi (bu görev kapsamında), yani bu
-klasöre yazılan dosyalar yanlışlıkla commit edilmez.
-
-```powershell
-New-Item -ItemType Directory -Force -Path .local-backups | Out-Null
+```sh
+A11_RUN_DISPOSABLE_DB_TEST=1 .venv/bin/pytest -q \
+  tests/test_deployment_contract.py -m integration
 ```
 
-```powershell
-$stamp = Get-Date -Format "yyyyMMdd_HHmmss"
+It must prove DML and function access on both existing and later-created
+objects, and SQLSTATE `42501` for table/schema/role DDL. It is not authorization
+to run against a retained database.
+
+Then run from the repository root:
+
+```sh
+python scripts/verify_migrations.py --strict --database-url "$DATABASE_URL"
 ```
 
-```powershell
-docker compose exec -T postgres pg_dump -U raguser -d rag_platform -F p > ".local-backups/pre-phase2-$stamp.sql"
+The JSON result must be `PASS`, the graph must have one head, runtime revision
+must equal the expected head and every invariant count must be zero.
+
+## Disposable downgrade cycle
+
+Only on an explicitly identified empty/disposable database:
+
+```sh
+python -m alembic downgrade base
+python -m alembic upgrade head
+python scripts/verify_migrations.py --strict --database-url "$DATABASE_URL"
 ```
 
-**Beklenen çıktı:** `.local-backups/pre-phase2-<tarih>.sql` dosyası oluşur;
-boyutu mevcut veri miktarına göre değişir ama 0 byte OLMAMALI. Kontrol edin:
+Do not treat this as production rollback evidence.
 
-```powershell
-Get-Item ".local-backups/pre-phase2-$stamp.sql" | Select-Object Length
+## Backup and restore drill
+
+PostgreSQL backup must be custom format and stop on restore errors:
+
+```sh
+pg_dump --format=custom --file=context-vault.dump "$DATABASE_URL"
+createdb context_vault_restore
+pg_restore --exit-on-error --dbname=context_vault_restore context-vault.dump
 ```
 
-**Sorun olursa:** Dosya boşsa veya `pg_dump` hata verdiyse **devam etmeyin**;
-`docker compose ps` ile `postgres` container'ının `healthy` olduğunu
-doğrulayın ve tekrar deneyin.
+The actual secret-bearing invocation belongs in private operational tooling.
+Record only:
 
----
+- dump SHA-256;
+- image digest and database major/minor version;
+- source/restore schema fingerprints;
+- deterministic table counts and invariant counts;
+- start/finish time and RPO/RTO;
+- opaque private-artifact reference.
 
-## 2. Migration öncesi satır sayılarını kaydet
+For MinIO/S3, capture a deterministically sorted inventory containing hashed
+keys, version identifier, size and checksum. Restore into a separate bucket and
+compare inventory and downloaded byte hashes. A copied file is not a verified
+backup until restore succeeds.
 
-```powershell
-docker compose exec -T postgres psql -U raguser -d rag_platform -c "SELECT (SELECT count(*) FROM projects) AS projects, (SELECT count(*) FROM documents) AS documents, (SELECT count(*) FROM chunks) AS chunks, (SELECT count(*) FROM chunks WHERE embedding IS NOT NULL) AS chunks_with_embedding;"
-```
+## Startup and readiness
 
-Bu dört sayıyı bir kenara not edin (`N_projects`, `N_documents`, `N_chunks`,
-`N_chunks_embedded`) — Adım 5'te backfill sonucu bunlarla karşılaştırılacak.
-
-**Beklenen çıktı:** tek satırlık bir sonuç tablosu, hata yok.
-
----
-
-## 3. Baseline'ı stamp'le
-
-Mevcut DB zaten `projects` / `documents` / `chunks` şemasına sahip (eski
-`init_db()` → `Base.metadata.create_all` yoluyla oluşmuş). Alembic'e bunun
-`b2f1c0a10001` (baseline) noktasında olduğunu söyleyin:
-
-```powershell
-docker compose exec backend alembic stamp b2f1c0a10001
-```
-
-**ÖNEMLİ:** `alembic stamp head` KULLANMAYIN. `versions/` klasöründe zaten
-üç revizyon var; "head" bunların sonuncusu (`b2f1c0a10003`) demektir ve DB'yi
-sanki şema+backfill zaten uygulanmış gibi işaretler — bu YANLIŞ ve gerçek
-migration'ların sessizce atlanmasına yol açar. Her zaman açık revizyon id'si
-kullanın: `b2f1c0a10001`.
-
-**Beklenen çıktı:** `INFO [alembic.runtime.migration] Running stamp_revision
-... -> b2f1c0a10001`. Hata yok.
-
-**Doğrulama:**
-
-```powershell
-docker compose exec backend alembic current
-```
-
-Çıktı `b2f1c0a10001 (head)` DEĞİL, sadece `b2f1c0a10001` göstermeli (henüz
-head'de değilsiniz, bu doğru).
-
-**Sorun olursa:** `relation "alembic_version" already exists` gibi bir hata
-alırsanız, DB daha önce başka bir alembic kurulumuyla stamp'lenmiş olabilir;
-`docker compose exec -T postgres psql -U raguser -d rag_platform -c "SELECT * FROM alembic_version;"`
-ile mevcut durumu kontrol edip devam etmeden önce durumu anlayın.
-
----
-
-## 4. Şema ve backfill'i uygula
-
-```powershell
-docker compose exec backend alembic upgrade head
-```
-
-Bu tek komut sırayla `b2f1c0a10002` (şema) ve `b2f1c0a10003` (backfill)
-migration'larını uygular.
-
-**Beklenen çıktı:** İki adet `Running upgrade ... -> ...` satırı, sonda hata
-yok. `alembic current` artık `b2f1c0a10003 (head)` göstermeli.
-
-**Sorun olursa:** Bir hata alırsanız DB muhtemelen kısmi bir durumda kalır
-(Postgres DDL genelde transactional olduğundan tek migration içindeki adımlar
-ya tamamen uygulanır ya da hiç uygulanmaz, ama iki migration arasında
-durabilir). Hata mesajını tam olarak kaydedin, **downgrade komutlarını
-deneyin (Adım 6)**; downgrade da başarısız olursa Adım 1'deki backup'tan
-restore edin:
-
-```powershell
-docker compose exec -T postgres psql -U raguser -d rag_platform -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-```
-
-```powershell
-Get-Content ".local-backups/pre-phase2-$stamp.sql" | docker compose exec -T postgres psql -U raguser -d rag_platform
-```
-
----
-
-## 5. Backfill'i doğrula
-
-```powershell
-docker compose exec -T postgres psql -U raguser -d rag_platform -c "SELECT (SELECT count(*) FROM document_versions) AS versions, (SELECT count(*) FROM documents WHERE active_version_id IS NULL) AS docs_without_active_version, (SELECT count(*) FROM chunks WHERE version_id IS NULL) AS chunks_without_version, (SELECT count(*) FROM embedding_profiles WHERE is_active = true) AS active_profiles, (SELECT count(*) FROM chunk_embeddings) AS chunk_embeddings;"
-```
-
-**Beklenen çıktı (Adım 2'de not ettiğiniz sayılarla karşılaştırın):**
-
-| Kolon | Beklenen değer |
-|---|---|
-| `versions` | `N_documents` ile aynı |
-| `docs_without_active_version` | `0` |
-| `chunks_without_version` | `0` |
-| `active_profiles` | `1` |
-| `chunk_embeddings` | `N_chunks_embedded` ile aynı |
-
-**Sorun olursa:** Sayılar eşleşmiyorsa migration'ı tekrar çalıştırmak
-güvenlidir — her iki backfill sorgusu da `WHERE NOT EXISTS` / `IS NULL`
-korumalı, yani `alembic upgrade head`'i tekrar çalıştırmak (zaten head'deyken
-no-op olur) veri çoğaltmaz. Sayılar hâlâ eşleşmiyorsa Adım 1'deki backup'tan
-restore edip hatayı bu dosyaya/`AKTIF_GOREV.md`'ye not ederek durun.
-
----
-
-## 6. Downgrade testi
-
-Geri alma yolunun gerçekten çalıştığını doğrulayın (önce backfill'i, sonra
-şemayı geri alın):
-
-```powershell
-docker compose exec backend alembic downgrade b2f1c0a10002
-```
-
-**Doğrulama (backfill geri alındı, şema hâlâ duruyor olmalı):**
-
-```powershell
-docker compose exec -T postgres psql -U raguser -d rag_platform -c "SELECT (SELECT count(*) FROM document_versions) AS versions, (SELECT count(*) FROM chunk_embeddings) AS chunk_embeddings, (SELECT count(*) FROM documents WHERE active_version_id IS NOT NULL) AS docs_with_active_version;"
-```
-
-**Beklenen çıktı:** üçü de `0`. Şema tabloları (`document_versions` vb.) hâlâ
-var, sadece boş.
-
-Şimdi baseline'a kadar tamamen geri alın:
-
-```powershell
-docker compose exec backend alembic downgrade b2f1c0a10001
-```
-
-**Doğrulama (şema tamamen kaldırıldı):** interaktif `psql` oturumuna girip
-tabloları gözle kontrol edin:
-
-```powershell
-docker compose exec -it postgres psql -U raguser -d rag_platform
-```
-
-`psql` içinde:
+After migration, application startup calls `init_db()`, which runs only:
 
 ```sql
-\dt
-\d documents
-\d chunks
-\q
+SELECT version_num FROM alembic_version;
 ```
 
-**Beklenen çıktı:** `\dt` listesinde `document_versions`, `source_files`,
-`document_artifacts`, `ingestion_jobs`, `ingestion_events`,
-`embedding_profiles`, `chunk_embeddings`, `conversations`, `messages`,
-`message_citations` tablolarından HİÇBİRİ görünmemeli — yalnızca `projects`,
-`documents`, `chunks` kalmalı. `\d documents` ve `\d chunks` çıktısında
-`source_type`, `active_version_id`, `version_id`, `search_vector` gibi Aşama
-2 kolonları görünmemeli (orijinal kolonlara dönmüş olmalı).
+Missing `alembic_version`, an unreachable DB, or any revision other than the
+compiled expected head causes startup/readiness failure. Startup never creates
+extensions, tables or indexes.
 
-**Sorun olursa:** Downgrade bir `ForeignKeyViolation` veya benzeri hata
-verirse, aradaki süreçte migration dışından (elle) veri eklenmiş olabilir.
-Adım 1'deki backup'tan restore edin.
+## Failure handling
 
----
+- Lock/statement timeout: stop; identify the lock owner and retry only after a
+  safe operational decision.
+- Multiple heads: fail CI and reconcile the source graph; do not merge heads at
+  runtime.
+- Revision ahead/behind: stop startup and deploy the matching code/migration.
+- Partial data operation: resume the separate receipt-producing data command;
+  do not hide it with an Alembic stamp.
+- Restore mismatch: quarantine the candidate target and retain source/backup.
+- Legacy source discovered: keep it read-only and open a new provenance,
+  fingerprint and import admission.
 
-## 7. Tekrar ileri al
+## Verified 2026-09-02 evidence
 
-```powershell
-docker compose exec backend alembic upgrade head
-```
+- Disposable `cv3_00000003 → cv3_00000004 → cv3_00000003 → cv3_00000004`:
+  PASS; `alembic check` reported no new upgrade operations.
+- Strict verifier at `cv3_00000004`: PASS; 255 columns, 110 constraints, one
+  active profile and 17 measured invariant counts all zero.
+- Provider credentials loaded by migration verifier: `false`.
+- `cv3_00000004` schema SHA-256:
+  `7328301b5e7ccd22ba66b1c4e3c23292ac751049ede639628cae1dca339d087b`.
 
-**Beklenen çıktı:** Adım 4 ile aynı — iki `Running upgrade` satırı, hata
-yok. Adım 5'teki doğrulama sorgularını tekrar çalıştırıp aynı sonuçları
-aldığınızı teyit edin.
+- Blank `base → cv3_00000003`: PASS.
+- Re-run `upgrade head`: PASS/no-op.
+- Disposable `cv3_00000003 → cv3_00000002 → cv3_00000003`: PASS.
+- Recovered fixture `cv3_00000001 → cv3_00000003`: PASS with project,
+  document, version, chunk, profile counts preserved at `1/1/1/1/1`.
+- Migration without provider/object-store credentials: PASS.
+- Exact startup revision admission: PASS.
+- PostgreSQL custom dump SHA-256:
+  `d03b3917dd2b4f207e7e92352b4c0df91406c058e78d54d057564ecbfd553804`.
+- Source/restore normalized schema SHA-256:
+  `55ceada8d3539f817af0a03b11c000abcf6aadb2ee7f248a8343495728814af8`.
+- Source/restore aggregate row counts: equal.
+- Source/restore MinIO inventory and byte checksum: equal.
 
----
-
-## 8. Backend'i yeniden başlat ve uçtan uca test et
-
-```powershell
-docker compose up -d --build backend
-```
-
-**Beklenen çıktı:** `rag-backend` yeniden build olur ve `Up` durumuna geçer.
-Loglarda başlangıç hatası olmamalı:
-
-```powershell
-docker compose logs --tail=50 backend
-```
-
-Ardından uçtan uca endpoint testleri:
-
-Windows PowerShell'de `curl` komutu aslında `Invoke-WebRequest` takma adıdır
-ve `-X`/`-H`/`-d` bayraklarını desteklemez — bu yüzden aşağıda **gerçek
-curl programını** (`curl.exe`) açıkça çağırıyoruz, `curl` YAZMAYIN:
-
-```powershell
-curl.exe http://localhost:8000/health
-```
-
-```powershell
-curl.exe http://localhost:8000/projects
-```
-
-```powershell
-curl.exe http://localhost:8000/documents
-```
-
-```powershell
-curl.exe -X POST http://localhost:8000/chat/query -H "Content-Type: application/json" -d '{"query": "merhaba"}'
-```
-
-**Beklenen çıktı:**
-- `/health` → `200 OK`, DB bağlantısını doğrulayan bir gövde.
-- `/projects` → mevcut projelerin listesi (migration öncesiyle aynı sayıda).
-- `/documents` → mevcut belgelerin listesi (migration öncesiyle aynı sayıda,
-  `status`/`name` alanları değişmemiş olmalı — sadece yeni nullable alanlar
-  eklendi).
-- `/chat/query` → `answer` ve `sources` içeren bir JSON gövde (gerçek bir
-  belge sorusuyla da tekrar deneyip kaynakların döndüğünü doğrulayın).
-
-**Sorun olursa:** Backend başlamıyorsa `docker compose logs backend`'i
-inceleyin. `src/models.py`'deki yeni ORM sınıfları mevcut endpoint'lerin
-davrandığı hiçbir alanı değiştirmedi (sadece ekledi); `/health`,
-`/projects`, `/documents`, `/chat/query` yanıt şemaları migration öncesiyle
-birebir aynı kalmalı. Şema farklıysa bu bir regresyon işaretidir — durun ve
-raporlayın, kendi başınıza ek düzeltme yapmayın.
-
----
-
-## Özet: tam komut sırası
-
-Bu blok tek bir kopyala-yapıştır DEĞİLDİR — her satırı ayrı ayrı, sırayla
-çalıştırın (aralarda Adım 2/5'teki doğrulama sorgularını atlamayın, bkz.
-yukarıdaki notlar):
-
-```powershell
-cd C:\innova\projeler\context-vault\document-rag-platform
-docker compose build backend worker
-docker compose up -d backend worker
-New-Item -ItemType Directory -Force -Path .local-backups | Out-Null
-$stamp = Get-Date -Format "yyyyMMdd_HHmmss"
-docker compose exec -T postgres pg_dump -U raguser -d rag_platform -F p > ".local-backups/pre-phase2-$stamp.sql"
-docker compose exec backend alembic stamp b2f1c0a10001
-docker compose exec backend alembic upgrade head
-docker compose exec backend alembic downgrade b2f1c0a10002
-docker compose exec backend alembic downgrade b2f1c0a10001
-docker compose exec backend alembic upgrade head
-docker compose up -d --build backend
-```
+Public receipt:
+`document-rag-platform/artifacts/audit/2026-09-02-baseline/PREPARE_RECEIPT-002.json`.

@@ -6,8 +6,9 @@ to ``results/metrics-report.json`` (plus a human-readable ``.md``).
 
 It is deliberately **offline / DB-free**: the default ``FakeRetriever`` and
 ``FakeAnswerer`` derive deterministic results from the golden dataset itself,
-so CI can exercise the full metric pipeline with no real service, database or
-network.
+so CI can exercise the metric contract with no real service, database or
+network. Synthetic results are explicitly classified as a contract fixture and
+can never make a RAG quality claim.
 
 Real-service path
 -----------------
@@ -26,7 +27,8 @@ of dicts with ``chunk_id``/``document``/``content``. E.g.::
     run_eval(golden, retriever=real, ...)
 
 When a database/embedding-backed service is unavailable, the fake path below
-keeps the same output contract, so reports are comparable across runs.
+keeps the same output contract. Its scores are not comparable to a real-service
+quality benchmark because expected labels are used to construct the output.
 """
 
 from __future__ import annotations
@@ -39,7 +41,6 @@ from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from golden_spec import load_golden
 from metrics import compute_retrieval_metrics, evaluate_quality_gate
-from generation_metrics import compute_generation_metrics
 
 #: Output files produced by the runner (relative to the runner's parent).
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
@@ -69,7 +70,9 @@ def is_relevant(result: Dict[str, Any], expected_sources: List[Dict[str, Any]]) 
     return False
 
 
-def matching_chunk_ids(results: List[Dict[str, Any]], expected_sources: List[Dict[str, Any]]) -> List[str]:
+def matching_chunk_ids(
+    results: List[Dict[str, Any]], expected_sources: List[Dict[str, Any]]
+) -> List[str]:
     return [str(r["chunk_id"]) for r in results if is_relevant(r, expected_sources)]
 
 
@@ -90,11 +93,19 @@ class FakeRetriever:
     def __init__(self, *, filler_count: int = 2) -> None:
         self.filler_count = filler_count
 
-    def retrieve(self, query: str, scope: str = "documents", fixture: str = "") -> List[Dict[str, Any]]:
+    def retrieve(
+        self, query: str, scope: str = "documents", fixture: str = ""
+    ) -> List[Dict[str, Any]]:
         return []
 
-    def __call__(self, query: str, scope: str = "documents", fixture: str = "", *,
-                 expected_sources: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+    def __call__(
+        self,
+        query: str,
+        scope: str = "documents",
+        fixture: str = "",
+        *,
+        expected_sources: Optional[List[Dict[str, Any]]] = None,
+    ) -> List[Dict[str, Any]]:
         expected_sources = expected_sources or []
         if not expected_sources:
             return []
@@ -103,7 +114,9 @@ class FakeRetriever:
         for idx, source in enumerate(expected_sources, start=1):
             doc = source.get("document", "unknown")
             terms = source.get("must_contain") or []
-            content = f"{doc} bolum: " + (" ve ".join(str(t) for t in terms) if terms else "icerik")
+            content = f"{doc} bolum: " + (
+                " ve ".join(str(t) for t in terms) if terms else "icerik"
+            )
             results.append(
                 {
                     "chunk_id": f"{doc}::{idx}",
@@ -132,8 +145,12 @@ class FakeAnswerer:
     with sufficient coverage and no contradictions (for the smoke run).
     """
 
-    def __call__(self, query: str, results: List[Dict[str, Any]],
-                 expected_sources: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def __call__(
+        self,
+        query: str,
+        results: List[Dict[str, Any]],
+        expected_sources: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
         if not expected_sources:
             return {"claims": [], "citations": [], "answer": "", "required_aspects": []}
         claims = []
@@ -182,6 +199,12 @@ def run_eval(
     Writes ``output_json`` (loggable) and ``output_md``. Returns the report
     dict so callers/tests can assert on it without hitting disk.
     """
+    synthetic_fixture = (
+        retriever is None
+        or answerer is None
+        or isinstance(retriever, FakeRetriever)
+        or isinstance(answerer, FakeAnswerer)
+    )
     retriever = retriever or FakeRetriever()
     answerer = answerer or FakeAnswerer()
 
@@ -223,7 +246,8 @@ def run_eval(
                 "n_results": len(results),
                 "n_relevant": len(relevant),
                 "first_relevant_rank": next(
-                    (i for i, cid in enumerate(ranked_ids, 1) if cid in set(relevant)), None
+                    (i for i, cid in enumerate(ranked_ids, 1) if cid in set(relevant)),
+                    None,
                 ),
             }
         )
@@ -255,7 +279,7 @@ def run_eval(
         predicted_answerable=predicted_answerable,
         latencies=latencies if collect_latency else None,
     )
-    quality_gate = evaluate_quality_gate(retrieval_metrics)
+    metric_contract_check = evaluate_quality_gate(retrieval_metrics)
 
     generation_metrics = {
         "n_samples": len(generation_samples),
@@ -268,14 +292,20 @@ def run_eval(
     report = {
         "schema_version": "1.0",
         "runner": "tests/evals/run_eval.py",
+        "classification": (
+            "offline_contract_fixture"
+            if synthetic_fixture
+            else "production_pipeline_evaluation"
+        ),
+        "quality_claim": not synthetic_fixture,
         "n_records": len(golden),
         "retrieval": retrieval_metrics,
-        "quality_gate": quality_gate,
         "generation": generation_metrics,
         "per_query": per_query,
     }
-
-    report["quality_gate"]["reasons"] += _runner_generation_note(generation_metrics)
+    gate_key = "contract_check" if synthetic_fixture else "quality_gate"
+    report[gate_key] = metric_contract_check
+    report[gate_key]["reasons"] += _runner_generation_note(generation_metrics)
 
     output_json.parent.mkdir(parents=True, exist_ok=True)
     output_json.write_text(
@@ -287,8 +317,13 @@ def run_eval(
 
 
 def _average_generation(samples: List[Dict[str, Any]]) -> Dict[str, float]:
-    keys = ("citation_coverage", "unsourced_claim_rate", "citation_accuracy",
-            "answer_sufficiency", "contradictory_source_behavior")
+    keys = (
+        "citation_coverage",
+        "unsourced_claim_rate",
+        "citation_accuracy",
+        "answer_sufficiency",
+        "contradictory_source_behavior",
+    )
     out: Dict[str, float] = {}
     for key in keys:
         values = [s[key] for s in samples if key in s]
@@ -310,6 +345,8 @@ def render_markdown(report: Dict[str, Any]) -> str:
         "# Aşama 9 Evaluation Report",
         "",
         f"- runner: `{report['runner']}`",
+        f"- classification: `{report['classification']}`",
+        f"- quality claim: `{str(report['quality_claim']).lower()}`",
         f"- degerlendirilen soru sayisi: {report['n_records']}",
         "",
         "## Retrieval",
@@ -331,11 +368,12 @@ def render_markdown(report: Dict[str, Any]) -> str:
         "",
         f"- {r.get('latency', {})}",
         "",
-        "## Quality gate",
+        "## Contract check" if not report["quality_claim"] else "## Quality gate",
         "",
-        f"- {report['quality_gate']['pass']}",
+        f"- {report['contract_check' if not report['quality_claim'] else 'quality_gate']['pass']}",
     ]
-    for reason in report["quality_gate"]["reasons"]:
+    gate_key = "contract_check" if not report["quality_claim"] else "quality_gate"
+    for reason in report[gate_key]["reasons"]:
         lines.append(f"- {reason}")
     lines.append("")
     lines.append("## Generation (average)")
@@ -363,15 +401,22 @@ def _fmt(value: Any) -> str:
 # CLI
 # --------------------------------------------------------------------------- #
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--golden", type=Path, default=Path(__file__).parent / "datasets" / "golden.jsonl")
-    parser.add_argument("--subset-ids", type=str, default=None,
-                        help="comma-separated query ids to restrict the run")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--golden",
+        type=Path,
+        default=Path(__file__).parent / "datasets" / "golden.jsonl",
+    )
+    parser.add_argument(
+        "--subset-ids",
+        type=str,
+        default=None,
+        help="comma-separated query ids to restrict the run",
+    )
     parser.add_argument("--output-json", type=Path, default=METRICS_REPORT_JSON)
     parser.add_argument("--output-md", type=Path, default=METRICS_REPORT_MD)
-    parser.add_argument("--fake", action="store_true", default=True,
-                        help="use the offline FakeRetriever/FakeAnswerer (default)")
     parser.add_argument("--collect-latency", action="store_true")
     args = parser.parse_args()
 
@@ -384,8 +429,17 @@ def main() -> None:
         output_md=args.output_md,
         collect_latency=args.collect_latency,
     )
-    print(json.dumps({"n_records": report["n_records"],
-                      "gate_pass": report["quality_gate"]["pass"]}, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "n_records": report["n_records"],
+                "classification": report["classification"],
+                "quality_claim": report["quality_claim"],
+                "contract_pass": report["contract_check"]["pass"],
+            },
+            ensure_ascii=False,
+        )
+    )
     print(f"reporto {args.output_json}")
 
 

@@ -6,8 +6,6 @@ lexical/identifier evidence can rescue a low dense score, and that the policy
 relies on configurable thresholds rather than a single hardcoded 0.55.
 """
 
-import pytest
-
 from src.infrastructure.retrieval.no_answer import (
     INTENT_DOCUMENT,
     INTENT_SMALLTALK,
@@ -46,7 +44,9 @@ def test_document_question_not_smalltalk():
 
 def test_empty_retrieval_is_not_smalltalk():
     policy = AnswerPolicy()
-    query = "STP sisteminin yıllık lisans maliyeti ve destek anlaşması bedeli ne kadardır?"
+    query = (
+        "STP sisteminin yıllık lisans maliyeti ve destek anlaşması bedeli ne kadardır?"
+    )
 
     decision = policy.classify(query, evidence=[])
 
@@ -171,7 +171,9 @@ def test_policy_respects_min_evidence():
 
 
 def test_evidence_signal_from_dict_and_object_equivalent():
-    signal_dict = EvidenceSignal.from_raw({"dense_score": 0.6, "exact_identifier": True})
+    signal_dict = EvidenceSignal.from_raw(
+        {"dense_score": 0.6, "exact_identifier": True}
+    )
     signal_obj = EvidenceSignal.from_raw(signal_dict)
 
     assert signal_dict.exact_identifier is True

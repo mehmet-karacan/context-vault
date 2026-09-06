@@ -1,0 +1,176 @@
+{
+  "schema_version": "1.0",
+  "receipt_type": "verify",
+  "operation_id": "cv3-a9-preflight-20260903-001",
+  "work_item_id": "CV3-A9-EVAL",
+  "attempt_id": "local-no-effect-preflight-001",
+  "actor": "codex-local-agent",
+  "tool_adapter": "local-cli-pytest-independent-review",
+  "started_at": "2026-09-03T09:50:27Z",
+  "finished_at": "2026-09-03T09:50:27Z",
+  "time_scope": "Receipt assembly timestamp; exact pytest durations and timestamps are in the redacted JUnit reports.",
+  "baseline_revision": "f25dbbf653720ae12ea153514bd34ea0fa6447a7",
+  "result_revision": null,
+  "revision_note": "Pre-commit source hashes bind tested bytes; a follow-up receipt will bind the implementation commit.",
+  "scope_hash": "f0fdabd82cc21131af5277bb3909cf4b60a60dbe789ab769d769c46d1cb5cc41",
+  "context_manifest_hash": "872b86716d15f9f19829c969b3d3374ad4380fe449409a75c91288cade872553",
+  "idempotency_key_hash": null,
+  "commands": [
+    {
+      "command": "pytest -q tests/evals/test_tier_contracts.py before implementation",
+      "exit_code": 1,
+      "result": "83 passed, 5 failed; missing operator preparation functions reproduced"
+    },
+    {
+      "command": "pytest -q tests/evals/test_tier_contracts.py --junitxml=reports/a9-preflight-tier-final.xml",
+      "exit_code": 0,
+      "result": "94 passed"
+    },
+    {
+      "command": "pytest -q tests --junitxml=reports/a9-preflight-backend-final.xml with explicit isolated PostgreSQL/Redis/MinIO test endpoints",
+      "exit_code": 0,
+      "result": "710 passed, 2 skipped, 1 warning"
+    },
+    {
+      "command": "ruff format --check; ruff check; strict MyPy ratchet; OpenAPI deterministic check; uv lock --check --offline; git diff --check",
+      "exit_code": 0,
+      "result": "PASS; MyPy checked 14 source files and lock contained 122 packages"
+    },
+    {
+      "command": "run_eval.py --approval-preflight with missing manifest/runner",
+      "exit_code": 3,
+      "result": "Expected bounded fail-closed request envelope; no output or provider effect"
+    },
+    {
+      "command": "Independent non-executable-runner and dangling-symlink break probes",
+      "exit_code": 0,
+      "result": "Both fail closed; no target/provider effect; fresh output mode 0600"
+    },
+    {
+      "command": "Independent final tests/Ruff/format/diff and source review",
+      "exit_code": 0,
+      "result": "APPROVE for local patch only; 94/94 tests passed"
+    },
+    {
+      "command": "check_public_tree.py --repo . --json-output <evidence>/public-tree.json",
+      "exit_code": 0,
+      "result": "272 staged/tracked files checked; PASS"
+    }
+  ],
+  "exit_status": 0,
+  "tests": [
+    {
+      "name": "full backend",
+      "passed": 710,
+      "skipped": 2,
+      "failed": 0,
+      "warnings": 1,
+      "report": "backend-junit.xml"
+    },
+    {
+      "name": "A9 tier and operator-preparation contracts",
+      "passed": 94,
+      "failed": 0,
+      "report": "tier-junit.xml"
+    },
+    {
+      "name": "strict MyPy",
+      "result": "PASS",
+      "source_files": 14
+    },
+    {
+      "name": "Ruff format/check, OpenAPI, lock, public tree and diff check",
+      "result": "PASS"
+    },
+    {
+      "name": "independent local patch review",
+      "result": "APPROVE",
+      "phase_closed": false
+    }
+  ],
+  "result": "PASS",
+  "phase_closed": false,
+  "scope": "Local no-provider-effect A9 approval fingerprinting and human-approval drift validation only. No approval decision, real benchmark or A9 closure.",
+  "source_manifest": "SOURCE_MANIFEST.json",
+  "artifacts": [
+    {
+      "path": "CLI_PROBES.json",
+      "sha256": "826e7985f955f5dbf2e0682f3362e4c9b9c32a7e28f07b1de67a81ee29167398",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "INDEPENDENT_REVIEW.json",
+      "sha256": "4003ca40b30cb4244cfe4fcfb8390264880b8887198e497565e8cfba2a201475",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "REPRODUCTION_SUMMARY.json",
+      "sha256": "e1f838f50234e69a2cfc2eba4b941baf7b52b8c48ba49cf102658f7d1dc40d98",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "SOURCE_MANIFEST.json",
+      "sha256": "f0fdabd82cc21131af5277bb3909cf4b60a60dbe789ab769d769c46d1cb5cc41",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "backend-junit.xml",
+      "sha256": "dd41596ff3d1fca62fa5decf3940fca7bfd6daaaa056f6b2bfe4634bc346c25a",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "public-tree.json",
+      "sha256": "4f9f648c2125a2a63f7b361b0f5ac7cfc8200d323fb3b0a90a19803cacf990d0",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    },
+    {
+      "path": "tier-junit.xml",
+      "sha256": "ff2021e9d41441709b33d7ed8e1fb137d7e8a1d477f971725f832fdb35921eae",
+      "classification": "public-synthetic",
+      "retention": "versioned evidence"
+    }
+  ],
+  "security_redactions": [
+    "JUnit local hostname and absolute repository/temp paths removed",
+    "Preparation output never includes raw private paths, reviewer, secret-store reference or credential values",
+    "Only synthetic local runners and isolated test infrastructure were used"
+  ],
+  "intermediate_failures": [
+    "Initial test-first run: 83 passed, 5 failed.",
+    "Initial format check found one test file requiring mechanical formatting.",
+    "Local intermediate run: 91 passed, 2 failed because mocked revision evaluation preceded the intended guard; guard ordering was corrected.",
+    "Independent concurrent-edit run: 87 passed, 4 failed due to field-name/test mismatch; stabilized bytes passed.",
+    "Initial manual missing-input probe emitted tier:null; bounded request_type failure envelope was added and rerun."
+  ],
+  "rollback": {
+    "schema_change": false,
+    "data_reset_required": false,
+    "instruction": "Revert only this evaluator preparation patch if needed; preserve databases, objects, prior evidence and fail-closed release decisions."
+  },
+  "data_safety": {
+    "user_data_mutated": false,
+    "isolated_test_infrastructure_used": true,
+    "real_provider_calls": 0,
+    "provider_credential_values_read": false
+  },
+  "open_gates": [
+    "Human owner-reviewed real private pack",
+    "Explicit provider/model/credential-name/provider-side-budget approval",
+    "Audited real-provider execution and independent request/non-transfer evidence",
+    "Human baseline seal",
+    "A11-A13, remote CI and final independent verification"
+  ],
+  "remote_actions": {
+    "provider_call": false,
+    "push": false,
+    "pull_request": false,
+    "merge": false,
+    "release": false
+  }
+}

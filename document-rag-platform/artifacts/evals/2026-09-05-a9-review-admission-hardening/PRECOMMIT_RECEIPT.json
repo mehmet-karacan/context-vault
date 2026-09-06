@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "base_revision": "b017846099f2647e957e7dd0f19e21e435b4fe2f",
+  "finding": "Nonfinal human-review actor strings could bypass PENDING-only checks; private reviewed_by also allowed leading-space PENDING.",
+  "repair": "Require explicit final-state fields in new private-pack v2 and benchmark-approval v3 schemas; stably prevalidate baseline and seal bytes before dispatch.",
+  "verified_effect_boundary": "Private-pack, benchmark-approval and CLI baseline/seal regression cases assert the runner is not called.",
+  "data_safety": "A new PostgreSQL database and a new MinIO bucket were used; no existing database, bucket or artifact was deleted, reset or reused.",
+  "limitations": [
+    "String validation cannot authenticate a reviewer identity.",
+    "No owner review or human authorization is represented.",
+    "No independent provider-request observation is represented.",
+    "No baseline is sealed and A9 remains open."
+  ]
+}

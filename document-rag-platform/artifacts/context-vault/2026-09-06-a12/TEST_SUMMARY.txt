@@ -1,0 +1,11 @@
+A12 focused unit/domain/CLI tests: 210 passed
+Full backend non-integration regression: 1472 passed, 9 skipped, 35 deselected
+Migration/doctor/backup-restore regression: 40 passed
+Fresh PostgreSQL Work Graph + Context Vault persistence integration: 13 passed
+Independent reviewer focused suite: 196 passed
+Independent reviewer fresh PostgreSQL integration: 13 passed
+Ruff check: passed
+Ruff format check: passed (25 files)
+git diff --check: passed
+Public-tree scan: 713 tracked files checked, 0 findings
+Known warning: one Starlette/httpx deprecation warning
