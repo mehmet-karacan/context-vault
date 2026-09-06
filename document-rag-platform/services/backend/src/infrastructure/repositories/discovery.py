@@ -182,6 +182,9 @@ def discover_directory(
     discovered descriptors plus truncation metadata; the descriptors never list
     ignored, sensitive, oversize, or symlinked files.
     """
+    # Normalize before any filesystem sink. Request-facing callers additionally
+    # enforce their selected allowed-root boundary before reaching this layer.
+    path = os.path.realpath(os.path.abspath(path))
     cfg = config or ScanConfig.from_settings()
     if ignore is None:
         ignore = build_ignore_rules(root_path=path)

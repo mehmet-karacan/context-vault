@@ -10,6 +10,7 @@ from src.infrastructure.repositories.discovery import (
     ScanConfig,
     discover_directory,
 )
+from src.infrastructure.repositories import discovery_compat
 from src.infrastructure.repositories.directory_source import (
     DirectorySourceScanner,
 )
@@ -169,6 +170,28 @@ def test_file_swapped_to_symlink_after_walk_is_rejected(tmp_path, monkeypatch):
     )
     result = discover_directory(str(repo), config=_config())
     assert result.files == []
+
+
+def test_compat_scanner_uses_fail_closed_canonical_pipeline(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "safe.py").write_text("print(1)\n", encoding="utf-8")
+    outside = tmp_path / "outside.txt"
+    outside.write_text("private\n", encoding="utf-8")
+    try:
+        (repo / "linked.txt").symlink_to(outside)
+    except OSError:
+        pytest.skip("symlink creation not permitted in this environment")
+
+    files = discovery_compat.discover_files(str(repo))
+    assert {item.relative_path for item in files} == {"safe.py"}
+
+    def fail_closed(*args, **kwargs):
+        raise PermissionError("scanner refused source")
+
+    monkeypatch.setattr(discovery_compat, "discover_directory", fail_closed)
+    with pytest.raises(PermissionError, match="scanner refused source"):
+        discovery_compat.discover_files(str(repo))
 
 
 def test_fake_walker_injection(tmp_path, monkeypatch):

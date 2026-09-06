@@ -160,6 +160,37 @@ def test_directory_scan_rejects_path_escaping_root(client, tmp_path, monkeypatch
     assert "escapes" in resp.json()["detail"]
 
 
+def test_directory_scan_rejects_symlink_into_a_different_allowed_alias(
+    client, tmp_path, monkeypatch
+):
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    link = first / "jump"
+    try:
+        link.symlink_to(second, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlink creation not permitted in this environment")
+    monkeypatch.setattr(
+        settings,
+        "CODE_ALLOWED_ROOTS",
+        f"first={first},second={second}",
+    )
+
+    resp = client.post(
+        f"{API}/directories/scan",
+        json={
+            "project_id": str(PROJECT_ID),
+            "allowed_root_alias": "first",
+            "relative_path": "jump",
+        },
+    )
+
+    assert resp.status_code == 403
+    assert "escapes" in resp.json()["detail"]
+
+
 def test_directory_scan_accepts_allowed_relative_path(client, tmp_path, monkeypatch):
     root = tmp_path
     sub = root / "project-a"

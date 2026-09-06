@@ -162,24 +162,22 @@ def resolve_allowed_scan_path(alias: str, relative_path: str) -> str:
             status_code=403, detail=f"Unknown allowed root alias: {alias!r}"
         )
 
-    root = roots[key]
+    root = os.path.realpath(roots[key])
     rel = rp.replace("\\", "/").lstrip("/")
     target = os.path.realpath(os.path.join(root, rel))
 
-    # Route the under-root decision through the documented security gate
-    # (AKTIF §7.2 / §12.3): canonicalize on both sides and refuse anything that
-    # escapes every allowed root (incl. via symlink / traversal).
+    # Bind the request to the selected alias, not merely to any configured root.
+    # Keeping normalization and the boundary comparison adjacent also makes the
+    # path-injection barrier explicit to static analysis.
     try:
-        from ...infrastructure.repositories.path_security import is_allowed_scan_path
-
-        _is_allowed = is_allowed_scan_path(target, settings.CODE_ALLOWED_ROOTS)
-    except Exception:  # concurrent module absent -> local canonical check
-        _is_allowed = target == root or target.startswith(root + os.sep)
-    if not _is_allowed:
+        common_root = os.path.commonpath((root, target))
+    except ValueError:
+        common_root = ""
+    if common_root != root:
         raise HTTPException(status_code=403, detail="Path escapes the allowed root")
 
     if not os.path.exists(target):
-        raise HTTPException(status_code=404, detail=f"Path does not exist: {target}")
+        raise HTTPException(status_code=404, detail="Path does not exist")
     return target
 
 
