@@ -718,7 +718,7 @@ def test_generic_error_hides_stack_trace_when_not_debug(monkeypatch):
     assert "top-secret-stack-frame" not in json.dumps(body)
 
 
-def test_debug_error_includes_stack_details_when_api_debug_on(monkeypatch):
+def test_debug_error_still_hides_stack_details_from_http_clients(monkeypatch):
     monkeypatch.setattr("src.main.init_db", lambda: None)
     app = create_app(_secured_settings("development", API_DEBUG=True))
     app.add_api_route("/boom", _boom, methods=["GET"])
@@ -726,7 +726,8 @@ def test_debug_error_includes_stack_details_when_api_debug_on(monkeypatch):
         response = client.get("/boom")
     assert response.status_code == 500
     body = response.json()
-    assert "top-secret-stack-frame" in body["detail"]
+    assert body["detail"] == "Internal Server Error"
+    assert "top-secret-stack-frame" not in json.dumps(body)
 
 
 # --- Rate limiter -----------------------------------------------------------

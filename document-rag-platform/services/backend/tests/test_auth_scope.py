@@ -91,6 +91,12 @@ def _api_key_app(db: _AuthDB) -> FastAPI:
     return app
 
 
+def test_api_key_hash_preserves_existing_hmac_records_without_storing_token():
+    assert hash_api_key("cv_live_0123456789abcdef", "pepper-value") == (
+        "69bac4551141c94b1efc39fae65cb3fb244af650ec51f0cfbf2e4c70a9a4366f"
+    )
+
+
 def test_api_key_authenticates_hash_only_and_membership():
     db = _AuthDB()
     with TestClient(_api_key_app(db)) as client:

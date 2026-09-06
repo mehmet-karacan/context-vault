@@ -1,8 +1,8 @@
 """FastAPI application factory (Aşama 1 / Aşama 9.4-9.5).
 
 Assembles the app: CORS from resolved config (never "*" in production), a
-request-id observability middleware, a global exception handler that hides
-stack traces outside debug, the v1 router, and the database startup hook.
+request-id observability middleware, a global exception handler that never
+returns exception details, the v1 router, and the database startup hook.
 
 Kept free of business logic and route handlers per the Aşama 1 acceptance
 criterion (see ``tests/test_main_app.py`` structural guard): route handlers
@@ -10,7 +10,6 @@ live in ``api/v1/*``.
 """
 
 import logging
-import traceback
 from contextlib import asynccontextmanager
 from typing import Optional
 from urllib.parse import urlsplit
@@ -117,20 +116,12 @@ def create_app(cfg: Optional[Settings] = None) -> FastAPI:
     # Aşama 9.4: request-id tagging + completion logging for every request.
     application.add_middleware(RequestContextMiddleware)
 
-    # Aşama 9.5: never return a stack trace to the user unless API_DEBUG is on
-    # in a non-production environment. The full traceback is still logged
-    # server-side either way.
+    # Aşama 9.5: exception details and tracebacks are server-side evidence only.
+    # Returning them even in a development HTTP response can expose credentials,
+    # filesystem locations or query data to an unintended client.
     @application.exception_handler(Exception)
     async def _handle_unhandled_exception(request: Request, exc: Exception):
         logging.getLogger("app.error").exception("Unhandled exception", exc_info=exc)
-        if app_cfg.debug_enabled:
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "detail": str(exc),
-                    "traceback": traceback.format_exc(),
-                },
-            )
         return JSONResponse(
             status_code=500, content={"detail": "Internal Server Error"}
         )

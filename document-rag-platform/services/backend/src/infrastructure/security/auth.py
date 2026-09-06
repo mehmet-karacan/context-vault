@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import secrets
 from typing import Protocol
 from uuid import UUID
 
+from cryptography.hazmat.primitives import hashes, hmac
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
@@ -30,9 +29,16 @@ class OidcIdentityAdapter(Protocol):
 
 
 def hash_api_key(raw_key: str, pepper: str) -> str:
-    return hmac.new(
-        pepper.encode("utf-8"), raw_key.encode("utf-8"), hashlib.sha256
-    ).hexdigest()
+    """Return the stable keyed digest used for high-entropy API tokens.
+
+    This remains byte-for-byte compatible with the existing HMAC-SHA-256
+    records while using the cryptography library's explicit MAC primitive.
+    It is not a password hash and never stores the bearer token itself.
+    """
+
+    signer = hmac.HMAC(pepper.encode("utf-8"), hashes.SHA256())
+    signer.update(raw_key.encode("utf-8"))
+    return signer.finalize().hex()
 
 
 def _bearer_or_api_key(request: Request) -> str | None:
