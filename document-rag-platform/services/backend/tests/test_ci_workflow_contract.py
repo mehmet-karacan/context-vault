@@ -52,8 +52,8 @@ def test_restore_fixture_preserves_migration_and_seed_data_before_upgrade() -> N
     assert restore < upgrade < verify
 
 
-def test_pr_ownership_checks_scan_the_exact_head_not_the_synthetic_merge() -> None:
-    """GitHub's temporary PR merge commit is not repository-owned history."""
+def test_ownership_checks_scan_only_commits_introduced_by_the_event() -> None:
+    """Ignore synthetic merges and pre-existing base-branch history."""
 
     for path, job_name in (
         (OWNERSHIP_WORKFLOW, "check-ownership"),
@@ -67,17 +67,23 @@ def test_pr_ownership_checks_scan_the_exact_head_not_the_synthetic_merge() -> No
             if step.get("name")
             in {"Commit sahiplik ve vocab denetimi", "Commit ownership check"}
         )
+        environment = ownership_step["env"]
         commands = ownership_step["run"]
 
+        assert environment["EVENT_NAME"] == "${{ github.event_name }}"
+        assert environment["BEFORE_SHA"] == "${{ github.event.before }}"
+        assert environment["BASE_SHA"] == "${{ github.event.pull_request.base.sha }}"
+        assert environment["HEAD_SHA"] == (
+            "${{ github.event.pull_request.head.sha || github.sha }}"
+        )
         assert not any(
             line.strip().split(maxsplit=1)[0] == "--all"
             for line in commands.splitlines()
             if line.strip()
         )
-        assert (
-            '--refspec "${{ github.event.pull_request.head.sha || github.sha }}"'
-            in commands
-        )
+        assert 'refspec="$BASE_SHA..$HEAD_SHA"' in commands
+        assert 'refspec="$BEFORE_SHA..$HEAD_SHA"' in commands
+        assert '--refspec "$refspec"' in commands
 
 
 def test_frontend_image_and_ci_share_the_canonical_node_version() -> None:

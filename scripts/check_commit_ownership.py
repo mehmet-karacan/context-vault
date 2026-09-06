@@ -9,8 +9,11 @@ Ortak-yazar politikasi (varsayilan):
   - Her turdeki "Co-Authored-By" / "Co-authored by" trailer'i reddedilir.
   - Izinli istisnalar yalniz acik yazili onay ve allowlist ile eklenebilir.
     Allowlist satirlari tam trailer satiriyla birebir eslesmelidir.
-  - Author ve committer kimligi yalniz izinli gercek sahiplik listesinde
-    olmalidir (varsayilan aday listesi ile birlikte gelir).
+  - Author kimligi yalniz izinli gercek sahiplik listesinde olmalidir
+    (varsayilan aday listesi ile birlikte gelir).
+  - Committer varsayilan olarak ayni sahiplik listesine tabidir. GitHub'in
+    korumali PR merge'i gibi server-side islemler icin ayri ve exact
+    ``--allowed-committer`` girdisi gereklidir; bu author yetkisi vermez.
 
 Kullanim ornekleri:
   python scripts/check_commit_ownership.py
@@ -122,6 +125,15 @@ def main(argv=None):
         default=[],
         help="Izinli '<ad> <email>' kimligi (birden fazla verilebilir)",
     )
+    parser.add_argument(
+        "--allowed-committer",
+        action="append",
+        default=[],
+        help=(
+            "Yalniz committer icin izinli exact '<ad> <email>' kimligi "
+            "(author yetkisi vermez; birden fazla verilebilir)"
+        ),
+    )
     args = parser.parse_args(argv)
 
     refspec = args.refspec or ("--all" if args.all else "HEAD")
@@ -135,6 +147,14 @@ def main(argv=None):
             print("Gecersiz --allowed-author: %r" % entry, file=sys.stderr)
             return 2
         allowed_authors.add((parts[0], parts[1]))
+
+    allowed_committers = set(allowed_authors)
+    for entry in args.allowed_committer:
+        parts = entry.rsplit(" ", 1)
+        if len(parts) != 2:
+            print("Gecersiz --allowed-committer: %r" % entry, file=sys.stderr)
+            return 2
+        allowed_committers.add((parts[0], parts[1]))
 
     try:
         commits = collect_commits(args.repo, refspec)
@@ -163,7 +183,7 @@ def main(argv=None):
                 "%s : izinli olmayan author -> %s <%s>"
                 % (sha, commit["author_name"], commit["author_email"])
             )
-        if committer not in allowed_authors:
+        if committer not in allowed_committers:
             violations.append(
                 "%s : izinli olmayan committer -> %s <%s>"
                 % (sha, commit["committer_name"], commit["committer_email"])
@@ -175,7 +195,9 @@ def main(argv=None):
             print("  - %s" % item)
         return 1
 
-    print("OK: commit sahiplik politikasina aykiri kayit yok (%d commit)" % len(commits))
+    print(
+        "OK: commit sahiplik politikasina aykiri kayit yok (%d commit)" % len(commits)
+    )
     return 0
 
 
