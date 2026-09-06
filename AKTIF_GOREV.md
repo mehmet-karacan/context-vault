@@ -3205,6 +3205,8 @@ Terminal veya ara handoff şu structured özeti üretir:
 - Başlangıç uygulama SHA'sı:
   `30ea23e2750fb3c5f96ab2012b509da6c688aad4`; geliştirme branch'i
   `fix/context-vault-v3-hardening`. Remote push/PR/merge/release yapılmadı.
+- A12 implementation commit'i:
+  `8ac1c4f3f37310e1598ba623717529dba98676e4`.
 - Proje manifesti `.contextvault/project.yaml` ve şemasıyla doğrulandı;
   canonical manifest SHA-256 değeri
   `461c4b41d0e2474d449dcd3cfdc7ef8dc73f8044b75b80bb20f4d2f87c09f7e3`.

@@ -11,5 +11,7 @@ OpenCode, Claude, and Codex behavior was verified through the provider-neutral
 adapter conformance suite. Local registry behavior uses the BGE-compatible
 embedding profile requested for the MacBook runtime.
 
-The implementation commit is intentionally bound by a follow-up receipt after
-this bundle and the canonical task record are committed.
+The verified A12 implementation commit is
+`8ac1c4f3f37310e1598ba623717529dba98676e4`. This follow-up binding changes
+only documentation/evidence files; A13 clean-environment verification uses the
+resulting candidate commit.
