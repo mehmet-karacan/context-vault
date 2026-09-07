@@ -11,7 +11,7 @@ dependencies = [
   "cryptography>=46,<51",
   "fastapi==0.141.1",
   "httpx==0.26.0",
-  "minio==7.2.5",
+  "minio==7.2.20",
   "openai==1.58.1",
   "pgvector==0.2.5",
   "psycopg2-binary==2.9.9",
