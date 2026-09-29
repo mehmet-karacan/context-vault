@@ -1,6 +1,9 @@
 # Context Vault
 
-Bu repository, RAG (Retrieval-Augmented Generation) tabanlı bir belge/kod sohbet platformu üzerinde çalışıyor.
+Context Vault; belge, görsel, Git deposu, arşiv ve izinli klasörleri indeksleyen,
+kaynak göstererek yanıt üreten bir RAG platformudur. FastAPI ve Celery tabanlı
+servisler, PostgreSQL/pgvector, Redis ve MinIO ile çalışır; web arayüzü Next.js
+üzerindedir.
 
 ## Kanonik uygulama dizini
 
@@ -10,9 +13,13 @@ Uygulamanın gerçek kaynak kodu, Docker Compose yapılandırması ve kurulum ta
 cd document-rag-platform
 ```
 
-Ayrıntılı talimatlar için `document-rag-platform/README.md` dosyasına bakın. Operasyonel
-runbook'lar (upload/ingestion, re-index, embedding değişimi, OCR, repository scan
-limitleri, backup/restore) `document-rag-platform/docs/runbooks/` altındadır.
+Ayrıntılı kurulum, yapılandırma ve API bilgisi için
+[`document-rag-platform/README.md`](document-rag-platform/README.md) dosyasına
+bakın. Geliştirme ortamında servisler Docker Compose ile, web arayüzü ise
+`document-rag-platform/apps/web/` dizininden ayrı başlatılır. Yükleme, yeniden
+indeksleme, OCR, depo tarama ve yedekleme işlemlerinin yönergeleri
+[`document-rag-platform/docs/runbooks/`](document-rag-platform/docs/runbooks/)
+altındadır.
 
 Kullanılmayan kök uygulama iskeletleri kaldırılmıştır. Tarihsel görev ve durum
 dosyaları yalnız insan görünümüdür; çalışan sistemin kanıtı değildir.
@@ -31,15 +38,5 @@ kanıtı veya dirty tree varsa `verified` değeri `false` olur.
 
 ## Aktif görev planı
 
-Repo kökündeki **`AKTIF_GOREV.md`** tek kanonik görev ve ilerleme kaydıdır. Eski
+Repo kökündeki [`AKTIF_GOREV.md`](AKTIF_GOREV.md) tek kanonik görev ve ilerleme kaydıdır. Eski
 checklist, roadmap ve özetlerdeki tamamlanma iddiaları kanıt değildir.
-
-## Lisans durumu
-
-Copyright © 2026 Mehmet Karacan. Tüm hakları saklıdır.
-
-Bu public repository için açık kaynak veya başka bir kullanım lisansı
-verilmemektedir. Kaynak kodun görüntülenebilir olması; kopyalama, değiştirme,
-dağıtma, alt lisanslama ya da ticari kullanım izni verildiği anlamına gelmez.
-Yazılı izin alınmadan bu hakların hiçbiri kullanılamaz. Üçüncü taraf bileşenler
-kendi lisanslarına tabidir.
